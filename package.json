@@ -5,7 +5,8 @@
   "scripts": {
     "dev": "vite build --watch --mode development",
     "build": "vite build --mode production",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "package": "npm run build && python3 scripts/package.py"
   },
   "devDependencies": {
     "@crxjs/vite-plugin": "^2.0.0-beta.23",

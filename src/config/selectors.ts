@@ -18,25 +18,35 @@ export const YT_SELECTORS = {
 export type SelectorKey = keyof typeof YT_SELECTORS;
 
 /**
- * Accurately finds the Subscriptions section in YouTube's guide sidebar.
- * Avoids false matches on the Home navigation section or Library section.
+ * Accurately finds the channel Subscriptions section in YouTube's guide sidebar.
+ * Specifically targets the section with title "Subscriptions" or link to /feed/channels,
+ * deliberately ignoring navigation links like /feed/subscriptions in the Home section.
  */
 export function getSubscriptionSection(): Element | null {
-  const sections = Array.from(
-    document.querySelectorAll('#sections > ytd-guide-section-renderer')
-  );
+  const guide =
+    document.querySelector('ytd-guide-renderer #sections') ||
+    document.querySelector('#sections');
+  if (!guide) return null;
 
-  // Strategy 1: Section with header titled "Subscriptions" or link to /feed/channels
+  const sections = Array.from(guide.querySelectorAll('ytd-guide-section-renderer'));
+
+  // Match the section whose #guide-section-title contains "subscription"
   for (const s of sections) {
     const titleEl = s.querySelector('#guide-section-title');
-    const titleText = titleEl?.textContent?.trim().toLowerCase() || '';
-    const headerLink = s.querySelector('a[href*="/feed/channels"], a[href*="/feed/subscriptions"]');
-    if (headerLink || titleText.includes('subscription')) {
+    const title = titleEl?.textContent?.trim().toLowerCase() || '';
+    if (title.includes('subscription')) {
       return s;
     }
   }
 
-  // Strategy 2: Section containing multiple channel links (/@ or /channel/)
+  // Secondary match: header link specifically pointing to /feed/channels
+  for (const s of sections) {
+    if (s.querySelector('a[href*="/feed/channels"]')) {
+      return s;
+    }
+  }
+
+  // Fallback: section containing multiple channel links (/@ or /channel/UC)
   for (const s of sections) {
     const channelLinks = s.querySelectorAll('a[href*="/@"], a[href*="/channel/UC"]');
     if (channelLinks.length >= 2) {
@@ -44,6 +54,5 @@ export function getSubscriptionSection(): Element | null {
     }
   }
 
-  // Fallback to second or third section
-  return sections[1] || sections[2] || document.querySelector(YT_SELECTORS.subscriptionSection);
+  return null;
 }

@@ -10,11 +10,21 @@ export class SidebarManager {
     const subSection = getSubscriptionSection();
     if (!subSection) return;
 
+    // Deduplicate: Remove any stale or duplicate containers
+    const existing = document.querySelectorAll(`#${this.containerId}`);
+    if (existing.length > 1) {
+      existing.forEach((el, idx) => {
+        if (idx > 0) el.remove();
+      });
+    }
+
     let container = document.getElementById(this.containerId);
     if (!container) {
       container = document.createElement('div');
       container.id = this.containerId;
-      // Insert directly above the subscriptions section
+      subSection.parentNode?.insertBefore(container, subSection);
+    } else if (container.nextElementSibling !== subSection) {
+      // Ensure it is positioned directly above the subscriptions section
       subSection.parentNode?.insertBefore(container, subSection);
     }
 

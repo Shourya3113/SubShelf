@@ -97,7 +97,18 @@ export class SidebarManager {
       aiBtn.innerText = '⏳ Clustering...';
 
       try {
-        await this.runQuickCategorization();
+        await new Promise<void>((resolve) => {
+          chrome.runtime.sendMessage({ type: 'subdeck-auto-organize' }, async (res) => {
+            if (res?.success) {
+              await SidebarManager.render();
+            } else {
+              await SidebarManager.runQuickCategorization();
+            }
+            resolve();
+          });
+        });
+      } catch {
+        await SidebarManager.runQuickCategorization();
       } finally {
         aiBtn.disabled = false;
         aiBtn.innerText = '✨ Auto-AI';

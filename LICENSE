@@ -1,21 +1,22 @@
-MIT License
+SubDeck Source-Available License
+Copyright (c) 2026 Shourya Solanki. All Rights Reserved.
 
-Copyright (c) 2026 Shourya Solanki
+This software and associated documentation files (the "Software") are provided under the following terms:
 
-Permission is hereby granted, free of charge, to any person obtaining a copy
-of this software and associated documentation files (the "Software"), to deal
-in the Software without restriction, including without limitation the rights
-to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-copies of the Software, and to permit persons to whom the Software is
-furnished to do so, subject to the following conditions:
+1. GRANT OF RIGHTS:
+   Permission is hereby granted to any person obtaining a copy of this Software to:
+   a. View, read, and study the source code for personal, educational, and non-commercial evaluation.
+   b. Fork this repository on GitHub solely for the purpose of developing and submitting issues, feature suggestions, or Pull Requests to the official upstream repository maintained by the author.
+   c. Compile and run the Software locally for personal, private use on personal devices.
 
-The above copyright notice and this permission notice shall be included in all
-copies or substantial portions of the Software.
+2. RESTRICTIONS:
+   Without the prior express written permission of the copyright holder (Shourya Solanki), you MAY NOT:
+   a. Distribute, publish, host, or make available compiled packages, binaries, or unpackaged versions of this Software (or derivative works) on any public or private extension registry, browser store, or marketplace (including, but not limited to, the Chrome Web Store, Firefox Add-ons, Microsoft Edge Add-ons, or Opera Add-ons).
+   b. Rebrand, resell, sublicense, rent, lease, or commercially exploit the Software or any portion thereof.
+   c. Remove, alter, or obscure any copyright notices, trademarks, or attribution statements present in the Software.
 
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-SOFTWARE.
+3. CONTRIBUTIONS:
+   By submitting a Pull Request, patch, or contribution to this project, you grant Shourya Solanki a perpetual, worldwide, non-exclusive, royalty-free, transferable license to use, modify, distribute, and sublicense your contribution as part of the Software under these or any other terms chosen by the author.
+
+4. DISCLAIMER OF WARRANTY:
+   THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHOR OR COPYRIGHT HOLDER BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.

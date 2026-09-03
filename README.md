@@ -59,7 +59,7 @@ For the complete architectural specification and 6-day build sprint plan, see:
 
 ## 📄 License
 
-[MIT License](./LICENSE) © 2026 Shourya Solanki
+[Source-Available License](./LICENSE) © 2026 Shourya Solanki. All Rights Reserved. Open for community contributions, issue reporting, and review. Commercial redistribution or republishing to extension stores is strictly prohibited without prior written permission.
 
 ---
 

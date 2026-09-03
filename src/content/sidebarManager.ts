@@ -170,9 +170,25 @@ export class SidebarManager {
     });
     container.appendChild(showAllBtn);
 
-    // 3. Render Category Folders (Skip system uncategorized if empty)
-    categories
-      .filter(cat => cat.id !== '__uncategorized__' || cat.channelIds.length > 0)
+    // 3. Deduplicate Category Folders by normalized name to prevent duplicate folders
+    const seenNames = new Set<string>();
+    const uniqueCategories: typeof categories = [];
+    for (const cat of categories) {
+      if (cat.id === '__uncategorized__' && cat.channelIds.length === 0) continue;
+      const norm = cat.name.toLowerCase().trim();
+      if (!seenNames.has(norm)) {
+        seenNames.add(norm);
+        uniqueCategories.push(cat);
+      } else {
+        const canonical = uniqueCategories.find(c => c.name.toLowerCase().trim() === norm);
+        if (canonical) {
+          const merged = new Set([...canonical.channelIds, ...cat.channelIds]);
+          canonical.channelIds = Array.from(merged);
+        }
+      }
+    }
+
+    uniqueCategories
       .slice()
       .sort((a, b) => a.sortOrder - b.sortOrder)
       .forEach(cat => {

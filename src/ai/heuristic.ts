@@ -58,7 +58,7 @@ export const SUBDECK_TAXONOMY: TaxonomyEntry[] = [
     icon: '🎵',
     color: '#EC4899',
     exactSignatures: [
-      'post malone', 'charlie puth', 'clean bandit', 'eminem', 'eminemmusic', 'dizastamusic', 'dolby',
+      'post malone', 'postmalone', 'charlie puth', 'clean bandit', 'eminem', 'eminemmusic', 'dizastamusic', 'dolby',
       'vevo', 'sony music', 'warner records', 't-series', 'trap nation', 'monstercat',
       'lofi girl', 'taylor swift', 'ed sheeran', 'drake', 'the weeknd', 'justin bieber',
       'billie eilish', 'adele', 'bts', 'alan walker', 'marshmello', 'bruno mars',
@@ -214,6 +214,8 @@ export class HeuristicCategorizer {
     for (const ch of channels) {
       const titleLower = ch.title.toLowerCase().trim();
       const handleLower = (ch.handle || '').toLowerCase().replace(/^@/, '').trim();
+      const cleanTitle = titleLower.replace(/[^a-z0-9]/g, '');
+      const cleanHandle = handleLower.replace(/[^a-z0-9]/g, '');
       const combined = `${titleLower} ${handleLower}`;
 
       let bestCatId: string | null = null;
@@ -223,11 +225,19 @@ export class HeuristicCategorizer {
         if (tax.id === 'general-other') continue;
         let score = 0;
 
-        // 1. Direct Famous Signature Match (+100 points)
+        // 1. Direct Famous Signature Match (+150 points)
         if (tax.exactSignatures) {
           for (const sig of tax.exactSignatures) {
-            if (titleLower === sig || handleLower === sig || titleLower.includes(sig) || handleLower.includes(sig)) {
-              score += 100;
+            const cleanSig = sig.toLowerCase().replace(/[^a-z0-9]/g, '');
+            if (
+              titleLower === sig ||
+              handleLower === sig ||
+              cleanTitle === cleanSig ||
+              cleanHandle === cleanSig ||
+              cleanTitle.includes(cleanSig) ||
+              cleanHandle.includes(cleanSig)
+            ) {
+              score += 150;
               break;
             }
           }
@@ -243,7 +253,6 @@ export class HeuristicCategorizer {
           } else if (regex.test(handleLower)) {
             score += 10;
           } else if (combined.includes(kw) && kw.includes(' ')) {
-            // Multi-word phrases like "real engineering", "tech tips", "web dev", "breaking news"
             score += 25;
           }
         }

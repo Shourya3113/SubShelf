@@ -1,0 +1,103 @@
+.subdeck-folder-container {
+  margin: 4px 0;
+  border-radius: 8px;
+  background-color: transparent;
+  color: var(--yt-spec-text-primary, #0f0f0f);
+  font-family: Roboto, Arial, sans-serif;
+  overflow: hidden;
+}
+
+.subdeck-folder-header {
+  display: flex;
+  align-items: center;
+  padding: 8px 16px;
+  cursor: pointer;
+  border-radius: 8px;
+  transition: background-color 0.15s ease;
+  user-select: none;
+}
+
+.subdeck-folder-header:hover {
+  background-color: var(--yt-spec-badge-chip-background, rgba(0, 0, 0, 0.05));
+}
+
+.subdeck-folder-header.active-filter {
+  background-color: var(--yt-spec-brand-background-primary, rgba(255, 0, 0, 0.1));
+  font-weight: 600;
+}
+
+.subdeck-channel-list {
+  max-height: 0;
+  overflow: hidden;
+  transition: max-height 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+  padding-left: 12px;
+}
+
+.subdeck-channel-list:not(.collapsed) {
+  max-height: 2500px;
+}
+
+.subdeck-channel-item {
+  display: flex;
+  align-items: center;
+  padding: 6px 12px;
+  cursor: pointer;
+  border-radius: 6px;
+  text-decoration: none;
+  color: var(--yt-spec-text-primary, #0f0f0f);
+  font-size: 13px;
+  transition: background-color 0.15s ease;
+}
+
+.subdeck-channel-item:hover {
+  background-color: var(--yt-spec-badge-chip-background, rgba(0, 0, 0, 0.05));
+}
+
+.subdeck-channel-avatar {
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  margin-right: 8px;
+  object-fit: cover;
+}
+
+.subdeck-channel-count {
+  margin-left: auto;
+  font-size: 11px;
+  color: var(--yt-spec-text-secondary, #606060);
+}
+
+.subdeck-chevron {
+  margin-left: 8px;
+  font-size: 10px;
+  transition: transform 0.2s ease;
+}
+
+.subdeck-chevron.open {
+  transform: rotate(180deg);
+}
+
+.subdeck-degradation-banner,
+.subdeck-feed-banner {
+  background-color: var(--yt-spec-badge-chip-background, #f2f2f2);
+  color: var(--yt-spec-text-primary, #0f0f0f);
+  padding: 10px 18px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin: 8px 16px;
+  border-radius: 8px;
+  font-size: 13px;
+}
+
+.subdeck-banner-dismiss,
+.subdeck-clear-filter {
+  cursor: pointer;
+  color: var(--yt-spec-text-primary, #0f0f0f);
+  background: transparent;
+  border: 1px solid var(--yt-spec-text-secondary, #606060);
+  border-radius: 4px;
+  padding: 4px 10px;
+  font-size: 12px;
+  font-weight: 500;
+}

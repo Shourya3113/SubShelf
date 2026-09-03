@@ -1,0 +1,35 @@
+body {
+  width: 320px;
+  margin: 0;
+  padding: 20px;
+  font-family: Roboto, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  background-color: #ffffff;
+  color: #0f0f0f;
+  text-align: center;
+}
+
+@media (prefers-color-scheme: dark) {
+  body {
+    background-color: #0f0f0f;
+    color: #f1f1f1;
+  }
+}
+
+.logo {
+  font-size: 18px;
+  font-weight: 700;
+  margin-bottom: 12px;
+  color: #3ea6ff;
+}
+
+.status {
+  font-size: 13px;
+  color: #606060;
+  line-height: 1.4;
+}
+
+@media (prefers-color-scheme: dark) {
+  .status {
+    color: #aaaaaa;
+  }
+}

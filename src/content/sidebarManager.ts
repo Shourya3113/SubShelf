@@ -6,10 +6,18 @@ import { CategoryDeck } from '@/types';
 export class SidebarManager {
   private static containerId = 'subdeck-sidebar-container';
   private static observer: MutationObserver | null = null;
+  private static retryCount = 0;
 
   static async ensureInjected(): Promise<void> {
     const subSection = getSubscriptionSection();
-    if (!subSection) return;
+    if (!subSection) {
+      if (this.retryCount < 6) {
+        this.retryCount++;
+        setTimeout(() => this.ensureInjected(), 400);
+      }
+      return;
+    }
+    this.retryCount = 0;
 
     // Deduplicate: Clean up any extra containers
     const existing = document.querySelectorAll(`#${this.containerId}`);

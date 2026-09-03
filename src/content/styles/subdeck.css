@@ -1,4 +1,9 @@
-* {
+#subdeck-sidebar-container,
+#subdeck-sidebar-container *,
+.subdeck-feed-banner,
+.subdeck-feed-banner *,
+.subdeck-degradation-banner,
+.subdeck-degradation-banner * {
   box-sizing: border-box;
 }
 

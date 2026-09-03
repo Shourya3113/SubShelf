@@ -1,28 +1,39 @@
+* {
+  box-sizing: border-box;
+}
+
+#subdeck-sidebar-container {
+  width: 100%;
+  box-sizing: border-box;
+  font-family: "Roboto", "Arial", sans-serif;
+}
+
 .subdeck-folder-container {
-  margin: 6px 12px;
+  margin: 3px 8px;
   border-radius: 8px;
   background-color: transparent;
   color: var(--yt-spec-text-primary, #f1f1f1);
-  font-family: "Roboto", "Arial", sans-serif;
   overflow: hidden;
+  box-sizing: border-box;
 }
 
 /* Force high-contrast text color on dark and light YouTube themes */
 .subdeck-folder-header,
-.subdeck-channel-item,
-.subdeck-channel-item span {
+.subdeck-channel-item {
   color: var(--yt-spec-text-primary, #f1f1f1) !important;
 }
 
 .subdeck-folder-header {
   display: flex;
   align-items: center;
-  padding: 8px 12px;
+  padding: 6px 10px;
   cursor: pointer;
   border-radius: 8px;
   transition: background-color 0.15s ease;
   user-select: none;
-  font-size: 14px;
+  font-size: 13px;
+  min-width: 0;
+  box-sizing: border-box;
 }
 
 .subdeck-folder-header:hover {
@@ -34,22 +45,38 @@
   font-weight: 600;
 }
 
+.subdeck-folder-icon {
+  font-size: 14px;
+  flex-shrink: 0;
+}
+
+.subdeck-folder-title {
+  margin-left: 8px;
+  font-weight: 500;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  flex: 1;
+  min-width: 0;
+}
+
 /* Controlled scrollable channel list preventing sidebar displacement */
 .subdeck-channel-list {
   max-height: 0;
   overflow-y: hidden;
   transition: max-height 0.25s cubic-bezier(0.4, 0, 0.2, 1);
-  padding-left: 8px;
+  padding-left: 6px;
+  box-sizing: border-box;
 }
 
 .subdeck-channel-list:not(.collapsed) {
-  max-height: 380px;
+  max-height: 320px;
   overflow-y: auto;
 }
 
 /* Custom scrollbar */
 .subdeck-channel-list::-webkit-scrollbar {
-  width: 5px;
+  width: 4px;
 }
 
 .subdeck-channel-list::-webkit-scrollbar-track {
@@ -58,52 +85,48 @@
 
 .subdeck-channel-list::-webkit-scrollbar-thumb {
   background: rgba(255, 255, 255, 0.2);
-  border-radius: 3px;
+  border-radius: 2px;
 }
 
 .subdeck-channel-list::-webkit-scrollbar-thumb:hover {
   background: rgba(255, 255, 255, 0.35);
 }
 
+/* Minimal channel item without logos */
 .subdeck-channel-item {
-  display: flex;
-  align-items: center;
-  padding: 6px 10px;
+  display: block;
+  padding: 5px 12px;
   cursor: pointer;
-  border-radius: 8px;
+  border-radius: 6px;
   text-decoration: none;
-  font-size: 13px;
+  font-size: 12px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
   transition: background-color 0.15s ease;
+  box-sizing: border-box;
 }
 
 .subdeck-channel-item:hover {
   background-color: var(--yt-spec-badge-chip-background, rgba(255, 255, 255, 0.1));
 }
 
-.subdeck-channel-avatar {
-  width: 24px;
-  height: 24px;
-  border-radius: 50%;
-  margin-right: 10px;
-  object-fit: cover;
-  background-color: rgba(255, 255, 255, 0.1);
-  flex-shrink: 0;
-}
-
 .subdeck-channel-count {
-  margin-left: auto;
+  margin-left: 6px;
   font-size: 11px;
   color: var(--yt-spec-text-secondary, #aaaaaa) !important;
   background: var(--yt-spec-badge-chip-background, rgba(255, 255, 255, 0.08));
-  padding: 2px 7px;
+  padding: 2px 6px;
   border-radius: 10px;
+  flex-shrink: 0;
 }
 
 .subdeck-chevron {
-  margin-left: 8px;
-  font-size: 10px;
+  margin-left: 6px;
+  font-size: 9px;
   color: var(--yt-spec-text-secondary, #aaaaaa);
   transition: transform 0.2s ease;
+  flex-shrink: 0;
 }
 
 .subdeck-chevron.open {
@@ -112,18 +135,22 @@
 
 .subdeck-clear-filter {
   display: block;
-  width: calc(100% - 24px);
-  margin: 6px 12px 6px 12px;
-  padding: 7px 12px;
+  width: calc(100% - 16px);
+  margin: 4px 8px 6px 8px;
+  padding: 6px 10px;
   background-color: var(--yt-spec-badge-chip-background, rgba(255, 255, 255, 0.08));
   color: var(--yt-spec-text-primary, #f1f1f1) !important;
   border: 1px solid var(--yt-spec-10-percent-layer, rgba(255, 255, 255, 0.15));
   border-radius: 8px;
-  font-size: 13px;
+  font-size: 12px;
   font-weight: 500;
   cursor: pointer;
   text-align: left;
   transition: background-color 0.15s ease;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  box-sizing: border-box;
 }
 
 .subdeck-clear-filter:hover {
@@ -132,35 +159,35 @@
 
 /* Categorize Action Card */
 .subdeck-action-card {
-  margin: 6px 12px 8px 12px;
-  padding: 10px 12px;
+  margin: 4px 8px 6px 8px;
+  padding: 8px 10px;
   background: var(--yt-spec-badge-chip-background, rgba(255, 255, 255, 0.06));
   border: 1px solid var(--yt-spec-10-percent-layer, rgba(255, 255, 255, 0.12));
   border-radius: 8px;
-  font-family: "Roboto", "Arial", sans-serif;
+  box-sizing: border-box;
 }
 
 .subdeck-action-header {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  margin-bottom: 8px;
+  margin-bottom: 6px;
 }
 
 .subdeck-brand {
   font-weight: 700;
-  font-size: 13px;
+  font-size: 12px;
   color: #3ea6ff;
 }
 
 .subdeck-subtext {
-  font-size: 11px;
+  font-size: 10.5px;
   color: var(--yt-spec-text-secondary, #aaaaaa);
 }
 
 .subdeck-action-buttons {
   display: flex;
-  gap: 8px;
+  gap: 6px;
 }
 
 .subdeck-btn-ai {
@@ -169,12 +196,13 @@
   color: #ffffff !important;
   border: none;
   border-radius: 6px;
-  padding: 6px 10px;
-  font-size: 12px;
+  padding: 5px 6px;
+  font-size: 11.5px;
   font-weight: 600;
   cursor: pointer;
   transition: background 0.15s ease;
   white-space: nowrap;
+  text-align: center;
 }
 
 .subdeck-btn-ai:hover {
@@ -192,12 +220,13 @@
   color: var(--yt-spec-text-primary, #f1f1f1) !important;
   border: 1px solid var(--yt-spec-10-percent-layer, rgba(255, 255, 255, 0.2));
   border-radius: 6px;
-  padding: 6px 8px;
-  font-size: 12px;
+  padding: 5px 6px;
+  font-size: 11.5px;
   font-weight: 500;
   cursor: pointer;
   transition: background 0.15s ease;
   white-space: nowrap;
+  text-align: center;
 }
 
 .subdeck-btn-manual:hover {
@@ -206,20 +235,22 @@
 
 .subdeck-manual-input-box {
   display: flex;
-  gap: 6px;
-  margin-top: 8px;
+  gap: 4px;
+  margin-top: 6px;
   align-items: center;
 }
 
 .subdeck-manual-input-box input {
   flex: 1;
+  min-width: 0;
   background: rgba(0, 0, 0, 0.25);
   border: 1px solid var(--yt-spec-10-percent-layer, rgba(255, 255, 255, 0.2));
   border-radius: 4px;
   color: var(--yt-spec-text-primary, #f1f1f1);
-  font-size: 12px;
-  padding: 5px 8px;
+  font-size: 11px;
+  padding: 4px 6px;
   outline: none;
+  box-sizing: border-box;
 }
 
 .subdeck-btn-save {
@@ -227,10 +258,11 @@
   color: #000 !important;
   border: none;
   border-radius: 4px;
-  padding: 5px 10px;
+  padding: 4px 8px;
   font-size: 11px;
   font-weight: 600;
   cursor: pointer;
+  flex-shrink: 0;
 }
 
 .subdeck-btn-cancel {
@@ -239,7 +271,8 @@
   border: none;
   font-size: 12px;
   cursor: pointer;
-  padding: 2px 6px;
+  padding: 2px 4px;
+  flex-shrink: 0;
 }
 
 .subdeck-degradation-banner,
@@ -254,6 +287,7 @@
   border-radius: 8px;
   font-size: 13px;
   border: 1px solid var(--yt-spec-10-percent-layer, rgba(255, 255, 255, 0.15));
+  box-sizing: border-box;
 }
 
 .subdeck-banner-dismiss {

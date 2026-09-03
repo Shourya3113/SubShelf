@@ -61,11 +61,11 @@ export class SidebarManager {
     actionCard.innerHTML = `
       <div class="subdeck-action-header">
         <span class="subdeck-brand">⚡ SubDeck</span>
-        <span class="subdeck-subtext">Categorize (${channelCount} subs)</span>
+        <span class="subdeck-subtext">${channelCount} channels</span>
       </div>
       <div class="subdeck-action-buttons">
         <button class="subdeck-btn-ai" id="subdeck-ai-btn">✨ Auto-AI</button>
-        <button class="subdeck-btn-manual" id="subdeck-manual-btn">📁 + New Folder</button>
+        <button class="subdeck-btn-manual" id="subdeck-manual-btn">+ Folder</button>
       </div>
       <div class="subdeck-manual-input-box" id="subdeck-manual-box" style="display: none;">
         <input type="text" id="subdeck-new-folder-name" placeholder="Folder name..." />
@@ -149,8 +149,9 @@ export class SidebarManager {
     });
     container.appendChild(showAllBtn);
 
-    // 3. Render Category Folders
+    // 3. Render Category Folders (Skip Uncategorized Folder entirely)
     categories
+      .filter(cat => cat.id !== '__uncategorized__')
       .slice()
       .sort((a, b) => a.sortOrder - b.sortOrder)
       .forEach(cat => {
@@ -160,8 +161,8 @@ export class SidebarManager {
         const header = document.createElement('div');
         header.className = `subdeck-folder-header ${activeCategory === cat.id ? 'active-filter' : ''}`;
         header.innerHTML = `
-          <span>${cat.icon}</span>
-          <span style="margin-left: 8px; font-weight: 500;">${cat.name}</span>
+          <span class="subdeck-folder-icon">${cat.icon}</span>
+          <span class="subdeck-folder-title" title="${cat.name}">${cat.name}</span>
           <span class="subdeck-channel-count">${cat.channelIds.length}</span>
           <span class="subdeck-chevron ${cat.isCollapsed ? '' : 'open'}">▼</span>
         `;
@@ -169,21 +170,15 @@ export class SidebarManager {
         const list = document.createElement('div');
         list.className = `subdeck-channel-list ${cat.isCollapsed ? 'collapsed' : ''}`;
 
+        // Render clean channel text items (no logos)
         cat.channelIds.forEach(id => {
           const ch = channelsMap[id];
           if (!ch) return;
           const item = document.createElement('a');
           item.className = 'subdeck-channel-item';
           item.href = ch.url;
-
-          const avatarHtml = ch.avatarUrl
-            ? `<img class="subdeck-channel-avatar" src="${ch.avatarUrl}" alt="" onerror="this.style.display='none'" />`
-            : `<div class="subdeck-channel-avatar" style="display:flex;align-items:center;justify-content:center;font-size:12px;">📺</div>`;
-
-          item.innerHTML = `
-            ${avatarHtml}
-            <span>${ch.title}</span>
-          `;
+          item.textContent = ch.title;
+          item.title = ch.title;
           list.appendChild(item);
         });
 
@@ -218,27 +213,27 @@ export class SidebarManager {
       'tech-coding': {
         name: 'Tech & Coding',
         icon: '💻',
-        keywords: ['tech', 'apple', 'code', 'coding', 'cs50', 'software', 'programming', 'developer', 'linux', 'dev', 'python', 'ai', 'engineer'],
+        keywords: ['tech', 'apple', 'code', 'coding', 'cs50', 'software', 'programming', 'developer', 'linux', 'dev', 'python', 'ai', 'engineer', 'linus'],
       },
       gaming: {
         name: 'Gaming',
         icon: '🎮',
-        keywords: ['game', 'gaming', 'destiny', 'playthrough', 'twitch', 'steam', 'xbox', 'playstation', 'nintendo'],
+        keywords: ['game', 'gaming', 'destiny', 'playthrough', 'twitch', 'steam', 'xbox', 'playstation', 'nintendo', 'clips'],
       },
       music: {
         name: 'Music',
         icon: '🎵',
-        keywords: ['music', 'puth', 'bandit', 'records', 'song', 'audio', 'sound', 'band', 'vevo', 'dolby', 'charlie', 'dizasta'],
+        keywords: ['music', 'puth', 'bandit', 'records', 'song', 'audio', 'sound', 'band', 'vevo', 'dolby', 'charlie', 'dizasta', 'eminem'],
       },
       education: {
         name: 'Education & Science',
         icon: '📚',
-        keywords: ['science', 'learn', 'education', 'domain', 'course', 'academy', 'history', 'physics', 'math', 'explained'],
+        keywords: ['science', 'learn', 'education', 'domain', 'course', 'academy', 'history', 'physics', 'math', 'explained', 'demos'],
       },
       entertainment: {
         name: 'Entertainment',
         icon: '🍿',
-        keywords: ['entertainment', 'comedy', 'vlog', 'show', 'cinema', 'movie', 'film', 'podcast', 'clips'],
+        keywords: ['entertainment', 'comedy', 'vlog', 'show', 'cinema', 'movie', 'film', 'podcast', 'marvel', 'sony'],
       },
     };
 
@@ -247,7 +242,7 @@ export class SidebarManager {
       name: meta.name,
       icon: meta.icon,
       channelIds: [],
-      isCollapsed: false,
+      isCollapsed: true, // Collapsed by default
       sortOrder: idx,
     }));
 
@@ -265,7 +260,7 @@ export class SidebarManager {
       }
     }
 
-    // Capture remaining into Uncategorized
+    // Capture remaining into Uncategorized in storage (but hidden from sidebar display)
     const unassigned = channels.filter(c => !assignedIds.has(c.ucId)).map(c => c.ucId);
     newDecks.push({
       id: '__uncategorized__',

@@ -1,31 +1,49 @@
-import { YT_SELECTORS } from '@/config/selectors';
+import { YT_SELECTORS, getSubscriptionSection } from '@/config/selectors';
 import { IdNormalizer } from '@/utils/idNormalizer';
 import { SubscribedChannel } from '@/types';
 
 export class ChannelExtractor {
   static scrapeFromSidebar(): SubscribedChannel[] {
     const channels: SubscribedChannel[] = [];
-    const entries = document.querySelectorAll(
-      `${YT_SELECTORS.subscriptionSection} ${YT_SELECTORS.guideEntry}`
-    );
+    const subSection = getSubscriptionSection();
+    if (!subSection) return channels;
+
+    const entries = subSection.querySelectorAll(YT_SELECTORS.guideEntry);
 
     entries.forEach(entry => {
       const anchor = entry.querySelector('a') as HTMLAnchorElement | null;
       if (!anchor) return;
 
+      const href = anchor.getAttribute('href') || '';
+      // Skip "Show more", "Browse channels", etc.
+      if (!href.includes('/@') && !href.includes('/channel/')) return;
+
       const { ucId, handle } = IdNormalizer.extractFromAnchor(anchor);
-      if (!ucId) return;
+      if (!ucId && !handle) return;
 
-      const titleEl = entry.querySelector('yt-formatted-string') as HTMLElement | null;
-      const title = titleEl ? titleEl.innerText.trim() : (handle || 'Channel');
+      const title =
+        anchor.getAttribute('title') ||
+        (entry.querySelector('yt-formatted-string') as HTMLElement)?.innerText?.trim() ||
+        (entry.querySelector('#guide-entry-title') as HTMLElement)?.textContent?.trim() ||
+        handle ||
+        'Channel';
 
-      const imgEl = entry.querySelector('img') as HTMLImageElement | null;
-      const avatarUrl = imgEl ? imgEl.src : '';
+      // Safe avatar extraction
+      const imgEl = entry.querySelector('yt-img-shadow img, img') as HTMLImageElement | null;
+      let avatarUrl = '';
+      if (imgEl) {
+        avatarUrl = imgEl.src || imgEl.getAttribute('src') || '';
+        if (avatarUrl.startsWith('data:image')) {
+          avatarUrl = imgEl.getAttribute('data-thumb') || '';
+        }
+      }
+
+      const channelKey = ucId || handle || '';
 
       channels.push({
-        ucId,
+        ucId: channelKey,
         title,
-        handle: handle || `@${ucId}`,
+        handle: handle || `@${channelKey}`,
         url: anchor.href,
         avatarUrl,
         categoryIds: [],

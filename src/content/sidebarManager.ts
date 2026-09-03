@@ -1,19 +1,29 @@
-import { YT_SELECTORS } from '@/config/selectors';
+import { getSubscriptionSection } from '@/config/selectors';
 import { SubDeckStorage } from '@/utils/storage';
 import { ChannelExtractor } from './channelExtractor';
 
 export class SidebarManager {
   private static containerId = 'subdeck-sidebar-container';
+  private static observer: MutationObserver | null = null;
 
   static async ensureInjected(): Promise<void> {
-    const subSection = document.querySelector(YT_SELECTORS.subscriptionSection);
+    const subSection = getSubscriptionSection();
     if (!subSection) return;
 
     let container = document.getElementById(this.containerId);
     if (!container) {
       container = document.createElement('div');
       container.id = this.containerId;
+      // Insert directly above the subscriptions section
       subSection.parentNode?.insertBefore(container, subSection);
+    }
+
+    // Attach observer to native subscription section so clicking "Show more" auto-syncs
+    if (!this.observer) {
+      this.observer = new MutationObserver(() => {
+        this.syncWithNativeSubscriptions();
+      });
+      this.observer.observe(subSection, { childList: true, subtree: true });
     }
 
     await this.render();
@@ -33,8 +43,6 @@ export class SidebarManager {
     const showAllBtn = document.createElement('button');
     showAllBtn.innerText = '☰ Show All Subscriptions';
     showAllBtn.className = 'subdeck-clear-filter';
-    showAllBtn.style.width = 'calc(100% - 24px)';
-    showAllBtn.style.margin = '4px 12px 8px 12px';
     showAllBtn.addEventListener('click', () => {
       document.querySelectorAll('.subdeck-folder-header').forEach(el => el.classList.remove('active-filter'));
       document.dispatchEvent(new CustomEvent('subdeck-filter-category', { detail: null }));
@@ -66,8 +74,13 @@ export class SidebarManager {
           const item = document.createElement('a');
           item.className = 'subdeck-channel-item';
           item.href = ch.url;
+
+          const avatarHtml = ch.avatarUrl
+            ? `<img class="subdeck-channel-avatar" src="${ch.avatarUrl}" alt="" onerror="this.style.display='none'" />`
+            : `<div class="subdeck-channel-avatar" style="display:flex;align-items:center;justify-content:center;font-size:12px;">📺</div>`;
+
           item.innerHTML = `
-            <img class="subdeck-channel-avatar" src="${ch.avatarUrl || ''}" alt="" />
+            ${avatarHtml}
             <span>${ch.title}</span>
           `;
           list.appendChild(item);
@@ -97,6 +110,8 @@ export class SidebarManager {
 
   static async syncWithNativeSubscriptions(): Promise<void> {
     const scraped = ChannelExtractor.scrapeFromSidebar();
+    if (scraped.length === 0) return;
+
     const storageChannels = await SubDeckStorage.getChannels();
     let hasChanges = false;
 

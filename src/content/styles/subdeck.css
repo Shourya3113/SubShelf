@@ -1,28 +1,36 @@
 .subdeck-folder-container {
-  margin: 4px 0;
+  margin: 6px 12px;
   border-radius: 8px;
   background-color: transparent;
-  color: var(--yt-spec-text-primary, #0f0f0f);
-  font-family: Roboto, Arial, sans-serif;
+  color: var(--yt-spec-text-primary, #f1f1f1);
+  font-family: "Roboto", "Arial", sans-serif;
   overflow: hidden;
+}
+
+/* Force high-contrast text color on dark and light YouTube themes */
+.subdeck-folder-header,
+.subdeck-channel-item,
+.subdeck-channel-item span {
+  color: var(--yt-spec-text-primary, #f1f1f1) !important;
 }
 
 .subdeck-folder-header {
   display: flex;
   align-items: center;
-  padding: 8px 16px;
+  padding: 8px 12px;
   cursor: pointer;
   border-radius: 8px;
   transition: background-color 0.15s ease;
   user-select: none;
+  font-size: 14px;
 }
 
 .subdeck-folder-header:hover {
-  background-color: var(--yt-spec-badge-chip-background, rgba(0, 0, 0, 0.05));
+  background-color: var(--yt-spec-badge-chip-background, rgba(255, 255, 255, 0.1));
 }
 
 .subdeck-folder-header.active-filter {
-  background-color: var(--yt-spec-brand-background-primary, rgba(255, 0, 0, 0.1));
+  background-color: var(--yt-spec-brand-background-primary, rgba(255, 0, 0, 0.18));
   font-weight: 600;
 }
 
@@ -30,46 +38,51 @@
   max-height: 0;
   overflow: hidden;
   transition: max-height 0.25s cubic-bezier(0.4, 0, 0.2, 1);
-  padding-left: 12px;
+  padding-left: 8px;
 }
 
 .subdeck-channel-list:not(.collapsed) {
-  max-height: 2500px;
+  max-height: 3500px;
 }
 
 .subdeck-channel-item {
   display: flex;
   align-items: center;
-  padding: 6px 12px;
+  padding: 6px 10px;
   cursor: pointer;
-  border-radius: 6px;
+  border-radius: 8px;
   text-decoration: none;
-  color: var(--yt-spec-text-primary, #0f0f0f);
   font-size: 13px;
   transition: background-color 0.15s ease;
 }
 
 .subdeck-channel-item:hover {
-  background-color: var(--yt-spec-badge-chip-background, rgba(0, 0, 0, 0.05));
+  background-color: var(--yt-spec-badge-chip-background, rgba(255, 255, 255, 0.1));
 }
 
 .subdeck-channel-avatar {
   width: 24px;
   height: 24px;
   border-radius: 50%;
-  margin-right: 8px;
+  margin-right: 10px;
   object-fit: cover;
+  background-color: rgba(255, 255, 255, 0.1);
+  flex-shrink: 0;
 }
 
 .subdeck-channel-count {
   margin-left: auto;
   font-size: 11px;
-  color: var(--yt-spec-text-secondary, #606060);
+  color: var(--yt-spec-text-secondary, #aaaaaa) !important;
+  background: var(--yt-spec-badge-chip-background, rgba(255, 255, 255, 0.08));
+  padding: 2px 7px;
+  border-radius: 10px;
 }
 
 .subdeck-chevron {
   margin-left: 8px;
   font-size: 10px;
+  color: var(--yt-spec-text-secondary, #aaaaaa);
   transition: transform 0.2s ease;
 }
 
@@ -77,10 +90,30 @@
   transform: rotate(180deg);
 }
 
+.subdeck-clear-filter {
+  display: block;
+  width: calc(100% - 24px);
+  margin: 8px 12px 6px 12px;
+  padding: 8px 12px;
+  background-color: var(--yt-spec-badge-chip-background, rgba(255, 255, 255, 0.08));
+  color: var(--yt-spec-text-primary, #f1f1f1) !important;
+  border: 1px solid var(--yt-spec-10-percent-layer, rgba(255, 255, 255, 0.15));
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  text-align: left;
+  transition: background-color 0.15s ease;
+}
+
+.subdeck-clear-filter:hover {
+  background-color: var(--yt-spec-10-percent-layer, rgba(255, 255, 255, 0.18));
+}
+
 .subdeck-degradation-banner,
 .subdeck-feed-banner {
-  background-color: var(--yt-spec-badge-chip-background, #f2f2f2);
-  color: var(--yt-spec-text-primary, #0f0f0f);
+  background-color: var(--yt-spec-badge-chip-background, rgba(255, 255, 255, 0.08));
+  color: var(--yt-spec-text-primary, #f1f1f1);
   padding: 10px 18px;
   display: flex;
   justify-content: space-between;
@@ -88,14 +121,14 @@
   margin: 8px 16px;
   border-radius: 8px;
   font-size: 13px;
+  border: 1px solid var(--yt-spec-10-percent-layer, rgba(255, 255, 255, 0.15));
 }
 
-.subdeck-banner-dismiss,
-.subdeck-clear-filter {
+.subdeck-banner-dismiss {
   cursor: pointer;
-  color: var(--yt-spec-text-primary, #0f0f0f);
+  color: var(--yt-spec-text-primary, #f1f1f1);
   background: transparent;
-  border: 1px solid var(--yt-spec-text-secondary, #606060);
+  border: 1px solid var(--yt-spec-text-secondary, #aaaaaa);
   border-radius: 4px;
   padding: 4px 10px;
   font-size: 12px;

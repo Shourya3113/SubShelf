@@ -2,10 +2,18 @@ import { SubDeckStorage } from '@/utils/storage';
 import { AICategorizer } from '@/ai/categorizer';
 import { Logger } from '@/utils/logger';
 import { CategoryDeck } from '@/types';
+import { runMigrations } from './migrations';
 
-chrome.runtime.onInstalled.addListener(async () => {
-  await SubDeckStorage.getAll();
-  Logger.info('[SubDeck] Service worker initialized with default storage');
+chrome.runtime.onInstalled.addListener(async (details) => {
+  const current = await SubDeckStorage.getAll();
+  if (details.reason === 'update') {
+    const fromVersion = current.version || 1;
+    const migrated = runMigrations(fromVersion, 1, current);
+    await SubDeckStorage.setAll(migrated);
+    Logger.info(`[SubDeck] Migrated storage schema from v${fromVersion} to v1`);
+  } else {
+    Logger.info('[SubDeck] Service worker initialized with default storage');
+  }
 });
 
 // Handle auto-categorization and background tasks

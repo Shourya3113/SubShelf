@@ -9,7 +9,13 @@ chrome.runtime.onInstalled.addListener(async () => {
 });
 
 // Handle auto-categorization and background tasks
-chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
+chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+  // Security: Validate message origin (must match our extension ID)
+  if (sender.id !== chrome.runtime.id) {
+    Logger.warn('[SubDeck Background] Rejected message from unauthorized sender:', sender.id);
+    return false;
+  }
+
   if (message?.type === 'subdeck-auto-organize') {
     (async () => {
       try {
@@ -61,9 +67,12 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
         sendResponse({ success: true, count: channels.length, decks: finalDecks.length });
       } catch (err) {
         Logger.error('[SubDeck Background] Auto-organization failed:', err);
-        sendResponse({ success: false, error: String(err) });
+        // Security: Send sanitized error message without leaking sensitive strings
+        const safeError = err instanceof Error ? err.message : 'Auto-organization failed';
+        sendResponse({ success: false, error: safeError });
       }
     })();
     return true; // Keep message port open for async response
   }
+  return false;
 });

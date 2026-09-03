@@ -19,8 +19,7 @@ export type SelectorKey = keyof typeof YT_SELECTORS;
 
 /**
  * Accurately finds the channel Subscriptions section in YouTube's guide sidebar.
- * Specifically targets the section with title "Subscriptions" or link to /feed/channels,
- * deliberately ignoring navigation links like /feed/subscriptions in the Home section.
+ * Uses robust structural and multi-lingual checks, avoiding home navigation links.
  */
 export function getSubscriptionSection(): Element | null {
   const guide =
@@ -30,23 +29,29 @@ export function getSubscriptionSection(): Element | null {
 
   const sections = Array.from(guide.querySelectorAll('ytd-guide-section-renderer'));
 
-  // Match the section whose #guide-section-title contains "subscription"
-  for (const s of sections) {
-    const titleEl = s.querySelector('#guide-section-title');
-    const title = titleEl?.textContent?.trim().toLowerCase() || '';
-    if (title.includes('subscription')) {
-      return s;
-    }
-  }
-
-  // Secondary match: header link specifically pointing to /feed/channels
+  // 1. Structural match: section containing header link to /feed/channels
   for (const s of sections) {
     if (s.querySelector('a[href*="/feed/channels"]')) {
       return s;
     }
   }
 
-  // Fallback: section containing multiple channel links (/@ or /channel/UC)
+  // 2. Multi-lingual title check across common YouTube interface languages
+  const SUB_KEYWORDS = [
+    'subscription', 'suscrip', 'abonnements', 'abos', 'iscrizioni',
+    'inscrições', 'inscricoes', 'subskrypcje', 'подписки', 'सदस्यता',
+    '구독', '订阅', '訂閱', '登録チャンネル',
+  ];
+
+  for (const s of sections) {
+    const titleEl = s.querySelector('#guide-section-title');
+    const title = titleEl?.textContent?.trim().toLowerCase() || '';
+    if (SUB_KEYWORDS.some(kw => title.includes(kw))) {
+      return s;
+    }
+  }
+
+  // 3. Structural fallback: section containing multiple channel links (/@ or /channel/UC)
   for (const s of sections) {
     const channelLinks = s.querySelectorAll('a[href*="/@"], a[href*="/channel/UC"]');
     if (channelLinks.length >= 2) {

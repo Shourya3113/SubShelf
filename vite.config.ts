@@ -9,9 +9,14 @@ export default defineConfig({
       '@': resolve(__dirname, 'src'),
     },
   },
+  server: {
+    host: '127.0.0.1',
+  },
   plugins: [crx({ manifest })],
   build: {
     outDir: 'dist',
     emptyOutDir: true,
+    sourcemap: false,
+    target: 'chrome120',
   },
 });

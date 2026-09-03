@@ -1,5 +1,6 @@
 import { SubDeckStorage } from '@/utils/storage';
 import { ExportImport } from '@/utils/exportImport';
+import { debounce } from '@/utils/debounce';
 import { CategoryDeck, SubDeckStorageSchema } from '@/types';
 
 class PopupManager {
@@ -77,7 +78,10 @@ class PopupManager {
         }
       } else {
         // Create new deck
-        const newId = name.toLowerCase().replace(/[^a-z0-9]+/g, '-') + '-' + Date.now().toString().slice(-4);
+        let cleanId = name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
+        if (!cleanId) cleanId = 'deck-' + Date.now().toString(36);
+        const newId = `${cleanId}-${Date.now().toString().slice(-4)}`;
+
         categories.push({
           id: newId,
           name,
@@ -106,22 +110,50 @@ class PopupManager {
     categories
       .filter(cat => cat.id !== '__uncategorized__')
       .forEach(cat => {
+        // Safe DOM construction: Zero innerHTML
         const card = document.createElement('div');
         card.className = 'deck-card';
-        card.innerHTML = `
-          <span class="deck-icon">${cat.icon}</span>
-          <div class="deck-info">
-            <div class="deck-title">${cat.name}</div>
-            <div class="deck-subs-count">${cat.channelIds.length} channels</div>
-          </div>
-          <div class="deck-actions-btns">
-            <button class="action-btn edit" title="Edit Deck">✏️</button>
-            <button class="action-btn delete" title="Delete Deck">🗑️</button>
-          </div>
-        `;
+
+        const iconSpan = document.createElement('span');
+        iconSpan.className = 'deck-icon';
+        iconSpan.textContent = cat.icon;
+
+        const infoDiv = document.createElement('div');
+        infoDiv.className = 'deck-info';
+
+        const titleDiv = document.createElement('div');
+        titleDiv.className = 'deck-title';
+        titleDiv.textContent = cat.name;
+
+        const subsCountDiv = document.createElement('div');
+        subsCountDiv.className = 'deck-subs-count';
+        subsCountDiv.textContent = `${cat.channelIds.length} channels`;
+
+        infoDiv.appendChild(titleDiv);
+        infoDiv.appendChild(subsCountDiv);
+
+        const actionsDiv = document.createElement('div');
+        actionsDiv.className = 'deck-actions-btns';
+
+        const editBtn = document.createElement('button');
+        editBtn.className = 'action-btn edit';
+        editBtn.title = 'Edit Deck';
+        editBtn.textContent = '✏️';
+
+        const deleteBtn = document.createElement('button');
+        deleteBtn.className = 'action-btn delete';
+        deleteBtn.title = 'Delete Deck';
+        deleteBtn.textContent = '🗑️';
+
+        actionsDiv.appendChild(editBtn);
+        actionsDiv.appendChild(deleteBtn);
+
+        card.appendChild(iconSpan);
+        card.appendChild(infoDiv);
+        card.appendChild(actionsDiv);
 
         // Edit Deck
-        card.querySelector('.edit')?.addEventListener('click', () => {
+        editBtn.addEventListener('click', () => {
           const form = document.getElementById('deck-form') as HTMLElement;
           const editIdInput = document.getElementById('deck-edit-id') as HTMLInputElement;
           const iconInput = document.getElementById('deck-icon-input') as HTMLInputElement;
@@ -135,7 +167,7 @@ class PopupManager {
         });
 
         // Delete Deck
-        card.querySelector('.delete')?.addEventListener('click', async () => {
+        deleteBtn.addEventListener('click', async () => {
           if (confirm(`Delete category "${cat.name}"? Channels will move to Uncategorized.`)) {
             await this.deleteDeck(cat);
           }
@@ -147,7 +179,6 @@ class PopupManager {
 
   private static async deleteDeck(deck: CategoryDeck): Promise<void> {
     let categories = await SubDeckStorage.getCategories();
-    // Remove deck
     categories = categories.filter(c => c.id !== deck.id);
 
     // Add orphaned channels back to uncategorized
@@ -166,9 +197,14 @@ class PopupManager {
   // --- TAB 2: CHANNELS MANAGER ---
   private static setupChannelSearch(): void {
     const searchInput = document.getElementById('channel-search') as HTMLInputElement;
-    searchInput?.addEventListener('input', () => {
+    if (!searchInput) return;
+
+    // Debounce search input to prevent rapid UI thrashing
+    const debouncedSearch = debounce(() => {
       this.renderChannels(searchInput.value.toLowerCase().trim());
-    });
+    }, 150);
+
+    searchInput.addEventListener('input', debouncedSearch);
   }
 
   private static async renderChannels(filter = ''): Promise<void> {
@@ -185,39 +221,61 @@ class PopupManager {
       : channels;
 
     if (filtered.length === 0) {
-      container.innerHTML = '<div style="text-align:center;padding:20px;color:var(--text-secondary);font-size:12px;">No channels found.</div>';
+      const emptyDiv = document.createElement('div');
+      emptyDiv.style.textAlign = 'center';
+      emptyDiv.style.padding = '20px';
+      emptyDiv.style.color = 'var(--text-secondary)';
+      emptyDiv.style.fontSize = '12px';
+      emptyDiv.textContent = 'No channels found.';
+      container.appendChild(emptyDiv);
       return;
     }
 
     filtered.forEach(ch => {
+      // Safe DOM construction: Zero innerHTML
       const card = document.createElement('div');
       card.className = 'channel-card';
 
-      // Find current deck
-      const currentDeck = categories.find(c => c.channelIds.includes(ch.ucId)) || categories.find(c => c.id === '__uncategorized__');
+      const currentDeck =
+        categories.find(c => c.channelIds.includes(ch.ucId)) ||
+        categories.find(c => c.id === '__uncategorized__');
 
-      // Dropdown options
-      const optionsHtml = categories
-        .map(cat => `<option value="${cat.id}" ${currentDeck?.id === cat.id ? 'selected' : ''}>${cat.icon} ${cat.name}</option>`)
-        .join('');
+      const metaDiv = document.createElement('div');
+      metaDiv.className = 'channel-meta';
 
-      card.innerHTML = `
-        <div class="channel-meta">
-          <div class="channel-title" title="${ch.title}">${ch.title}</div>
-          <div class="channel-handle">${ch.handle}</div>
-        </div>
-        <select class="channel-deck-select" data-ucid="${ch.ucId}">
-          ${optionsHtml}
-        </select>
-      `;
+      const titleDiv = document.createElement('div');
+      titleDiv.className = 'channel-title';
+      titleDiv.title = ch.title;
+      titleDiv.textContent = ch.title;
 
-      // Handle category change
-      const select = card.querySelector('.channel-deck-select') as HTMLSelectElement;
+      const handleDiv = document.createElement('div');
+      handleDiv.className = 'channel-handle';
+      handleDiv.textContent = ch.handle;
+
+      metaDiv.appendChild(titleDiv);
+      metaDiv.appendChild(handleDiv);
+
+      const select = document.createElement('select');
+      select.className = 'channel-deck-select';
+      select.setAttribute('data-ucid', ch.ucId);
+
+      categories.forEach(cat => {
+        const option = document.createElement('option');
+        option.value = cat.id;
+        option.textContent = `${cat.icon} ${cat.name}`;
+        if (currentDeck?.id === cat.id) {
+          option.selected = true;
+        }
+        select.appendChild(option);
+      });
+
       select.addEventListener('change', async () => {
         const newCatId = select.value;
         await this.assignChannelToCategory(ch.ucId, newCatId);
       });
 
+      card.appendChild(metaDiv);
+      card.appendChild(select);
       container.appendChild(card);
     });
   }
@@ -250,7 +308,6 @@ class PopupManager {
 
     if (!this.state) return;
 
-    // Load initial settings
     aiProvider.value = this.state.settings.aiProvider;
     apiKey.value = this.state.settings.apiKey || '';
     hideShorts.checked = this.state.settings.hideShortsFromFeed;
@@ -283,11 +340,18 @@ class PopupManager {
     importFile?.addEventListener('change', async (e) => {
       const file = (e.target as HTMLInputElement).files?.[0];
       if (file) {
-        await ExportImport.importFromFile(file, 'merge');
-        this.state = await SubDeckStorage.getAll();
-        alert('SubDeck backup imported successfully!');
-        await this.renderDecks();
-        await this.renderChannels();
+        try {
+          await ExportImport.importFromFile(file, 'merge');
+          this.state = await SubDeckStorage.getAll();
+          alert('SubDeck backup imported successfully!');
+          await this.renderDecks();
+          await this.renderChannels();
+        } catch (err) {
+          alert(`Failed to import backup: ${err instanceof Error ? err.message : 'Invalid file'}`);
+        } finally {
+          // Reset file input so user can re-import the same file if needed
+          importFile.value = '';
+        }
       }
     });
   }

@@ -418,3 +418,9 @@
   font-size: 12px;
   font-weight: 500;
 }
+
+/* Responsive: hide custom sidebar elements when YouTube collapses to mini-guide */
+ytd-app[mini-guide] #subdeck-sidebar-container,
+ytd-mini-guide-renderer #subdeck-sidebar-container {
+  display: none !important;
+}

@@ -58,11 +58,15 @@ export class AICategorizer {
 
   private static async tryGeminiCloud(channels: SubscribedChannel[], apiKey: string): Promise<CategoryDeck[] | null> {
     const prompt = buildCategorizationPrompt(channels);
-    const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`;
+    // Security: Pass API key via header rather than exposing in URL query parameter
+    const url = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent';
 
     const res = await fetch(url, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: {
+        'Content-Type': 'application/json',
+        'x-goog-api-key': apiKey,
+      },
       body: JSON.stringify({
         contents: [{ parts: [{ text: prompt }] }],
         generationConfig: { responseMimeType: 'application/json' },
@@ -83,24 +87,39 @@ export class AICategorizer {
   private static parseAIResponse(raw: string, channels: SubscribedChannel[]): CategoryDeck[] | null {
     try {
       const cleaned = raw.replace(/```json/g, '').replace(/```/g, '').trim();
-      const parsed = JSON.parse(cleaned) as Record<string, string[]>;
+      const parsed = JSON.parse(cleaned);
+      if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+        return null;
+      }
 
-      const decks: CategoryDeck[] = SUBDECK_TAXONOMY.map((tax, idx) => ({
-        id: tax.id,
-        name: tax.name,
-        icon: tax.icon,
-        color: tax.color,
-        channelIds: Array.isArray(parsed[tax.id]) ? parsed[tax.id] : [],
-        isCollapsed: true,
-        sortOrder: idx,
-      }));
+      const safeParsed = parsed as Record<string, unknown>;
+
+      const decks: CategoryDeck[] = SUBDECK_TAXONOMY.map((tax, idx) => {
+        const rawIds = safeParsed[tax.id];
+        const validIds = Array.isArray(rawIds)
+          ? rawIds.filter((id): id is string => typeof id === 'string')
+          : [];
+
+        return {
+          id: tax.id,
+          name: tax.name,
+          icon: tax.icon,
+          color: tax.color,
+          channelIds: validIds,
+          isCollapsed: true,
+          sortOrder: idx,
+        };
+      });
 
       const assignedIds = new Set<string>();
       decks.forEach(d => d.channelIds.forEach(id => assignedIds.add(id)));
 
       // Collect uncategorized
       const unassigned = channels.filter(c => !assignedIds.has(c.ucId)).map(c => c.ucId);
-      const aiUncategorized = Array.isArray(parsed['__uncategorized__']) ? parsed['__uncategorized__'] : [];
+      const rawAiUncategorized = safeParsed['__uncategorized__'];
+      const aiUncategorized = Array.isArray(rawAiUncategorized)
+        ? rawAiUncategorized.filter((id): id is string => typeof id === 'string')
+        : [];
       const allUncategorized = Array.from(new Set([...unassigned, ...aiUncategorized]));
 
       decks.push({
@@ -114,9 +133,9 @@ export class AICategorizer {
         isSystem: true,
       });
 
-      return decks.filter(d => d.channelIds.length > 0 || d.isSystem);
+      return decks.filter(d => d.channelIds.length > 0 || d.id === '__uncategorized__');
     } catch (err) {
-      Logger.error('[SubDeck AI] Failed to parse AI JSON response:', err, raw);
+      Logger.warn('[SubDeck AI] Failed to parse AI JSON response:', err);
       return null;
     }
   }

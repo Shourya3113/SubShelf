@@ -3,15 +3,21 @@
   "name": "SubDeck — Smart Subscription Folders",
   "version": "1.0.0",
   "description": "Smart Subscription Category Folders & Feed Curator for YouTube™",
-  "permissions": ["storage", "alarms"],
-  "host_permissions": ["*://*.youtube.com/*"],
+  "permissions": ["storage"],
+  "host_permissions": [
+    "https://*.youtube.com/*",
+    "https://generativelanguage.googleapis.com/*"
+  ],
+  "content_security_policy": {
+    "extension_pages": "script-src 'self'; object-src 'self'; connect-src 'self' https://generativelanguage.googleapis.com;"
+  },
   "background": {
     "service_worker": "src/background/service-worker.ts",
     "type": "module"
   },
   "content_scripts": [
     {
-      "matches": ["*://*.youtube.com/*"],
+      "matches": ["https://*.youtube.com/*"],
       "js": ["src/content/index.ts"],
       "css": ["src/content/styles/subdeck.css"],
       "run_at": "document_end"

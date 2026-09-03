@@ -10,7 +10,7 @@
     "isolatedModules": true,
     "noEmit": true,
     "strict": true,
-    "types": ["vite/client", "chrome", "node"],
+    "types": ["vite/client", "chrome"],
     "noUnusedLocals": true,
     "noUnusedParameters": true,
     "noFallthroughCasesInSwitch": true,

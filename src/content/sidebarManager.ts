@@ -143,8 +143,9 @@ export class SidebarManager {
     const showAllBtn = document.createElement('button');
     showAllBtn.innerText = '☰ Show All Subscriptions';
     showAllBtn.className = 'subdeck-clear-filter';
-    showAllBtn.addEventListener('click', () => {
+    showAllBtn.addEventListener('click', async () => {
       document.querySelectorAll('.subdeck-folder-header').forEach(el => el.classList.remove('active-filter'));
+      await SubDeckStorage.setAll({ activeCategoryId: null });
       document.dispatchEvent(new CustomEvent('subdeck-filter-category', { detail: null }));
     });
     container.appendChild(showAllBtn);
@@ -195,6 +196,9 @@ export class SidebarManager {
             document.querySelectorAll('.subdeck-folder-header').forEach(el => el.classList.remove('active-filter'));
             header.classList.add('active-filter');
             document.dispatchEvent(new CustomEvent('subdeck-filter-category', { detail: cat }));
+          } else {
+            await SubDeckStorage.setAll({ activeCategoryId: cat.id });
+            window.location.href = '/feed/subscriptions';
           }
         });
 

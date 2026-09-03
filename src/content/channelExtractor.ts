@@ -2,6 +2,31 @@ import { YT_SELECTORS, getSubscriptionSection } from '@/config/selectors';
 import { IdNormalizer } from '@/utils/idNormalizer';
 import { SubscribedChannel } from '@/types';
 
+// YouTube navigation items and system topics to exclude
+const SYSTEM_NAMES = new Set([
+  'your videos',
+  'history',
+  'playlists',
+  'watch later',
+  'liked videos',
+  'your clips',
+  'shopping',
+  'music',
+  'movies',
+  'live',
+  'gaming',
+  'news',
+  'sports',
+  'learning',
+  'podcasts',
+  'browse channels',
+  'show more',
+  'show fewer',
+  'report history',
+  'help',
+  'send feedback',
+]);
+
 export class ChannelExtractor {
   static scrapeFromSidebar(): SubscribedChannel[] {
     const channels: SubscribedChannel[] = [];
@@ -15,20 +40,24 @@ export class ChannelExtractor {
       if (!anchor) return;
 
       const href = anchor.getAttribute('href') || '';
-      // Skip "Show more", "Browse channels", etc.
+      // Skip non-channel links
       if (!href.includes('/@') && !href.includes('/channel/')) return;
+      if (href.includes('/feed/') || href.includes('/playlist')) return;
 
       const { ucId, handle } = IdNormalizer.extractFromAnchor(anchor);
       if (!ucId && !handle) return;
 
-      const title =
+      const rawTitle =
         anchor.getAttribute('title') ||
         (entry.querySelector('yt-formatted-string') as HTMLElement)?.innerText?.trim() ||
         (entry.querySelector('#guide-entry-title') as HTMLElement)?.textContent?.trim() ||
         handle ||
         'Channel';
 
-      // Safe avatar extraction
+      const title = rawTitle.trim();
+      if (SYSTEM_NAMES.has(title.toLowerCase())) return;
+
+      // Extract real channel avatar
       const imgEl = entry.querySelector('yt-img-shadow img, img') as HTMLImageElement | null;
       let avatarUrl = '';
       if (imgEl) {

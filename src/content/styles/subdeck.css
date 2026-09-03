@@ -34,15 +34,35 @@
   font-weight: 600;
 }
 
+/* Controlled scrollable channel list preventing sidebar displacement */
 .subdeck-channel-list {
   max-height: 0;
-  overflow: hidden;
+  overflow-y: hidden;
   transition: max-height 0.25s cubic-bezier(0.4, 0, 0.2, 1);
   padding-left: 8px;
 }
 
 .subdeck-channel-list:not(.collapsed) {
-  max-height: 3500px;
+  max-height: 380px;
+  overflow-y: auto;
+}
+
+/* Custom scrollbar */
+.subdeck-channel-list::-webkit-scrollbar {
+  width: 5px;
+}
+
+.subdeck-channel-list::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.subdeck-channel-list::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.2);
+  border-radius: 3px;
+}
+
+.subdeck-channel-list::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.35);
 }
 
 .subdeck-channel-item {

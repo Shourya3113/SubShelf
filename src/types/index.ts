@@ -42,7 +42,7 @@ export const UNCATEGORIZED_DECK: CategoryDeck = {
   icon: '📂',
   color: '#6B7280',
   channelIds: [],
-  isCollapsed: false,
+  isCollapsed: true,
   sortOrder: 999,
   isSystem: true,
 };

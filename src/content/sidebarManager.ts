@@ -10,7 +10,7 @@ export class SidebarManager {
     const subSection = getSubscriptionSection();
     if (!subSection) return;
 
-    // Deduplicate: Remove any stale or duplicate containers
+    // Deduplicate: Clean up any extra containers
     const existing = document.querySelectorAll(`#${this.containerId}`);
     if (existing.length > 1) {
       existing.forEach((el, idx) => {
@@ -22,9 +22,13 @@ export class SidebarManager {
     if (!container) {
       container = document.createElement('div');
       container.id = this.containerId;
-      subSection.parentNode?.insertBefore(container, subSection);
-    } else if (container.nextElementSibling !== subSection) {
-      // Ensure it is positioned directly above the subscriptions section
+    }
+
+    // Anchor inside or directly above the subscriptions list
+    const itemsContainer = subSection.querySelector('#items');
+    if (itemsContainer && container.nextElementSibling !== itemsContainer) {
+      itemsContainer.parentNode?.insertBefore(container, itemsContainer);
+    } else if (!itemsContainer && container.nextElementSibling !== subSection) {
       subSection.parentNode?.insertBefore(container, subSection);
     }
 
@@ -123,7 +127,20 @@ export class SidebarManager {
     if (scraped.length === 0) return;
 
     const storageChannels = await SubDeckStorage.getChannels();
+    const categories = await SubDeckStorage.getCategories();
     let hasChanges = false;
+
+    // Purge any accidental system topics from storage
+    const SYSTEM_NAMES = new Set(['your videos', 'shopping', 'music', 'gaming', 'news', 'movies', 'live', 'podcasts', 'sports']);
+    for (const [ucId, ch] of Object.entries(storageChannels)) {
+      if (SYSTEM_NAMES.has(ch.title.toLowerCase())) {
+        await SubDeckStorage.removeChannel(ucId);
+        categories.forEach(cat => {
+          cat.channelIds = cat.channelIds.filter(id => id !== ucId);
+        });
+        hasChanges = true;
+      }
+    }
 
     for (const ch of scraped) {
       if (!storageChannels[ch.ucId]) {
@@ -134,6 +151,7 @@ export class SidebarManager {
     }
 
     if (hasChanges) {
+      await SubDeckStorage.setAll({ categories });
       await this.render();
     }
   }

@@ -85,16 +85,17 @@
   flex-shrink: 0;
 }
 
-/* Action buttons on the header */
+/* Action buttons on the header: hidden by default so title has maximum width, revealed on hover */
 .subdeck-header-actions {
   display: flex;
   align-items: center;
-  gap: 3px;
-  margin-left: 6px;
+  gap: 2px;
+  margin-left: 4px;
   flex-shrink: 0;
 }
 
-.subdeck-header-btn {
+.subdeck-header-actions .subdeck-header-btn {
+  display: none;
   background: transparent;
   border: none;
   color: var(--yt-spec-text-secondary, #aaaaaa);
@@ -103,12 +104,11 @@
   border-radius: 4px;
   font-size: 11px;
   line-height: 1;
-  opacity: 0.6;
-  transition: opacity 0.15s ease, color 0.15s ease;
+  transition: all 0.15s ease;
 }
 
-.subdeck-folder-header:hover .subdeck-header-btn {
-  opacity: 1;
+.subdeck-folder-header:hover .subdeck-header-actions .subdeck-header-btn {
+  display: inline-flex;
 }
 
 .subdeck-header-btn:hover {

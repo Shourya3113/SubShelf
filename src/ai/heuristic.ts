@@ -30,7 +30,7 @@ export const SUBDECK_TAXONOMY: TaxonomyEntry[] = [
       'machine learning', 'deep learning', 'neural', 'hardware', 'gadgets', 'cybersecurity',
       'engineering', 'intel', 'amd', 'nvidia', 'setup', 'server', 'terminal',
       'cloud', 'aws', 'data science', 'algorithms', 'github', 'macos', 'ios',
-      'android', 'smartphone', 'review', 'benchmark', 'overclock',
+      'android', 'smartphone', 'benchmark', 'overclock',
     ],
   },
   {
@@ -46,8 +46,8 @@ export const SUBDECK_TAXONOMY: TaxonomyEntry[] = [
     ],
     keywords: [
       'game', 'games', 'gaming', 'playthrough', 'walkthrough', 'gameplay',
-      'play', 'streamer', 'twitch', 'steam', 'esports', 'speedrun', 'rpg',
-      'fps', 'multiplayer', 'trailer', 'mod', 'roblox', 'fortnite', 'valorant',
+      'streamer', 'twitch', 'steam', 'esports', 'speedrun', 'rpg',
+      'fps', 'multiplayer', 'mod', 'roblox', 'fortnite', 'valorant',
       'league of legends', 'minecraft', 'gta', 'pokemon', 'zelda', 'overwatch',
       'counter-strike', 'apex legends', 'console', 'emulator',
     ],
@@ -58,18 +58,25 @@ export const SUBDECK_TAXONOMY: TaxonomyEntry[] = [
     icon: '🎵',
     color: '#EC4899',
     exactSignatures: [
-      'charlie puth', 'clean bandit', 'eminem', 'eminemmusic', 'dizastamusic', 'dolby',
+      'post malone', 'charlie puth', 'clean bandit', 'eminem', 'eminemmusic', 'dizastamusic', 'dolby',
       'vevo', 'sony music', 'warner records', 't-series', 'trap nation', 'monstercat',
       'lofi girl', 'taylor swift', 'ed sheeran', 'drake', 'the weeknd', 'justin bieber',
       'billie eilish', 'adele', 'bts', 'alan walker', 'marshmello', 'bruno mars',
-      'spinnin records', 'we the sus music', 'noisiest', 'ultra records',
+      'spinnin records', 'we the sus music', 'noisiest', 'ultra records', 'coldplay',
+      'imagine dragons', 'maroon 5', 'kendrick lamar', 'travis scott', 'kanye west',
+      'bad bunny', 'j balvin', 'dua lipa', 'olivia rodrigo', 'selena gomez',
+      'shawn mendes', 'katy perry', 'shakira', 'lady gaga', 'rihanna', 'ariana grande',
+      'queen', 'michael jackson', 'nirvana', 'linkin park', 'green day', 'metallica',
+      'snoop dogg', '50 cent', 'jay-z', 'lil nas x', 'cardi b', 'nicki minaj',
+      'avicii', 'david guetta', 'calvin harris', 'the chainsmokers', 'kygo', 'skrillex',
     ],
     keywords: [
       'music', 'vevo', 'records', 'sound', 'audio', 'song', 'songs', 'band',
       'orchestra', 'beats', 'bass', 'lyrics', 'acoustic', 'remix', 'hiphop',
       'pop', 'rock', 'rap', 'dj', 'vocals', 'radio', 'track', 'concert',
       'album', 'melody', 'instrumental', 'jazz', 'lo-fi', 'lofi', 'trap',
-      'guitar', 'piano', 'singer', 'chords', 'studio', 'synthesizer',
+      'guitar', 'piano', 'singer', 'chords', 'studio', 'synthesizer', 'official audio',
+      'official video', 'lyric video',
     ],
   },
   {
@@ -107,7 +114,7 @@ export const SUBDECK_TAXONOMY: TaxonomyEntry[] = [
     keywords: [
       'entertainment', 'comedy', 'vlog', 'show', 'cinema', 'movie', 'film',
       'podcast', 'funny', 'skit', 'reaction', 'drama', 'animation', 'anime',
-      'cartoon', 'studios', 'review', 'interview', 'talk show', 'late night',
+      'cartoon', 'studios', 'interview', 'talk show', 'late night',
       'memes', 'hollywood', 'parody', 'acting', 'shorts', 'clips', 'bloopers',
       'episode', 'season', 'scene',
     ],
@@ -172,11 +179,13 @@ export const SUBDECK_TAXONOMY: TaxonomyEntry[] = [
       'bbc news', 'cnn', 'fox news', 'msnbc', 'vox', 'the new york times',
       'the wall street journal', 'reuters', 'bloomberg', 'vice news', 'al jazeera',
       'the guardian', 'pbs newshour', 'abc news', 'sky news', 'dw news',
+      'washington post', 'new york post', 'daily news', 'associated press',
     ],
     keywords: [
-      'news', 'politics', 'daily', 'report', 'journalism', 'breaking',
-      'world', 'global', 'press', 'coverage', 'commentary', 'affairs',
-      'election', 'times', 'post', 'live news', 'current affairs', 'geopolitics',
+      'news', 'politics', 'journalism', 'breaking news',
+      'coverage', 'commentary', 'current affairs',
+      'election', 'live news', 'geopolitics', 'press conference',
+      'daily wire', 'daily beast', 'huffpost', 'political',
     ],
   },
   {
@@ -224,9 +233,8 @@ export class HeuristicCategorizer {
           }
         }
 
-        // 2. Word Boundary Matching (+10 points per keyword match)
+        // 2. Word Boundary Matching (+15 points per keyword match)
         for (const kw of tax.keywords) {
-          // Use regex word boundary to prevent partial collisions (e.g. 'cod' in 'coding', 'war' in 'software')
           const escaped = kw.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
           const regex = new RegExp(`\\b${escaped}\\b`, 'i');
 
@@ -235,7 +243,7 @@ export class HeuristicCategorizer {
           } else if (regex.test(handleLower)) {
             score += 10;
           } else if (combined.includes(kw) && kw.includes(' ')) {
-            // Multi-word phrases like "real engineering", "tech tips", "web dev"
+            // Multi-word phrases like "real engineering", "tech tips", "web dev", "breaking news"
             score += 25;
           }
         }

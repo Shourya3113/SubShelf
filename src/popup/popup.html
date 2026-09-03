@@ -2,14 +2,93 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <title>SubDeck</title>
+  <title>SubDeck — Subscription Manager</title>
   <link rel="stylesheet" href="popup.css">
 </head>
 <body>
-  <div id="app">
-    <div class="logo">⚡ SubDeck</div>
-    <div class="status">Foundation initialized successfully. Ready for Day 2!</div>
-  </div>
+  <header class="header">
+    <div class="brand">
+      <span class="logo-icon">⚡</span>
+      <h1 class="logo-title">SubDeck</h1>
+    </div>
+    <span id="version" class="version-badge">v1.0.0</span>
+  </header>
+
+  <nav class="tabs">
+    <button class="tab-btn active" data-tab="decks">📁 Decks</button>
+    <button class="tab-btn" data-tab="channels">📺 Channels</button>
+    <button class="tab-btn" data-tab="settings">⚙️ Settings</button>
+  </nav>
+
+  <main class="content">
+    <!-- TAB 1: DECKS -->
+    <section id="tab-decks" class="tab-panel active">
+      <div class="deck-actions">
+        <button id="add-deck-btn" class="btn btn-primary">+ New Category Deck</button>
+      </div>
+
+      <!-- Create/Edit Deck Form (hidden by default) -->
+      <div id="deck-form" class="deck-form" style="display: none;">
+        <input type="hidden" id="deck-edit-id" value="" />
+        <div class="form-row">
+          <input type="text" id="deck-icon-input" class="icon-input" placeholder="📁" maxlength="2" />
+          <input type="text" id="deck-name-input" class="text-input" placeholder="Deck Name (e.g. Coding)" />
+        </div>
+        <div class="form-buttons">
+          <button id="deck-save-btn" class="btn btn-sm btn-primary">Save Deck</button>
+          <button id="deck-cancel-btn" class="btn btn-sm btn-secondary">Cancel</button>
+        </div>
+      </div>
+
+      <div id="decks-list" class="decks-list"></div>
+    </section>
+
+    <!-- TAB 2: CHANNELS MANAGER -->
+    <section id="tab-channels" class="tab-panel">
+      <div class="search-bar">
+        <input type="text" id="channel-search" class="search-input" placeholder="🔍 Search channels..." />
+      </div>
+      <div id="channels-list" class="channels-list"></div>
+    </section>
+
+    <!-- TAB 3: SETTINGS -->
+    <section id="tab-settings" class="tab-panel">
+      <div class="settings-group">
+        <label class="settings-label">AI Categorization Model</label>
+        <select id="setting-ai-provider" class="select-input">
+          <option value="gemini-nano">Gemini Nano (Chrome Built-in AI)</option>
+          <option value="gemini-api">Google Gemini 1.5 Flash (Cloud API)</option>
+          <option value="heuristic">Offline Regex & Keywords</option>
+        </select>
+      </div>
+
+      <div class="settings-group" id="api-key-group">
+        <label class="settings-label">Gemini API Key (Optional)</label>
+        <input type="password" id="setting-api-key" class="text-input" placeholder="AIzaSy..." />
+        <span class="settings-help">Required only for Gemini Cloud API tier.</span>
+      </div>
+
+      <div class="settings-group toggle-group">
+        <label class="toggle-label" for="setting-hide-shorts">
+          <span>Hide Shorts from Subscriptions Feed</span>
+          <span class="settings-help">Automatically remove Shorts shelves</span>
+        </label>
+        <input type="checkbox" id="setting-hide-shorts" class="toggle-switch" />
+      </div>
+
+      <div class="settings-group">
+        <label class="settings-label">Backup & Restore</label>
+        <div class="backup-buttons">
+          <button id="export-backup-btn" class="btn btn-secondary">📥 Export JSON</button>
+          <label class="btn btn-secondary upload-btn">
+            📤 Import JSON
+            <input type="file" id="import-backup-file" accept=".json" style="display: none;" />
+          </label>
+        </div>
+      </div>
+    </section>
+  </main>
+
   <script type="module" src="popup.ts"></script>
 </body>
 </html>

@@ -1,7 +1,7 @@
 import { getSubscriptionSection } from '@/config/selectors';
 import { SubDeckStorage } from '@/utils/storage';
 import { ChannelExtractor } from './channelExtractor';
-import { CategoryDeck } from '@/types';
+import { HeuristicCategorizer } from '@/ai/heuristic';
 
 export class SidebarManager {
   private static containerId = 'subdeck-sidebar-container';
@@ -100,15 +100,15 @@ export class SidebarManager {
         await new Promise<void>((resolve) => {
           chrome.runtime.sendMessage({ type: 'subdeck-auto-organize' }, async (res) => {
             if (res?.success) {
-              await SidebarManager.render();
+              await this.render();
             } else {
-              await SidebarManager.runQuickCategorization();
+              await this.runQuickCategorization();
             }
             resolve();
           });
         });
       } catch {
-        await SidebarManager.runQuickCategorization();
+        await this.runQuickCategorization();
       } finally {
         aiBtn.disabled = false;
         aiBtn.innerText = '✨ Auto-AI';
@@ -139,6 +139,7 @@ export class SidebarManager {
           id: newId,
           name,
           icon: '📁',
+          color: '#3B82F6',
           channelIds: [],
           isCollapsed: false,
           sortOrder: currentCategories.length,
@@ -169,9 +170,9 @@ export class SidebarManager {
     });
     container.appendChild(showAllBtn);
 
-    // 3. Render Category Folders (Skip Uncategorized Folder entirely)
+    // 3. Render Category Folders (Skip system uncategorized if empty)
     categories
-      .filter(cat => cat.id !== '__uncategorized__')
+      .filter(cat => cat.id !== '__uncategorized__' || cat.channelIds.length > 0)
       .slice()
       .sort((a, b) => a.sortOrder - b.sortOrder)
       .forEach(cat => {
@@ -181,36 +182,105 @@ export class SidebarManager {
         const header = document.createElement('div');
         header.className = `subdeck-folder-header ${activeCategory === cat.id ? 'active-filter' : ''}`;
         header.innerHTML = `
-          <span class="subdeck-folder-icon">${cat.icon}</span>
-          <span class="subdeck-folder-title" title="${cat.name}">${cat.name}</span>
-          <span class="subdeck-channel-count">${cat.channelIds.length}</span>
-          <span class="subdeck-chevron ${cat.isCollapsed ? '' : 'open'}">▼</span>
+          <div class="subdeck-folder-main" title="Open feed for ${cat.name}">
+            <span class="subdeck-folder-icon">${cat.icon}</span>
+            <span class="subdeck-folder-title">${cat.name}</span>
+            <span class="subdeck-channel-count">${cat.channelIds.length}</span>
+          </div>
+          <div class="subdeck-header-actions">
+            <button class="subdeck-header-btn add" title="Add channel to folder">+</button>
+            <button class="subdeck-header-btn delete" title="Delete folder">🗑️</button>
+            <button class="subdeck-chevron-btn ${cat.isCollapsed ? '' : 'open'}" title="Toggle channels list">▼</button>
+          </div>
         `;
+
+        // Inline quick add channel picker box
+        const addPickerBox = document.createElement('div');
+        addPickerBox.className = 'subdeck-add-picker';
+        addPickerBox.style.display = 'none';
+
+        const availableChannels = Object.values(channelsMap).filter(ch => !cat.channelIds.includes(ch.ucId));
+        const optionsHtml = availableChannels
+          .map(ch => `<option value="${ch.ucId}">${ch.title}</option>`)
+          .join('');
+
+        addPickerBox.innerHTML = `
+          <select class="subdeck-add-select">
+            ${optionsHtml || '<option value="">All channels already in deck</option>'}
+          </select>
+          <button class="subdeck-add-confirm-btn">Add</button>
+        `;
+
+        const addBtn = header.querySelector('.subdeck-header-btn.add');
+        addBtn?.addEventListener('click', (e) => {
+          e.stopPropagation();
+          addPickerBox.style.display = addPickerBox.style.display === 'none' ? 'flex' : 'none';
+        });
+
+        const addConfirmBtn = addPickerBox.querySelector('.subdeck-add-confirm-btn');
+        addConfirmBtn?.addEventListener('click', async (e) => {
+          e.stopPropagation();
+          const select = addPickerBox.querySelector('.subdeck-add-select') as HTMLSelectElement;
+          const selectedUcId = select?.value;
+          if (selectedUcId) {
+            cat.channelIds.push(selectedUcId);
+            await SubDeckStorage.setAll({ categories });
+            await this.render();
+          }
+        });
+
+        const deleteBtn = header.querySelector('.subdeck-header-btn.delete');
+        deleteBtn?.addEventListener('click', async (e) => {
+          e.stopPropagation();
+          if (confirm(`Delete folder "${cat.name}"?`)) {
+            const currentCats = await SubDeckStorage.getCategories();
+            const updated = currentCats.filter(c => c.id !== cat.id);
+            await SubDeckStorage.setAll({ categories: updated });
+            await this.render();
+          }
+        });
 
         const list = document.createElement('div');
         list.className = `subdeck-channel-list ${cat.isCollapsed ? 'collapsed' : ''}`;
 
-        // Render clean channel text items (no logos)
+        // Render clean channel text items with remove button
         cat.channelIds.forEach(id => {
           const ch = channelsMap[id];
           if (!ch) return;
-          const item = document.createElement('a');
+
+          const item = document.createElement('div');
           item.className = 'subdeck-channel-item';
-          item.href = ch.url;
-          item.textContent = ch.title;
-          item.title = ch.title;
+          item.innerHTML = `
+            <a class="subdeck-channel-link" href="${ch.url}" title="${ch.title}">${ch.title}</a>
+            <button class="subdeck-channel-remove-btn" title="Remove from folder">✕</button>
+          `;
+
+          // Remove channel from this folder
+          item.querySelector('.subdeck-channel-remove-btn')?.addEventListener('click', async (e) => {
+            e.stopPropagation();
+            cat.channelIds = cat.channelIds.filter(cid => cid !== id);
+            await SubDeckStorage.setAll({ categories });
+            await this.render();
+          });
+
           list.appendChild(item);
         });
 
-        header.addEventListener('click', async () => {
-          const chevron = header.querySelector('.subdeck-chevron');
+        // 1. CHEVRON CLICK: ONLY toggles the channels list, NEVER navigates or opens feed!
+        const chevronBtn = header.querySelector('.subdeck-chevron-btn');
+        chevronBtn?.addEventListener('click', async (e) => {
+          e.stopPropagation();
           const isNowCollapsed = !list.classList.contains('collapsed');
           list.classList.toggle('collapsed');
-          chevron?.classList.toggle('open', !isNowCollapsed);
+          chevronBtn.classList.toggle('open', !isNowCollapsed);
 
           cat.isCollapsed = isNowCollapsed;
           await SubDeckStorage.setAll({ categories });
+        });
 
+        // 2. FOLDER TITLE CLICK: Opens and filters the feed!
+        const folderMain = header.querySelector('.subdeck-folder-main');
+        folderMain?.addEventListener('click', async () => {
           if (window.location.pathname.startsWith('/feed/subscriptions')) {
             document.querySelectorAll('.subdeck-folder-header').forEach(el => el.classList.remove('active-filter'));
             header.classList.add('active-filter');
@@ -222,6 +292,7 @@ export class SidebarManager {
         });
 
         folder.appendChild(header);
+        folder.appendChild(addPickerBox);
         folder.appendChild(list);
         container.appendChild(folder);
       });
@@ -232,71 +303,8 @@ export class SidebarManager {
     const channels = Object.values(channelsMap);
     if (channels.length === 0) return;
 
-    const taxonomy: Record<string, { name: string; icon: string; keywords: string[] }> = {
-      'tech-coding': {
-        name: 'Tech & Coding',
-        icon: '💻',
-        keywords: ['tech', 'apple', 'code', 'coding', 'cs50', 'software', 'programming', 'developer', 'linux', 'dev', 'python', 'ai', 'engineer', 'linus'],
-      },
-      gaming: {
-        name: 'Gaming',
-        icon: '🎮',
-        keywords: ['game', 'gaming', 'destiny', 'playthrough', 'twitch', 'steam', 'xbox', 'playstation', 'nintendo', 'clips'],
-      },
-      music: {
-        name: 'Music',
-        icon: '🎵',
-        keywords: ['music', 'puth', 'bandit', 'records', 'song', 'audio', 'sound', 'band', 'vevo', 'dolby', 'charlie', 'dizasta', 'eminem'],
-      },
-      education: {
-        name: 'Education & Science',
-        icon: '📚',
-        keywords: ['science', 'learn', 'education', 'domain', 'course', 'academy', 'history', 'physics', 'math', 'explained', 'demos'],
-      },
-      entertainment: {
-        name: 'Entertainment',
-        icon: '🍿',
-        keywords: ['entertainment', 'comedy', 'vlog', 'show', 'cinema', 'movie', 'film', 'podcast', 'marvel', 'sony'],
-      },
-    };
-
-    const newDecks: CategoryDeck[] = Object.entries(taxonomy).map(([id, meta], idx) => ({
-      id,
-      name: meta.name,
-      icon: meta.icon,
-      channelIds: [],
-      isCollapsed: true, // Collapsed by default
-      sortOrder: idx,
-    }));
-
-    const assignedIds = new Set<string>();
-
-    for (const ch of channels) {
-      const text = `${ch.title} ${ch.handle}`.toLowerCase();
-      for (const [catId, meta] of Object.entries(taxonomy)) {
-        if (meta.keywords.some(kw => text.includes(kw))) {
-          const deck = newDecks.find(d => d.id === catId);
-          deck?.channelIds.push(ch.ucId);
-          assignedIds.add(ch.ucId);
-          break;
-        }
-      }
-    }
-
-    // Capture remaining into Uncategorized in storage (but hidden from sidebar display)
-    const unassigned = channels.filter(c => !assignedIds.has(c.ucId)).map(c => c.ucId);
-    newDecks.push({
-      id: '__uncategorized__',
-      name: 'Uncategorized',
-      icon: '📂',
-      channelIds: unassigned,
-      isCollapsed: true,
-      sortOrder: 999,
-      isSystem: true,
-    });
-
-    // Save only decks that have channels or are uncategorized
-    const finalDecks = newDecks.filter(d => d.channelIds.length > 0 || d.id === '__uncategorized__');
+    // Use comprehensive 9-category taxonomy with catch-all
+    const finalDecks = HeuristicCategorizer.categorize(channels);
     await SubDeckStorage.setAll({ categories: finalDecks });
     await this.render();
   }

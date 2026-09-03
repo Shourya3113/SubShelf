@@ -24,15 +24,15 @@
 
 /* Force high-contrast text color on dark and light YouTube themes */
 .subdeck-folder-header,
-.subdeck-channel-item {
+.subdeck-channel-item,
+.subdeck-channel-link {
   color: var(--yt-spec-text-primary, #f1f1f1) !important;
 }
 
 .subdeck-folder-header {
   display: flex;
   align-items: center;
-  padding: 6px 10px;
-  cursor: pointer;
+  padding: 5px 8px;
   border-radius: 8px;
   transition: background-color 0.15s ease;
   user-select: none;
@@ -50,13 +50,23 @@
   font-weight: 600;
 }
 
+/* Main clickable area that opens the feed */
+.subdeck-folder-main {
+  display: flex;
+  align-items: center;
+  flex: 1;
+  min-width: 0;
+  cursor: pointer;
+  padding: 2px 0;
+}
+
 .subdeck-folder-icon {
   font-size: 14px;
   flex-shrink: 0;
 }
 
 .subdeck-folder-title {
-  margin-left: 8px;
+  margin-left: 7px;
   font-weight: 500;
   white-space: nowrap;
   overflow: hidden;
@@ -65,12 +75,114 @@
   min-width: 0;
 }
 
-/* Controlled scrollable channel list preventing sidebar displacement */
+.subdeck-channel-count {
+  margin-left: 6px;
+  font-size: 11px;
+  color: var(--yt-spec-text-secondary, #aaaaaa) !important;
+  background: var(--yt-spec-badge-chip-background, rgba(255, 255, 255, 0.08));
+  padding: 1px 6px;
+  border-radius: 10px;
+  flex-shrink: 0;
+}
+
+/* Action buttons on the header */
+.subdeck-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  margin-left: 6px;
+  flex-shrink: 0;
+}
+
+.subdeck-header-btn {
+  background: transparent;
+  border: none;
+  color: var(--yt-spec-text-secondary, #aaaaaa);
+  cursor: pointer;
+  padding: 2px 4px;
+  border-radius: 4px;
+  font-size: 11px;
+  line-height: 1;
+  opacity: 0.6;
+  transition: opacity 0.15s ease, color 0.15s ease;
+}
+
+.subdeck-folder-header:hover .subdeck-header-btn {
+  opacity: 1;
+}
+
+.subdeck-header-btn:hover {
+  color: var(--yt-spec-text-primary, #ffffff);
+  background: rgba(255, 255, 255, 0.15);
+}
+
+.subdeck-header-btn.delete:hover {
+  color: #ef4444 !important;
+}
+
+/* Chevron button specifically for expanding/collapsing */
+.subdeck-chevron-btn {
+  background: transparent;
+  border: none;
+  color: var(--yt-spec-text-secondary, #aaaaaa);
+  cursor: pointer;
+  padding: 4px 6px;
+  border-radius: 4px;
+  font-size: 9px;
+  line-height: 1;
+  transition: transform 0.2s ease, background 0.15s ease;
+  flex-shrink: 0;
+}
+
+.subdeck-chevron-btn:hover {
+  background: rgba(255, 255, 255, 0.15);
+  color: var(--yt-spec-text-primary, #ffffff);
+}
+
+.subdeck-chevron-btn.open {
+  transform: rotate(180deg);
+}
+
+/* Inline Add Channel Picker Box */
+.subdeck-add-picker {
+  display: flex;
+  gap: 4px;
+  margin: 4px 8px 6px 8px;
+  padding: 6px;
+  background: var(--yt-spec-badge-chip-background, rgba(255, 255, 255, 0.08));
+  border-radius: 6px;
+  border: 1px solid var(--yt-spec-10-percent-layer, rgba(255, 255, 255, 0.15));
+}
+
+.subdeck-add-select {
+  flex: 1;
+  min-width: 0;
+  background: rgba(0, 0, 0, 0.35);
+  color: var(--yt-spec-text-primary, #f1f1f1);
+  border: 1px solid var(--yt-spec-10-percent-layer, rgba(255, 255, 255, 0.2));
+  border-radius: 4px;
+  padding: 4px 6px;
+  font-size: 11px;
+  outline: none;
+}
+
+.subdeck-add-confirm-btn {
+  background: #3ea6ff;
+  color: #000 !important;
+  border: none;
+  border-radius: 4px;
+  padding: 4px 8px;
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+/* Controlled scrollable channel list */
 .subdeck-channel-list {
   max-height: 0;
   overflow-y: hidden;
   transition: max-height 0.25s cubic-bezier(0.4, 0, 0.2, 1);
-  padding-left: 6px;
+  padding-left: 8px;
   box-sizing: border-box;
 }
 
@@ -83,31 +195,22 @@
 .subdeck-channel-list::-webkit-scrollbar {
   width: 4px;
 }
-
 .subdeck-channel-list::-webkit-scrollbar-track {
   background: transparent;
 }
-
 .subdeck-channel-list::-webkit-scrollbar-thumb {
   background: rgba(255, 255, 255, 0.2);
   border-radius: 2px;
 }
 
-.subdeck-channel-list::-webkit-scrollbar-thumb:hover {
-  background: rgba(255, 255, 255, 0.35);
-}
-
-/* Minimal channel item without logos */
+/* Channel Item with Remove Button */
 .subdeck-channel-item {
-  display: block;
-  padding: 5px 12px;
-  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 4px 8px;
   border-radius: 6px;
-  text-decoration: none;
   font-size: 12px;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
   transition: background-color 0.15s ease;
   box-sizing: border-box;
 }
@@ -116,28 +219,38 @@
   background-color: var(--yt-spec-badge-chip-background, rgba(255, 255, 255, 0.1));
 }
 
-.subdeck-channel-count {
-  margin-left: 6px;
-  font-size: 11px;
-  color: var(--yt-spec-text-secondary, #aaaaaa) !important;
-  background: var(--yt-spec-badge-chip-background, rgba(255, 255, 255, 0.08));
-  padding: 2px 6px;
-  border-radius: 10px;
-  flex-shrink: 0;
+.subdeck-channel-link {
+  flex: 1;
+  min-width: 0;
+  text-decoration: none;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
-.subdeck-chevron {
-  margin-left: 6px;
-  font-size: 9px;
+.subdeck-channel-remove-btn {
+  background: transparent;
+  border: none;
   color: var(--yt-spec-text-secondary, #aaaaaa);
-  transition: transform 0.2s ease;
-  flex-shrink: 0;
+  cursor: pointer;
+  padding: 2px 5px;
+  border-radius: 3px;
+  font-size: 11px;
+  line-height: 1;
+  opacity: 0;
+  transition: opacity 0.15s ease, color 0.15s ease;
 }
 
-.subdeck-chevron.open {
-  transform: rotate(180deg);
+.subdeck-channel-item:hover .subdeck-channel-remove-btn {
+  opacity: 1;
 }
 
+.subdeck-channel-remove-btn:hover {
+  color: #ef4444 !important;
+  background: rgba(239, 68, 68, 0.15);
+}
+
+/* Show All Subscriptions Button */
 .subdeck-clear-filter {
   display: block;
   width: calc(100% - 16px);

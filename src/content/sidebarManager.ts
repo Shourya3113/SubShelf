@@ -1,6 +1,7 @@
 import { getSubscriptionSection } from '@/config/selectors';
 import { SubDeckStorage } from '@/utils/storage';
 import { ChannelExtractor } from './channelExtractor';
+import { CategoryDeck } from '@/types';
 
 export class SidebarManager {
   private static containerId = 'subdeck-sidebar-container';
@@ -52,8 +53,93 @@ export class SidebarManager {
     const categories = await SubDeckStorage.getCategories();
     const channelsMap = await SubDeckStorage.getChannels();
     const activeCategory = (await SubDeckStorage.getAll()).activeCategoryId;
+    const channelCount = Object.keys(channelsMap).length;
 
-    // Show All Button
+    // 1. Categorize Subscriptions Action Bar Card
+    const actionCard = document.createElement('div');
+    actionCard.className = 'subdeck-action-card';
+    actionCard.innerHTML = `
+      <div class="subdeck-action-header">
+        <span class="subdeck-brand">⚡ SubDeck</span>
+        <span class="subdeck-subtext">Categorize (${channelCount} subs)</span>
+      </div>
+      <div class="subdeck-action-buttons">
+        <button class="subdeck-btn-ai" id="subdeck-ai-btn">✨ Auto-AI</button>
+        <button class="subdeck-btn-manual" id="subdeck-manual-btn">📁 + New Folder</button>
+      </div>
+      <div class="subdeck-manual-input-box" id="subdeck-manual-box" style="display: none;">
+        <input type="text" id="subdeck-new-folder-name" placeholder="Folder name..." />
+        <button id="subdeck-save-folder-btn" class="subdeck-btn-save">Save</button>
+        <button id="subdeck-cancel-folder-btn" class="subdeck-btn-cancel">✕</button>
+      </div>
+    `;
+
+    // Action button listeners
+    const aiBtn = actionCard.querySelector('#subdeck-ai-btn') as HTMLButtonElement | null;
+    const manualBtn = actionCard.querySelector('#subdeck-manual-btn') as HTMLButtonElement | null;
+    const manualBox = actionCard.querySelector('#subdeck-manual-box') as HTMLElement | null;
+    const folderInput = actionCard.querySelector('#subdeck-new-folder-name') as HTMLInputElement | null;
+    const saveBtn = actionCard.querySelector('#subdeck-save-folder-btn') as HTMLButtonElement | null;
+    const cancelBtn = actionCard.querySelector('#subdeck-cancel-folder-btn') as HTMLButtonElement | null;
+
+    // Auto-AI Click Handler
+    aiBtn?.addEventListener('click', async () => {
+      if (aiBtn.disabled) return;
+      aiBtn.disabled = true;
+      aiBtn.innerText = '⏳ Clustering...';
+
+      try {
+        await this.runQuickCategorization();
+      } finally {
+        aiBtn.disabled = false;
+        aiBtn.innerText = '✨ Auto-AI';
+      }
+    });
+
+    // Manual Folder Creation
+    manualBtn?.addEventListener('click', () => {
+      if (manualBox) {
+        manualBox.style.display = manualBox.style.display === 'none' ? 'flex' : 'none';
+        if (manualBox.style.display === 'flex') folderInput?.focus();
+      }
+    });
+
+    cancelBtn?.addEventListener('click', () => {
+      if (manualBox) manualBox.style.display = 'none';
+    });
+
+    const saveFolder = async () => {
+      const name = folderInput?.value.trim();
+      if (!name) return;
+
+      const currentCategories = await SubDeckStorage.getCategories();
+      const newId = name.toLowerCase().replace(/[^a-z0-9]+/g, '-');
+
+      if (!currentCategories.find(c => c.id === newId)) {
+        currentCategories.push({
+          id: newId,
+          name,
+          icon: '📁',
+          channelIds: [],
+          isCollapsed: false,
+          sortOrder: currentCategories.length,
+        });
+        await SubDeckStorage.setAll({ categories: currentCategories });
+        if (folderInput) folderInput.value = '';
+        if (manualBox) manualBox.style.display = 'none';
+        await this.render();
+      }
+    };
+
+    saveBtn?.addEventListener('click', saveFolder);
+    folderInput?.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') saveFolder();
+      if (e.key === 'Escape' && manualBox) manualBox.style.display = 'none';
+    });
+
+    container.appendChild(actionCard);
+
+    // 2. Show All Button
     const showAllBtn = document.createElement('button');
     showAllBtn.innerText = '☰ Show All Subscriptions';
     showAllBtn.className = 'subdeck-clear-filter';
@@ -63,6 +149,7 @@ export class SidebarManager {
     });
     container.appendChild(showAllBtn);
 
+    // 3. Render Category Folders
     categories
       .slice()
       .sort((a, b) => a.sortOrder - b.sortOrder)
@@ -120,6 +207,80 @@ export class SidebarManager {
         folder.appendChild(list);
         container.appendChild(folder);
       });
+  }
+
+  static async runQuickCategorization(): Promise<void> {
+    const channelsMap = await SubDeckStorage.getChannels();
+    const channels = Object.values(channelsMap);
+    if (channels.length === 0) return;
+
+    const taxonomy: Record<string, { name: string; icon: string; keywords: string[] }> = {
+      'tech-coding': {
+        name: 'Tech & Coding',
+        icon: '💻',
+        keywords: ['tech', 'apple', 'code', 'coding', 'cs50', 'software', 'programming', 'developer', 'linux', 'dev', 'python', 'ai', 'engineer'],
+      },
+      gaming: {
+        name: 'Gaming',
+        icon: '🎮',
+        keywords: ['game', 'gaming', 'destiny', 'playthrough', 'twitch', 'steam', 'xbox', 'playstation', 'nintendo'],
+      },
+      music: {
+        name: 'Music',
+        icon: '🎵',
+        keywords: ['music', 'puth', 'bandit', 'records', 'song', 'audio', 'sound', 'band', 'vevo', 'dolby', 'charlie', 'dizasta'],
+      },
+      education: {
+        name: 'Education & Science',
+        icon: '📚',
+        keywords: ['science', 'learn', 'education', 'domain', 'course', 'academy', 'history', 'physics', 'math', 'explained'],
+      },
+      entertainment: {
+        name: 'Entertainment',
+        icon: '🍿',
+        keywords: ['entertainment', 'comedy', 'vlog', 'show', 'cinema', 'movie', 'film', 'podcast', 'clips'],
+      },
+    };
+
+    const newDecks: CategoryDeck[] = Object.entries(taxonomy).map(([id, meta], idx) => ({
+      id,
+      name: meta.name,
+      icon: meta.icon,
+      channelIds: [],
+      isCollapsed: false,
+      sortOrder: idx,
+    }));
+
+    const assignedIds = new Set<string>();
+
+    for (const ch of channels) {
+      const text = `${ch.title} ${ch.handle}`.toLowerCase();
+      for (const [catId, meta] of Object.entries(taxonomy)) {
+        if (meta.keywords.some(kw => text.includes(kw))) {
+          const deck = newDecks.find(d => d.id === catId);
+          deck?.channelIds.push(ch.ucId);
+          assignedIds.add(ch.ucId);
+          break;
+        }
+      }
+    }
+
+    // Capture remaining into Uncategorized
+    const unassigned = channels.filter(c => !assignedIds.has(c.ucId)).map(c => c.ucId);
+    newDecks.push({
+      id: '__uncategorized__',
+      name: 'Uncategorized',
+      icon: '📂',
+      channelIds: unassigned,
+      isCollapsed: true,
+      sortOrder: 999,
+      isSystem: true,
+    });
+
+    // Save only decks that have channels or are uncategorized
+    const finalDecks = newDecks.filter(d => d.channelIds.length > 0 || d.id === '__uncategorized__');
+    await SubDeckStorage.setAll({ categories: finalDecks });
+    await this.render();
   }
 
   static async syncWithNativeSubscriptions(): Promise<void> {

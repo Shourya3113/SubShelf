@@ -113,8 +113,8 @@
 .subdeck-clear-filter {
   display: block;
   width: calc(100% - 24px);
-  margin: 8px 12px 6px 12px;
-  padding: 8px 12px;
+  margin: 6px 12px 6px 12px;
+  padding: 7px 12px;
   background-color: var(--yt-spec-badge-chip-background, rgba(255, 255, 255, 0.08));
   color: var(--yt-spec-text-primary, #f1f1f1) !important;
   border: 1px solid var(--yt-spec-10-percent-layer, rgba(255, 255, 255, 0.15));
@@ -128,6 +128,118 @@
 
 .subdeck-clear-filter:hover {
   background-color: var(--yt-spec-10-percent-layer, rgba(255, 255, 255, 0.18));
+}
+
+/* Categorize Action Card */
+.subdeck-action-card {
+  margin: 6px 12px 8px 12px;
+  padding: 10px 12px;
+  background: var(--yt-spec-badge-chip-background, rgba(255, 255, 255, 0.06));
+  border: 1px solid var(--yt-spec-10-percent-layer, rgba(255, 255, 255, 0.12));
+  border-radius: 8px;
+  font-family: "Roboto", "Arial", sans-serif;
+}
+
+.subdeck-action-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 8px;
+}
+
+.subdeck-brand {
+  font-weight: 700;
+  font-size: 13px;
+  color: #3ea6ff;
+}
+
+.subdeck-subtext {
+  font-size: 11px;
+  color: var(--yt-spec-text-secondary, #aaaaaa);
+}
+
+.subdeck-action-buttons {
+  display: flex;
+  gap: 8px;
+}
+
+.subdeck-btn-ai {
+  flex: 1;
+  background: #065fd4;
+  color: #ffffff !important;
+  border: none;
+  border-radius: 6px;
+  padding: 6px 10px;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.15s ease;
+  white-space: nowrap;
+}
+
+.subdeck-btn-ai:hover {
+  background: #0056b3;
+}
+
+.subdeck-btn-ai:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.subdeck-btn-manual {
+  flex: 1;
+  background: transparent;
+  color: var(--yt-spec-text-primary, #f1f1f1) !important;
+  border: 1px solid var(--yt-spec-10-percent-layer, rgba(255, 255, 255, 0.2));
+  border-radius: 6px;
+  padding: 6px 8px;
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background 0.15s ease;
+  white-space: nowrap;
+}
+
+.subdeck-btn-manual:hover {
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.subdeck-manual-input-box {
+  display: flex;
+  gap: 6px;
+  margin-top: 8px;
+  align-items: center;
+}
+
+.subdeck-manual-input-box input {
+  flex: 1;
+  background: rgba(0, 0, 0, 0.25);
+  border: 1px solid var(--yt-spec-10-percent-layer, rgba(255, 255, 255, 0.2));
+  border-radius: 4px;
+  color: var(--yt-spec-text-primary, #f1f1f1);
+  font-size: 12px;
+  padding: 5px 8px;
+  outline: none;
+}
+
+.subdeck-btn-save {
+  background: #3ea6ff;
+  color: #000 !important;
+  border: none;
+  border-radius: 4px;
+  padding: 5px 10px;
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.subdeck-btn-cancel {
+  background: transparent;
+  color: var(--yt-spec-text-secondary, #aaa) !important;
+  border: none;
+  font-size: 12px;
+  cursor: pointer;
+  padding: 2px 6px;
 }
 
 .subdeck-degradation-banner,

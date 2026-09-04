@@ -1,6 +1,7 @@
 # SubDeck ⚡
 > **Smart Subscription Category Folders & Feed Curator for YouTube™**
 
+[![Chrome Web Store](https://img.shields.io/badge/Chrome%20Web%20Store-Available%20Now-brightgreen.svg?logo=googlechrome)](https://chromewebstore.google.com/detail/subdeck-smart-subscripti/elmeglemgjhfadeahmlbcgkjkfkfkfgd)
 [![Manifest V3](https://img.shields.io/badge/Chrome%20Extension-Manifest%20V3-blue.svg)](https://developer.chrome.com/docs/extensions/mv3/intro/)
 [![TypeScript](https://img.shields.io/badge/TypeScript-5.4-blue.svg?logo=typescript)](https://www.typescriptlang.org/)
 [![Vite](https://img.shields.io/badge/Bundled%20with-Vite%205-purple.svg?logo=vite)](https://vitejs.dev/)

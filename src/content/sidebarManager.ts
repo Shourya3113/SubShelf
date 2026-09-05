@@ -99,6 +99,14 @@ export class SidebarManager {
 
     if (!container) return;
 
+    // Preserve scroll position and prevent height collapse during re-render
+    const guideInner = document.querySelector<HTMLElement>('#guide-inner-content');
+    const savedGuideScroll = guideInner ? guideInner.scrollTop : 0;
+    const currentHeight = container.offsetHeight;
+    if (currentHeight > 0) {
+      container.style.minHeight = `${currentHeight}px`;
+    }
+
     container.innerHTML = '';
 
     const categories = await SubDeckStorage.getCategories();
@@ -174,13 +182,29 @@ export class SidebarManager {
       aiBtn.disabled = true;
       aiBtn.textContent = '⏳ Discovering...';
 
+      const guideInner = document.querySelector<HTMLElement>('#guide-inner-content');
+      const savedGuideScroll = guideInner ? guideInner.scrollTop : 0;
+      const savedWinScroll = window.scrollY;
+
+      const keepScrollLevel = () => {
+        if (guideInner && guideInner.scrollTop !== savedGuideScroll) {
+          guideInner.scrollTop = savedGuideScroll;
+        }
+        if (window.scrollY !== savedWinScroll) {
+          window.scrollTo(window.scrollX, savedWinScroll);
+        }
+      };
+
       try {
-        // 1. Expand all native subscriptions so all 80+ channels mount into DOM
+        // 1. Expand all native subscriptions so all 80+ channels mount into DOM without scroll jump
         ChannelExtractor.autoExpandNativeSubscriptions(true);
+        keepScrollLevel();
         await new Promise(r => setTimeout(r, 400));
+        keepScrollLevel();
 
         // 2. Scrape and sync all channels into storage
         await this.syncWithNativeSubscriptions();
+        keepScrollLevel();
 
         aiBtn.textContent = '⏳ Clustering...';
 
@@ -192,14 +216,17 @@ export class SidebarManager {
             } else {
               await this.runQuickCategorization();
             }
+            keepScrollLevel();
             resolve();
           });
         });
       } catch {
         await this.runQuickCategorization();
+        keepScrollLevel();
       } finally {
         aiBtn.disabled = false;
         aiBtn.textContent = '✨ Auto-AI';
+        keepScrollLevel();
       }
     });
 
@@ -448,6 +475,16 @@ export class SidebarManager {
         folder.appendChild(list);
         container.appendChild(folder);
       });
+
+    // Release minHeight and ensure scroll position was preserved
+    requestAnimationFrame(() => {
+      if (container) {
+        container.style.minHeight = '';
+      }
+      if (guideInner && guideInner.scrollTop !== savedGuideScroll) {
+        guideInner.scrollTop = savedGuideScroll;
+      }
+    });
   }
 
   static async runQuickCategorization(): Promise<void> {

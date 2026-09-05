@@ -78,12 +78,78 @@ export class ChannelExtractor {
       }
     }
 
+    // Snapshot scroll positions of all scrollable containers in the hierarchy
+    const scrollSnapshots: Array<{ el: HTMLElement; top: number; left: number }> = [];
+    let curr: HTMLElement | null = toggleBtn.parentElement;
+    while (curr) {
+      scrollSnapshots.push({ el: curr, top: curr.scrollTop, left: curr.scrollLeft });
+      curr = curr.parentElement;
+    }
+    const guideInner = document.querySelector<HTMLElement>('#guide-inner-content');
+    if (guideInner && !scrollSnapshots.some(s => s.el === guideInner)) {
+      scrollSnapshots.push({ el: guideInner, top: guideInner.scrollTop, left: guideInner.scrollLeft });
+    }
+    const winScrollY = window.scrollY;
+    const winScrollX = window.scrollX;
+
+    const restoreScroll = () => {
+      for (const snap of scrollSnapshots) {
+        if (snap.el.scrollTop !== snap.top) {
+          snap.el.scrollTop = snap.top;
+        }
+        if (snap.el.scrollLeft !== snap.left) {
+          snap.el.scrollLeft = snap.left;
+        }
+      }
+      if (window.scrollY !== winScrollY || window.scrollX !== winScrollX) {
+        window.scrollTo(winScrollX, winScrollY);
+      }
+    };
+
+    const activeEl = document.activeElement as HTMLElement | null;
+    const origFocus = HTMLElement.prototype.focus;
+    const origScrollIntoView = Element.prototype.scrollIntoView;
+    const origScrollIntoViewIfNeeded = (Element.prototype as any).scrollIntoViewIfNeeded;
+
     this.hasAttemptedExpand = true;
     try {
+      // Temporarily override focus and scrollIntoView to prevent browser or Polymer from scrolling to toggleBtn
+      HTMLElement.prototype.focus = function (this: HTMLElement, options?: FocusOptions) {
+        origFocus.call(this, { ...options, preventScroll: true });
+      };
+      Element.prototype.scrollIntoView = function () {};
+      if (origScrollIntoViewIfNeeded) {
+        (Element.prototype as any).scrollIntoViewIfNeeded = function () {};
+      }
+
       toggleBtn.click();
+
+      // Ensure toggle button does not retain focus causing browser to scroll
+      if (document.activeElement === toggleBtn || toggleBtn.contains(document.activeElement)) {
+        if (activeEl && typeof activeEl.focus === 'function' && activeEl !== toggleBtn) {
+          activeEl.focus({ preventScroll: true });
+        } else if (typeof toggleBtn.blur === 'function') {
+          toggleBtn.blur();
+        }
+      }
       return true;
     } catch {
       return false;
+    } finally {
+      HTMLElement.prototype.focus = origFocus;
+      Element.prototype.scrollIntoView = origScrollIntoView;
+      if (origScrollIntoViewIfNeeded) {
+        (Element.prototype as any).scrollIntoViewIfNeeded = origScrollIntoViewIfNeeded;
+      }
+      restoreScroll();
+
+      // Guard against asynchronous scroll jumps during YouTube DOM expansion
+      requestAnimationFrame(restoreScroll);
+      setTimeout(restoreScroll, 20);
+      setTimeout(restoreScroll, 50);
+      setTimeout(restoreScroll, 100);
+      setTimeout(restoreScroll, 200);
+      setTimeout(restoreScroll, 350);
     }
   }
 

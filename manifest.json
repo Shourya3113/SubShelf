@@ -1,6 +1,6 @@
 {
   "manifest_version": 3,
-  "name": "SubDeck — Smart Subscription Folders",
+  "name": "SubShelf — Smart YouTube Subscription Folders",
   "version": "1.0.1",
   "description": "Smart Subscription Category Folders & Feed Curator for YouTube™",
   "permissions": ["storage"],

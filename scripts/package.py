@@ -23,10 +23,10 @@ def package_extension():
         manifest = json.load(f)
         version = manifest.get('version', '1.0.0')
 
-    zip_filename = f"subdeck-v{version}.zip"
+    zip_filename = f"subshelf-v{version}.zip"
     zip_path = os.path.join(project_root, zip_filename)
 
-    print(f"📦 Packaging SubDeck v{version} into {zip_filename}...")
+    print(f"📦 Packaging SubShelf v{version} into {zip_filename}...")
 
     with zipfile.ZipFile(zip_path, 'w', zipfile.ZIP_DEFLATED) as zipf:
         for root, dirs, files in os.walk(dist_dir):

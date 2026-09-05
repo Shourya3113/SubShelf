@@ -123,7 +123,7 @@ export class SidebarManager {
 
     const brandSpan = document.createElement('span');
     brandSpan.className = 'subdeck-brand';
-    brandSpan.textContent = '⚡ SubDeck';
+    brandSpan.textContent = '⚡ SubShelf';
 
     const subtextSpan = document.createElement('span');
     subtextSpan.className = 'subdeck-subtext';

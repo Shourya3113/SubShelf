@@ -343,7 +343,7 @@ class PopupManager {
         try {
           await ExportImport.importFromFile(file, 'merge');
           this.state = await SubDeckStorage.getAll();
-          alert('SubDeck backup imported successfully!');
+          alert('SubShelf backup imported successfully!');
           await this.renderDecks();
           await this.renderChannels();
         } catch (err) {

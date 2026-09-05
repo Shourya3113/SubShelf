@@ -1,4 +1,4 @@
-# SubDeck ⚡
+# SubShelf ⚡
 > **Smart Subscription Category Folders & Feed Curator for YouTube™**
 
 [![Chrome Web Store](https://img.shields.io/badge/Chrome%20Web%20Store-Available%20Now-brightgreen.svg?logo=googlechrome)](https://chromewebstore.google.com/detail/subdeck-smart-subscripti/elmeglemgjhfadeahmlbcgkjkfkfkfgd)
@@ -8,9 +8,9 @@
 [![Security Audit](https://img.shields.io/badge/Security%20Audit-Zero--XSS%20%7C%20Hardened-brightgreen.svg)](#-security--privacy-first-architecture)
 [![License](https://img.shields.io/badge/License-Source--Available-yellow.svg)](./LICENSE)
 
-**SubDeck** is a lightweight, privacy-first Chrome Extension that transforms your cluttered YouTube subscriptions into organized, themed category folders directly inside YouTube's native left sidebar and subscription feed.
+**SubShelf** is a lightweight, privacy-first Chrome Extension that transforms your cluttered YouTube subscriptions into organized, themed category folders directly inside YouTube's native left sidebar and subscription feed.
 
-Powered by a 3-tier categorization engine (on-device **Gemini Nano**, cloud **Gemini 1.5 Flash**, and deterministic **NLP keyword heuristics**), SubDeck automatically clusters your channels into smart decks in seconds with zero data collection.
+Powered by a 3-tier categorization engine (on-device **Gemini Nano**, cloud **Gemini 1.5 Flash**, and deterministic **NLP keyword heuristics**), SubShelf automatically clusters your channels into smart decks in seconds with zero data collection.
 
 ---
 
@@ -31,7 +31,7 @@ Powered by a 3-tier categorization engine (on-device **Gemini Nano**, cloud **Ge
 
 ## 🛡️ Security & Privacy-First Architecture
 
-SubDeck was built from the ground up to adhere strictly to Google Chrome Web Store Developer Program Policies and YouTube Brand Guidelines:
+SubShelf was built from the ground up to adhere strictly to Google Chrome Web Store Developer Program Policies and YouTube Brand Guidelines:
 
 * **Zero-XSS Protection:** 100% of DOM manipulation uses safe node construction (`document.createElement`, `textContent`). Zero `innerHTML` interpolation across the entire extension.
 * **Minimal Permissions:** Only requests `"storage"`. Zero intrusive permissions like `webRequest`, `cookies`, `tabs`, or `<all_urls>`.
@@ -91,8 +91,8 @@ SubDeck was built from the ground up to adhere strictly to Google Chrome Web Sto
 
 ### 1. Clone & Install Dependencies
 ```bash
-git clone git@github.com:Shourya3113/SubDeck.git
-cd SubDeck
+git clone git@github.com:Shourya3113/SubShelf.git
+cd SubShelf
 npm install
 ```
 
@@ -107,7 +107,7 @@ npm run package
 ```
 This compiles the production bundle in `dist/` and generates a Chrome Web Store-ready archive:
 ```
-subdeck-v1.0.0.zip (manifest.json at archive root)
+subshelf-v1.0.1.zip (manifest.json at archive root)
 ```
 
 ### 4. Load into Chrome
@@ -180,4 +180,4 @@ Open for community contributions, issue reporting, and review. Commercial redist
 
 ---
 
-*Disclaimer: SubDeck is an independent open-source project and is not affiliated with, sponsored by, or endorsed by Google LLC or YouTube. YouTube™ is a trademark of Google LLC.*
+*Disclaimer: SubShelf is an independent open-source project and is not affiliated with, sponsored by, or endorsed by Google LLC or YouTube. YouTube™ is a trademark of Google LLC.*

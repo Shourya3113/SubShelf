@@ -124,7 +124,7 @@ export class FeedFilter {
     labelSpan.textContent = 'Showing: ';
 
     const strongEl = document.createElement('strong');
-    strongEl.style.color = '#3ea6ff';
+    strongEl.style.color = 'var(--sd-brand-blue, #065fd4)';
     strongEl.textContent = category.name;
 
     const countText = document.createTextNode(` (${category.channelIds.length} channels)`);

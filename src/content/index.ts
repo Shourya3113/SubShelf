@@ -10,6 +10,13 @@ class SubDeckCoordinator {
   static init(): void {
     Logger.info('Initializing SubDeck Coordinator');
 
+    window.addEventListener('yt-navigate-start', (e: any) => {
+      const url = e?.detail?.url || window.location.pathname;
+      if (!url.startsWith('/feed/subscriptions')) {
+        SidebarManager.clearActiveFilterHighlight();
+        FeedFilter.removeBanner();
+      }
+    });
     window.addEventListener('yt-navigate-finish', this.handleNavigation);
     window.addEventListener('yt-page-data-updated', this.handleDataUpdate);
     this.waitForYouTubeReady();
@@ -59,9 +66,11 @@ class SubDeckCoordinator {
           }
         } else {
           // Outside subscriptions page, cleanly tear down feed filter, observer, and banner
+          await SubDeckStorage.setAll({ activeCategoryId: null });
           FeedFilter.clearFilter();
           FeedFilter.removeBanner();
           FeedFilter.stopObserving();
+          SidebarManager.clearActiveFilterHighlight();
         }
       }
     } catch (err) {

@@ -310,8 +310,10 @@ export class SidebarManager {
         const folder = document.createElement('div');
         folder.className = 'subdeck-folder-container';
 
+        const isOnSubFeed = window.location.pathname.startsWith('/feed/subscriptions');
+        const isFolderActive = isOnSubFeed && activeCategory === cat.id;
         const header = document.createElement('div');
-        header.className = `subdeck-folder-header ${activeCategory === cat.id ? 'active-filter' : ''}`;
+        header.className = `subdeck-folder-header ${isFolderActive ? 'active-filter' : ''}`;
 
         // Safe DOM construction for folder header (Zero innerHTML)
         const folderMain = document.createElement('div');
@@ -529,5 +531,9 @@ export class SidebarManager {
       await SubDeckStorage.setAll({ categories });
       await this.render();
     }
+  }
+
+  static clearActiveFilterHighlight(): void {
+    document.querySelectorAll('.subdeck-folder-header').forEach(el => el.classList.remove('active-filter'));
   }
 }

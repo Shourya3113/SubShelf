@@ -25,8 +25,8 @@ html:not([dark]) {
   --sd-bg-card: rgba(0, 0, 0, 0.04);
   --sd-bg-card-border: rgba(0, 0, 0, 0.1);
   --sd-bg-hover: rgba(0, 0, 0, 0.06);
-  --sd-bg-active: rgba(204, 0, 0, 0.1);
-  --sd-active-text: #c00;
+  --sd-bg-active: rgba(0, 0, 0, 0.06);
+  --sd-active-text: #0f0f0f;
   --sd-badge-bg: rgba(0, 0, 0, 0.06);
   --sd-badge-text: #606060;
   --sd-input-bg: #ffffff;
@@ -48,8 +48,8 @@ html[dark],
   --sd-bg-card: rgba(255, 255, 255, 0.06);
   --sd-bg-card-border: rgba(255, 255, 255, 0.12);
   --sd-bg-hover: rgba(255, 255, 255, 0.1);
-  --sd-bg-active: rgba(255, 0, 0, 0.18);
-  --sd-active-text: #ff4e45;
+  --sd-bg-active: rgba(255, 255, 255, 0.12);
+  --sd-active-text: #ffffff;
   --sd-badge-bg: rgba(255, 255, 255, 0.08);
   --sd-badge-text: #aaaaaa;
   --sd-input-bg: rgba(0, 0, 0, 0.35);
@@ -104,10 +104,26 @@ html[dark],
 .subdeck-folder-header.active-filter {
   background-color: var(--sd-bg-active);
   font-weight: 600;
+  border-radius: 8px;
+}
+
+.subdeck-folder-header.active-filter:hover {
+  background-color: var(--sd-bg-active);
 }
 
 .subdeck-folder-header.active-filter .subdeck-folder-title {
   color: var(--sd-active-text);
+  font-weight: 600;
+}
+
+.subdeck-folder-header.active-filter .subdeck-channel-count {
+  background-color: var(--sd-bg-card-border);
+  color: var(--sd-text-primary) !important;
+  font-weight: 600;
+}
+
+.subdeck-folder-header.active-filter .subdeck-chevron-btn {
+  color: var(--sd-text-primary);
 }
 
 /* Main Clickable Title Area */

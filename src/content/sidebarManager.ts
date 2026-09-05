@@ -176,7 +176,7 @@ export class SidebarManager {
 
       try {
         // 1. Expand all native subscriptions so all 80+ channels mount into DOM
-        ChannelExtractor.autoExpandNativeSubscriptions();
+        ChannelExtractor.autoExpandNativeSubscriptions(true);
         await new Promise(r => setTimeout(r, 400));
 
         // 2. Scrape and sync all channels into storage

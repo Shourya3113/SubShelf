@@ -1,4 +1,4 @@
-import { YT_SELECTORS, getSubscriptionSection, getNativeExpander } from '@/config/selectors';
+import { YT_SELECTORS, getSubscriptionSection } from '@/config/selectors';
 import { IdNormalizer } from '@/utils/idNormalizer';
 import { SubscribedChannel } from '@/types';
 
@@ -28,39 +28,69 @@ const SYSTEM_NAMES = new Set([
 ]);
 
 export class ChannelExtractor {
+  private static hasAttemptedExpand = false;
+
   /**
-   * Expands YouTube's native collapsed "Show more" subscription section so
-   * all subscribed channels (not just the first 7) are mounted into the DOM.
+   * Safely expands YouTube's native collapsed "Show more" subscription section.
+   * STRICT SAFEGUARD: Never clicks any link that has an href to prevent navigation loops.
    */
-  static autoExpandNativeSubscriptions(): boolean {
+  static autoExpandNativeSubscriptions(force = false): boolean {
+    if (this.hasAttemptedExpand && !force) return false;
+
     const subSection = getSubscriptionSection();
     if (!subSection) return false;
 
-    const expander = getNativeExpander(subSection);
-    if (!expander) return false;
+    // Look specifically for the collapsible container
+    const collapsible = subSection.querySelector<HTMLElement>('ytd-guide-collapsible-entry-renderer, #expander-item');
+    if (!collapsible) return false;
 
+    // Check if already expanded
     const isExpanded =
-      expander.hasAttribute('expanded') ||
-      expander.classList.contains('expanded') ||
-      expander.getAttribute('aria-expanded') === 'true';
+      collapsible.hasAttribute('expanded') ||
+      collapsible.classList.contains('expanded') ||
+      collapsible.getAttribute('aria-expanded') === 'true';
 
-    if (!isExpanded) {
-      const clickTarget =
-        expander.querySelector<HTMLElement>('a, button, #endpoint, yt-formatted-string, #button') ||
-        expander;
-      clickTarget.click();
-      return true;
+    if (isExpanded) {
+      this.hasAttemptedExpand = true;
+      return false;
     }
-    return false;
+
+    // Safety: Verify it's an expander, NOT a page link (like /feed/subscriptions or /feed/channels)
+    const anchor = collapsible.querySelector('a');
+    if (anchor) {
+      const href = anchor.getAttribute('href') || '';
+      if (href && href !== '#' && !href.startsWith('javascript:')) {
+        // This is a navigation link! NEVER click it.
+        return false;
+      }
+    }
+
+    // Find the toggle button
+    const toggleBtn = collapsible.querySelector<HTMLElement>('tp-yt-paper-button, #button, #endpoint, yt-formatted-string');
+    if (!toggleBtn) return false;
+
+    // Double check toggleBtn is not inside a navigation link
+    const parentA = toggleBtn.closest('a[href]');
+    if (parentA) {
+      const href = parentA.getAttribute('href') || '';
+      if (href && href !== '#' && !href.startsWith('javascript:')) {
+        return false;
+      }
+    }
+
+    this.hasAttemptedExpand = true;
+    try {
+      toggleBtn.click();
+      return true;
+    } catch {
+      return false;
+    }
   }
 
   static scrapeFromSidebar(): SubscribedChannel[] {
     const channels: SubscribedChannel[] = [];
     const subSection = getSubscriptionSection();
     if (!subSection) return channels;
-
-    // Check if we should expand the native list to capture all channels
-    this.autoExpandNativeSubscriptions();
 
     const entries = subSection.querySelectorAll(YT_SELECTORS.guideEntry);
 

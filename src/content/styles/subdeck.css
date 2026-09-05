@@ -1,3 +1,8 @@
+/* ==========================================================================
+   SubDeck Content Script Styles — Seamless Light & Dark YouTube Integration
+   ========================================================================== */
+
+/* Universal box-sizing reset for SubDeck containers */
 #subdeck-sidebar-container,
 #subdeck-sidebar-container *,
 .subdeck-feed-banner,
@@ -7,50 +12,105 @@
   box-sizing: border-box;
 }
 
+/* --------------------------------------------------------------------------
+   THEME VARIABLES: Strict YouTube Light & Dark Mode Pairing
+   -------------------------------------------------------------------------- */
+
+/* Light Theme (Default when html does not have [dark]) */
+:root,
+html:not([dark]) {
+  --sd-text-primary: #0f0f0f;
+  --sd-text-secondary: #606060;
+  --sd-text-muted: #909090;
+  --sd-bg-card: rgba(0, 0, 0, 0.04);
+  --sd-bg-card-border: rgba(0, 0, 0, 0.1);
+  --sd-bg-hover: rgba(0, 0, 0, 0.06);
+  --sd-bg-active: rgba(204, 0, 0, 0.1);
+  --sd-active-text: #c00;
+  --sd-badge-bg: rgba(0, 0, 0, 0.06);
+  --sd-badge-text: #606060;
+  --sd-input-bg: #ffffff;
+  --sd-input-border: #cccccc;
+  --sd-brand-blue: #065fd4;
+  --sd-btn-ai-bg: #065fd4;
+  --sd-btn-ai-hover: #004bb5;
+  --sd-banner-bg: #f9f9f9;
+  --sd-banner-border: #e0e0e0;
+  --sd-scrollbar-thumb: rgba(0, 0, 0, 0.2);
+}
+
+/* Dark Theme Overrides (when html has [dark]) */
+html[dark],
+[dark] {
+  --sd-text-primary: #f1f1f1;
+  --sd-text-secondary: #aaaaaa;
+  --sd-text-muted: #717171;
+  --sd-bg-card: rgba(255, 255, 255, 0.06);
+  --sd-bg-card-border: rgba(255, 255, 255, 0.12);
+  --sd-bg-hover: rgba(255, 255, 255, 0.1);
+  --sd-bg-active: rgba(255, 0, 0, 0.18);
+  --sd-active-text: #ff4e45;
+  --sd-badge-bg: rgba(255, 255, 255, 0.08);
+  --sd-badge-text: #aaaaaa;
+  --sd-input-bg: rgba(0, 0, 0, 0.35);
+  --sd-input-border: rgba(255, 255, 255, 0.2);
+  --sd-brand-blue: #3ea6ff;
+  --sd-btn-ai-bg: #065fd4;
+  --sd-btn-ai-hover: #0056b3;
+  --sd-banner-bg: rgba(255, 255, 255, 0.08);
+  --sd-banner-border: rgba(255, 255, 255, 0.15);
+  --sd-scrollbar-thumb: rgba(255, 255, 255, 0.2);
+}
+
+/* --------------------------------------------------------------------------
+   CONTAINER & FOLDERS
+   -------------------------------------------------------------------------- */
+
 #subdeck-sidebar-container {
   width: 100%;
-  box-sizing: border-box;
   font-family: "Roboto", "Arial", sans-serif;
+  color: var(--sd-text-primary);
 }
 
 .subdeck-folder-container {
   margin: 3px 8px;
   border-radius: 8px;
   background-color: transparent;
-  color: var(--yt-spec-text-primary, #f1f1f1);
+  color: var(--sd-text-primary);
   overflow: hidden;
-  box-sizing: border-box;
 }
 
-/* Force high-contrast text color on dark and light YouTube themes */
 .subdeck-folder-header,
 .subdeck-channel-item,
 .subdeck-channel-link {
-  color: var(--yt-spec-text-primary, #f1f1f1) !important;
+  color: var(--sd-text-primary) !important;
 }
 
 .subdeck-folder-header {
   display: flex;
   align-items: center;
-  padding: 5px 8px;
+  padding: 6px 8px;
   border-radius: 8px;
   transition: background-color 0.15s ease;
   user-select: none;
   font-size: 13px;
   min-width: 0;
-  box-sizing: border-box;
 }
 
 .subdeck-folder-header:hover {
-  background-color: var(--yt-spec-badge-chip-background, rgba(255, 255, 255, 0.1));
+  background-color: var(--sd-bg-hover);
 }
 
 .subdeck-folder-header.active-filter {
-  background-color: var(--yt-spec-brand-background-primary, rgba(255, 0, 0, 0.18));
+  background-color: var(--sd-bg-active);
   font-weight: 600;
 }
 
-/* Main clickable area that opens the feed */
+.subdeck-folder-header.active-filter .subdeck-folder-title {
+  color: var(--sd-active-text);
+}
+
+/* Main Clickable Title Area */
 .subdeck-folder-main {
   display: flex;
   align-items: center;
@@ -73,19 +133,21 @@
   text-overflow: ellipsis;
   flex: 1;
   min-width: 0;
+  color: var(--sd-text-primary);
 }
 
 .subdeck-channel-count {
   margin-left: 6px;
   font-size: 11px;
-  color: var(--yt-spec-text-secondary, #aaaaaa) !important;
-  background: var(--yt-spec-badge-chip-background, rgba(255, 255, 255, 0.08));
+  color: var(--sd-badge-text) !important;
+  background: var(--sd-badge-bg);
   padding: 1px 6px;
   border-radius: 10px;
   flex-shrink: 0;
+  font-weight: 500;
 }
 
-/* Action buttons on the header: hidden by default so title has maximum width, revealed on hover */
+/* Action Buttons (+ / Delete) */
 .subdeck-header-actions {
   display: flex;
   align-items: center;
@@ -98,11 +160,11 @@
   display: none;
   background: transparent;
   border: none;
-  color: var(--yt-spec-text-secondary, #aaaaaa);
+  color: var(--sd-text-secondary);
   cursor: pointer;
-  padding: 2px 4px;
+  padding: 2px 5px;
   border-radius: 4px;
-  font-size: 11px;
+  font-size: 12px;
   line-height: 1;
   transition: all 0.15s ease;
 }
@@ -112,19 +174,19 @@
 }
 
 .subdeck-header-btn:hover {
-  color: var(--yt-spec-text-primary, #ffffff);
-  background: rgba(255, 255, 255, 0.15);
+  color: var(--sd-text-primary);
+  background: var(--sd-bg-hover);
 }
 
 .subdeck-header-btn.delete:hover {
   color: #ef4444 !important;
 }
 
-/* Chevron button specifically for expanding/collapsing */
+/* Chevron Button */
 .subdeck-chevron-btn {
   background: transparent;
   border: none;
-  color: var(--yt-spec-text-secondary, #aaaaaa);
+  color: var(--sd-text-secondary);
   cursor: pointer;
   padding: 4px 6px;
   border-radius: 4px;
@@ -135,8 +197,8 @@
 }
 
 .subdeck-chevron-btn:hover {
-  background: rgba(255, 255, 255, 0.15);
-  color: var(--yt-spec-text-primary, #ffffff);
+  background: var(--sd-bg-hover);
+  color: var(--sd-text-primary);
 }
 
 .subdeck-chevron-btn.open {
@@ -149,17 +211,17 @@
   gap: 4px;
   margin: 4px 8px 6px 8px;
   padding: 6px;
-  background: var(--yt-spec-badge-chip-background, rgba(255, 255, 255, 0.08));
+  background: var(--sd-bg-card);
   border-radius: 6px;
-  border: 1px solid var(--yt-spec-10-percent-layer, rgba(255, 255, 255, 0.15));
+  border: 1px solid var(--sd-bg-card-border);
 }
 
 .subdeck-add-select {
   flex: 1;
   min-width: 0;
-  background: rgba(0, 0, 0, 0.35);
-  color: var(--yt-spec-text-primary, #f1f1f1);
-  border: 1px solid var(--yt-spec-10-percent-layer, rgba(255, 255, 255, 0.2));
+  background: var(--sd-input-bg);
+  color: var(--sd-text-primary);
+  border: 1px solid var(--sd-input-border);
   border-radius: 4px;
   padding: 4px 6px;
   font-size: 11px;
@@ -167,8 +229,8 @@
 }
 
 .subdeck-add-confirm-btn {
-  background: #3ea6ff;
-  color: #000 !important;
+  background: var(--sd-brand-blue);
+  color: #ffffff !important;
   border: none;
   border-radius: 4px;
   padding: 4px 8px;
@@ -177,13 +239,12 @@
   cursor: pointer;
 }
 
-/* Controlled scrollable channel list */
+/* Scrollable Channel List */
 .subdeck-channel-list {
   max-height: 0;
   overflow-y: hidden;
   transition: max-height 0.25s cubic-bezier(0.4, 0, 0.2, 1);
   padding-left: 8px;
-  box-sizing: border-box;
 }
 
 .subdeck-channel-list:not(.collapsed) {
@@ -191,7 +252,6 @@
   overflow-y: auto;
 }
 
-/* Custom scrollbar */
 .subdeck-channel-list::-webkit-scrollbar {
   width: 4px;
 }
@@ -199,11 +259,11 @@
   background: transparent;
 }
 .subdeck-channel-list::-webkit-scrollbar-thumb {
-  background: rgba(255, 255, 255, 0.2);
+  background: var(--sd-scrollbar-thumb);
   border-radius: 2px;
 }
 
-/* Channel Item with Remove Button */
+/* Channel Item */
 .subdeck-channel-item {
   display: flex;
   align-items: center;
@@ -212,11 +272,10 @@
   border-radius: 6px;
   font-size: 12px;
   transition: background-color 0.15s ease;
-  box-sizing: border-box;
 }
 
 .subdeck-channel-item:hover {
-  background-color: var(--yt-spec-badge-chip-background, rgba(255, 255, 255, 0.1));
+  background-color: var(--sd-bg-hover);
 }
 
 .subdeck-channel-link {
@@ -226,12 +285,13 @@
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+  color: var(--sd-text-primary) !important;
 }
 
 .subdeck-channel-remove-btn {
   background: transparent;
   border: none;
-  color: var(--yt-spec-text-secondary, #aaaaaa);
+  color: var(--sd-text-secondary);
   cursor: pointer;
   padding: 2px 5px;
   border-radius: 3px;
@@ -250,15 +310,19 @@
   background: rgba(239, 68, 68, 0.15);
 }
 
-/* Show All Subscriptions Button */
+/* --------------------------------------------------------------------------
+   ACTION BAR & BUTTONS
+   -------------------------------------------------------------------------- */
+
+/* Clear Filter / Show All Button */
 .subdeck-clear-filter {
   display: block;
   width: calc(100% - 16px);
   margin: 4px 8px 6px 8px;
   padding: 6px 10px;
-  background-color: var(--yt-spec-badge-chip-background, rgba(255, 255, 255, 0.08));
-  color: var(--yt-spec-text-primary, #f1f1f1) !important;
-  border: 1px solid var(--yt-spec-10-percent-layer, rgba(255, 255, 255, 0.15));
+  background-color: var(--sd-bg-card);
+  color: var(--sd-text-primary) !important;
+  border: 1px solid var(--sd-bg-card-border);
   border-radius: 8px;
   font-size: 12px;
   font-weight: 500;
@@ -268,21 +332,19 @@
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  box-sizing: border-box;
 }
 
 .subdeck-clear-filter:hover {
-  background-color: var(--yt-spec-10-percent-layer, rgba(255, 255, 255, 0.18));
+  background-color: var(--sd-bg-hover);
 }
 
-/* Categorize Action Card */
+/* Action Card */
 .subdeck-action-card {
   margin: 4px 8px 6px 8px;
   padding: 8px 10px;
-  background: var(--yt-spec-badge-chip-background, rgba(255, 255, 255, 0.06));
-  border: 1px solid var(--yt-spec-10-percent-layer, rgba(255, 255, 255, 0.12));
+  background: var(--sd-bg-card);
+  border: 1px solid var(--sd-bg-card-border);
   border-radius: 8px;
-  box-sizing: border-box;
 }
 
 .subdeck-action-header {
@@ -294,13 +356,14 @@
 
 .subdeck-brand {
   font-weight: 700;
-  font-size: 12px;
-  color: #3ea6ff;
+  font-size: 12.5px;
+  color: var(--sd-brand-blue);
 }
 
 .subdeck-subtext {
-  font-size: 10.5px;
-  color: var(--yt-spec-text-secondary, #aaaaaa);
+  font-size: 11px;
+  color: var(--sd-text-secondary);
+  font-weight: 500;
 }
 
 .subdeck-action-buttons {
@@ -310,7 +373,7 @@
 
 .subdeck-btn-ai {
   flex: 1;
-  background: #065fd4;
+  background: var(--sd-btn-ai-bg);
   color: #ffffff !important;
   border: none;
   border-radius: 6px;
@@ -324,7 +387,7 @@
 }
 
 .subdeck-btn-ai:hover {
-  background: #0056b3;
+  background: var(--sd-btn-ai-hover);
 }
 
 .subdeck-btn-ai:disabled {
@@ -335,8 +398,8 @@
 .subdeck-btn-manual {
   flex: 1;
   background: transparent;
-  color: var(--yt-spec-text-primary, #f1f1f1) !important;
-  border: 1px solid var(--yt-spec-10-percent-layer, rgba(255, 255, 255, 0.2));
+  color: var(--sd-text-primary) !important;
+  border: 1px solid var(--sd-bg-card-border);
   border-radius: 6px;
   padding: 5px 6px;
   font-size: 11.5px;
@@ -348,7 +411,7 @@
 }
 
 .subdeck-btn-manual:hover {
-  background: rgba(255, 255, 255, 0.1);
+  background: var(--sd-bg-hover);
 }
 
 .subdeck-manual-input-box {
@@ -361,19 +424,18 @@
 .subdeck-manual-input-box input {
   flex: 1;
   min-width: 0;
-  background: rgba(0, 0, 0, 0.25);
-  border: 1px solid var(--yt-spec-10-percent-layer, rgba(255, 255, 255, 0.2));
+  background: var(--sd-input-bg);
+  border: 1px solid var(--sd-input-border);
   border-radius: 4px;
-  color: var(--yt-spec-text-primary, #f1f1f1);
+  color: var(--sd-text-primary);
   font-size: 11px;
   padding: 4px 6px;
   outline: none;
-  box-sizing: border-box;
 }
 
 .subdeck-btn-save {
-  background: #3ea6ff;
-  color: #000 !important;
+  background: var(--sd-brand-blue);
+  color: #ffffff !important;
   border: none;
   border-radius: 4px;
   padding: 4px 8px;
@@ -385,7 +447,7 @@
 
 .subdeck-btn-cancel {
   background: transparent;
-  color: var(--yt-spec-text-secondary, #aaa) !important;
+  color: var(--sd-text-secondary) !important;
   border: none;
   font-size: 12px;
   cursor: pointer;
@@ -393,10 +455,14 @@
   flex-shrink: 0;
 }
 
+/* --------------------------------------------------------------------------
+   BANNERS
+   -------------------------------------------------------------------------- */
+
 .subdeck-degradation-banner,
 .subdeck-feed-banner {
-  background-color: var(--yt-spec-badge-chip-background, rgba(255, 255, 255, 0.08));
-  color: var(--yt-spec-text-primary, #f1f1f1);
+  background-color: var(--sd-banner-bg);
+  color: var(--sd-text-primary);
   padding: 10px 18px;
   display: flex;
   justify-content: space-between;
@@ -404,22 +470,28 @@
   margin: 8px 16px;
   border-radius: 8px;
   font-size: 13px;
-  border: 1px solid var(--yt-spec-10-percent-layer, rgba(255, 255, 255, 0.15));
-  box-sizing: border-box;
+  border: 1px solid var(--sd-banner-border);
 }
 
 .subdeck-banner-dismiss {
   cursor: pointer;
-  color: var(--yt-spec-text-primary, #f1f1f1);
+  color: var(--sd-text-primary);
   background: transparent;
-  border: 1px solid var(--yt-spec-text-secondary, #aaaaaa);
+  border: 1px solid var(--sd-text-secondary);
   border-radius: 4px;
   padding: 4px 10px;
   font-size: 12px;
   font-weight: 500;
 }
 
-/* Responsive: hide custom sidebar elements when YouTube collapses to mini-guide */
+.subdeck-banner-dismiss:hover {
+  background: var(--sd-bg-hover);
+}
+
+/* --------------------------------------------------------------------------
+   RESPONSIVE
+   -------------------------------------------------------------------------- */
+
 ytd-app[mini-guide] #subdeck-sidebar-container,
 ytd-mini-guide-renderer #subdeck-sidebar-container {
   display: none !important;

@@ -21,15 +21,23 @@ export class SidebarManager {
     }
     this.retryCount = 0;
 
-    // Deduplicate: Clean up any extra containers
-    const existing = document.querySelectorAll(`#${this.containerId}`);
-    if (existing.length > 1) {
-      existing.forEach((el, idx) => {
-        if (idx > 0) el.remove();
-      });
+    // Deduplicate: Clean up any containers not inside active subSection, or extra containers
+    const existingContainers = Array.from(document.querySelectorAll<HTMLElement>(`#${this.containerId}`));
+    let container: HTMLElement | null = null;
+
+    for (const el of existingContainers) {
+      if (subSection.contains(el)) {
+        if (!container) {
+          container = el;
+        } else {
+          el.remove();
+        }
+      } else {
+        // Remove stale container from other sections or off-screen drawers
+        el.remove();
+      }
     }
 
-    let container = document.getElementById(this.containerId);
     if (!container) {
       container = document.createElement('div');
       container.id = this.containerId;
@@ -70,7 +78,25 @@ export class SidebarManager {
   }
 
   static async render(): Promise<void> {
-    const container = document.getElementById(this.containerId);
+    const subSection = getSubscriptionSection();
+    if (!subSection) return;
+
+    // Prune any rogue containers outside the active subSection
+    const allContainers = Array.from(document.querySelectorAll<HTMLElement>(`#${this.containerId}`));
+    let container: HTMLElement | null = null;
+
+    for (const el of allContainers) {
+      if (subSection.contains(el)) {
+        if (!container) {
+          container = el;
+        } else {
+          el.remove();
+        }
+      } else {
+        el.remove();
+      }
+    }
+
     if (!container) return;
 
     container.innerHTML = '';
@@ -142,13 +168,23 @@ export class SidebarManager {
     actionCard.appendChild(actionBtns);
     actionCard.appendChild(manualBox);
 
-    // Auto-AI Click Handler
+    // Auto-AI Click Handler: Auto-expands all channels and syncs before clustering
     aiBtn.addEventListener('click', async () => {
       if (aiBtn.disabled) return;
       aiBtn.disabled = true;
-      aiBtn.textContent = '⏳ Clustering...';
+      aiBtn.textContent = '⏳ Discovering...';
 
       try {
+        // 1. Expand all native subscriptions so all 80+ channels mount into DOM
+        ChannelExtractor.autoExpandNativeSubscriptions();
+        await new Promise(r => setTimeout(r, 400));
+
+        // 2. Scrape and sync all channels into storage
+        await this.syncWithNativeSubscriptions();
+
+        aiBtn.textContent = '⏳ Clustering...';
+
+        // 3. Run categorization across full list of channels
         await new Promise<void>((resolve) => {
           chrome.runtime.sendMessage({ type: 'subdeck-auto-organize' }, async (res) => {
             if (res?.success) {

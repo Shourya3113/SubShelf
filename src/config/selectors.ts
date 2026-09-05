@@ -18,16 +18,23 @@ export const YT_SELECTORS = {
 export type SelectorKey = keyof typeof YT_SELECTORS;
 
 /**
- * Accurately finds the channel Subscriptions section in YouTube's guide sidebar.
- * Uses robust structural and multi-lingual checks, avoiding home navigation links.
+ * Accurately finds the channel Subscriptions section in YouTube's active, visible guide sidebar.
+ * Uses robust structural and multi-lingual checks, avoiding off-screen/drawer duplicates.
  */
 export function getSubscriptionSection(): Element | null {
-  const guide =
-    document.querySelector('ytd-guide-renderer #sections') ||
-    document.querySelector('#sections');
-  if (!guide) return null;
+  // Find all guide renderers in the document (desktop persistent vs mobile/drawer)
+  const guideRenderers = Array.from(document.querySelectorAll<HTMLElement>('ytd-guide-renderer'));
+  if (guideRenderers.length === 0) return null;
 
-  const sections = Array.from(guide.querySelectorAll('ytd-guide-section-renderer'));
+  // Filter for the guide renderer that is currently visible in the layout
+  const visibleGuide = guideRenderers.find(g => {
+    const rect = g.getBoundingClientRect();
+    const style = window.getComputedStyle(g);
+    return rect.width > 0 && rect.height > 0 && style.visibility !== 'hidden' && style.display !== 'none';
+  }) || guideRenderers[0];
+
+  const sectionsContainer = visibleGuide.querySelector('#sections') || visibleGuide;
+  const sections = Array.from(sectionsContainer.querySelectorAll('ytd-guide-section-renderer'));
 
   // 1. Structural match: section containing header link to /feed/channels
   for (const s of sections) {
@@ -60,4 +67,18 @@ export function getSubscriptionSection(): Element | null {
   }
 
   return null;
+}
+
+/**
+ * Finds the native "Show more" expander button within the YouTube subscriptions section.
+ */
+export function getNativeExpander(subSection?: Element | null): HTMLElement | null {
+  const section = subSection || getSubscriptionSection();
+  if (!section) return null;
+
+  const expander = section.querySelector<HTMLElement>(
+    'ytd-guide-collapsible-entry-renderer, #expander-item, #expander-button, #expand-button, ytd-guide-entry-renderer#collapsible-expander, ytd-guide-collapsible-section-entry-renderer'
+  );
+
+  return expander;
 }

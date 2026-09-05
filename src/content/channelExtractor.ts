@@ -1,4 +1,4 @@
-import { YT_SELECTORS, getSubscriptionSection } from '@/config/selectors';
+import { YT_SELECTORS, getSubscriptionSection, getNativeExpander } from '@/config/selectors';
 import { IdNormalizer } from '@/utils/idNormalizer';
 import { SubscribedChannel } from '@/types';
 
@@ -28,10 +28,39 @@ const SYSTEM_NAMES = new Set([
 ]);
 
 export class ChannelExtractor {
+  /**
+   * Expands YouTube's native collapsed "Show more" subscription section so
+   * all subscribed channels (not just the first 7) are mounted into the DOM.
+   */
+  static autoExpandNativeSubscriptions(): boolean {
+    const subSection = getSubscriptionSection();
+    if (!subSection) return false;
+
+    const expander = getNativeExpander(subSection);
+    if (!expander) return false;
+
+    const isExpanded =
+      expander.hasAttribute('expanded') ||
+      expander.classList.contains('expanded') ||
+      expander.getAttribute('aria-expanded') === 'true';
+
+    if (!isExpanded) {
+      const clickTarget =
+        expander.querySelector<HTMLElement>('a, button, #endpoint, yt-formatted-string, #button') ||
+        expander;
+      clickTarget.click();
+      return true;
+    }
+    return false;
+  }
+
   static scrapeFromSidebar(): SubscribedChannel[] {
     const channels: SubscribedChannel[] = [];
     const subSection = getSubscriptionSection();
     if (!subSection) return channels;
+
+    // Check if we should expand the native list to capture all channels
+    this.autoExpandNativeSubscriptions();
 
     const entries = subSection.querySelectorAll(YT_SELECTORS.guideEntry);
 

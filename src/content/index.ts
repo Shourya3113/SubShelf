@@ -2,6 +2,7 @@ import { SidebarManager } from './sidebarManager';
 import { HealthMonitor } from './healthMonitor';
 import { FeedFilter } from './feedFilter';
 import { SubscriptionSync } from './subscriptionSync';
+import { ChannelExtractor } from './channelExtractor';
 import { SubDeckStorage } from '@/utils/storage';
 import { debounce } from '@/utils/debounce';
 import { Logger } from '@/utils/logger';
@@ -13,6 +14,11 @@ class SubDeckCoordinator {
     window.addEventListener('yt-navigate-finish', this.handleNavigation);
     window.addEventListener('yt-page-data-updated', this.handleDataUpdate);
     this.waitForYouTubeReady();
+
+    // Auto-expand native subscriptions shortly after load to discover all channels
+    setTimeout(() => {
+      ChannelExtractor.autoExpandNativeSubscriptions();
+    }, 1500);
   }
 
   static waitForYouTubeReady(): void {

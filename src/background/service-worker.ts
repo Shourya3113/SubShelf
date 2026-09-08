@@ -1,7 +1,6 @@
 import { SubDeckStorage } from '@/utils/storage';
 import { AICategorizer } from '@/ai/categorizer';
 import { Logger } from '@/utils/logger';
-import { CategoryDeck } from '@/types';
 import { runMigrations } from './migrations';
 
 chrome.runtime.onInstalled.addListener(async (details) => {
@@ -37,37 +36,15 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         }
 
         const categorizedDecks = await AICategorizer.categorizeAll(channels);
+        const state = await SubDeckStorage.getAll();
 
-        // Only retain genuinely custom decks created manually by the user
-        const currentCategories = await SubDeckStorage.getCategories();
-        const systemDeckNames = new Set(categorizedDecks.map(d => d.name.toLowerCase().trim()));
-        const obsoleteSystemIds = new Set(['education', 'tech', 'music', 'gaming', 'entertainment', 'news-politics', 'general-other', '__uncategorized__']);
-
-        const customDecks = currentCategories.filter(c =>
-          !c.isSystem &&
-          !obsoleteSystemIds.has(c.id) &&
-          !systemDeckNames.has(c.name.toLowerCase().trim()) &&
-          !categorizedDecks.some(d => d.id === c.id)
+        const finalDecks = AICategorizer.applyOverrides(
+          categorizedDecks,
+          state.categories,
+          state.manualAssignments || {},
+          state.channelExclusions || {},
+          channels
         );
-
-        // Deduplicate final decks by normalized name to guarantee zero duplicate folders
-        const finalDecks: CategoryDeck[] = [];
-        const seenNames = new Set<string>();
-
-        for (const deck of [...categorizedDecks, ...customDecks]) {
-          const normName = deck.name.toLowerCase().trim();
-          if (!seenNames.has(normName)) {
-            seenNames.add(normName);
-            finalDecks.push(deck);
-          } else {
-            // Merge channel IDs into canonical deck
-            const canonical = finalDecks.find(d => d.name.toLowerCase().trim() === normName);
-            if (canonical) {
-              const merged = new Set([...canonical.channelIds, ...deck.channelIds]);
-              canonical.channelIds = Array.from(merged);
-            }
-          }
-        }
 
         await SubDeckStorage.setAll({ categories: finalDecks });
 

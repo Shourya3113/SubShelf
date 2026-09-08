@@ -139,4 +139,129 @@ export class AICategorizer {
       return null;
     }
   }
+
+  /**
+   * Applies user manual assignments and exclusions on top of AI/heuristic categorization.
+   * Guarantees that:
+   * 1. Channels explicitly removed from a category are NEVER re-added to that category.
+   * 2. Channels manually assigned to folders are preserved.
+   * 3. Custom folders created by the user are retained.
+   * 4. Any unassigned channels land in Uncategorized.
+   */
+  static applyOverrides(
+    categorizedDecks: CategoryDeck[],
+    currentCategories: CategoryDeck[],
+    manualAssignments: Record<string, string[]>,
+    channelExclusions: Record<string, string[]>,
+    allChannels: SubscribedChannel[]
+  ): CategoryDeck[] {
+    const obsoleteSystemIds = new Set([
+      'education', 'tech', 'music', 'gaming', 'entertainment',
+      'news-politics', 'general-other', '__uncategorized__',
+    ]);
+    const systemDeckNames = new Set(categorizedDecks.map(d => d.name.toLowerCase().trim()));
+
+    // 1. Preserve custom user-created decks
+    const customDecks = currentCategories.filter(c =>
+      !c.isSystem &&
+      !obsoleteSystemIds.has(c.id) &&
+      !systemDeckNames.has(c.name.toLowerCase().trim()) &&
+      !categorizedDecks.some(d => d.id === c.id)
+    );
+
+    // Deep clone combined decks
+    const combinedDecks: CategoryDeck[] = [...categorizedDecks, ...customDecks].map(d => ({
+      ...d,
+      channelIds: [...d.channelIds],
+    }));
+
+    // 2. Filter out any AI assignments that violate user exclusions or manual assignments
+    for (const deck of combinedDecks) {
+      if (deck.id === '__uncategorized__') continue;
+
+      deck.channelIds = deck.channelIds.filter(ucId => {
+        // If user explicitly removed this channel from this deck -> EXCLUDE!
+        const exclusions = channelExclusions[ucId] || [];
+        if (exclusions.includes(deck.id)) {
+          return false;
+        }
+
+        // If user manually assigned this channel to specific deck(s) -> ONLY allow in those decks!
+        const manual = manualAssignments[ucId] || [];
+        if (manual.length > 0 && !manual.includes(deck.id)) {
+          return false;
+        }
+
+        return true;
+      });
+    }
+
+    // 3. Ensure all manual assignments are respected and present in their target decks
+    for (const [ucId, targetDeckIds] of Object.entries(manualAssignments)) {
+      for (const targetId of targetDeckIds) {
+        if (targetId === '__uncategorized__') continue;
+        let targetDeck = combinedDecks.find(d => d.id === targetId);
+        if (!targetDeck) {
+          // Check if deck existed in currentCategories (e.g. custom deck)
+          const existing = currentCategories.find(c => c.id === targetId);
+          if (existing) {
+            targetDeck = { ...existing, channelIds: [] };
+            combinedDecks.push(targetDeck);
+          }
+        }
+        if (targetDeck && !targetDeck.channelIds.includes(ucId)) {
+          targetDeck.channelIds.push(ucId);
+        }
+      }
+    }
+
+    // 4. Deduplicate final decks by normalized name
+    const finalDecks: CategoryDeck[] = [];
+    const seenNames = new Set<string>();
+
+    for (const deck of combinedDecks) {
+      if (deck.id === '__uncategorized__') continue;
+      const normName = deck.name.toLowerCase().trim();
+      if (!seenNames.has(normName)) {
+        seenNames.add(normName);
+        finalDecks.push(deck);
+      } else {
+        const canonical = finalDecks.find(d => d.name.toLowerCase().trim() === normName);
+        if (canonical) {
+          const merged = new Set([...canonical.channelIds, ...deck.channelIds]);
+          canonical.channelIds = Array.from(merged);
+        }
+      }
+    }
+
+    // 5. Handle unassigned channels -> place in Uncategorized
+    const allAssignedIds = new Set<string>();
+    finalDecks.forEach(d => d.channelIds.forEach(id => allAssignedIds.add(id)));
+
+    const unassignedChannelIds = allChannels
+      .map(c => c.ucId)
+      .filter(ucId => !allAssignedIds.has(ucId));
+
+    let uncategorizedDeck = currentCategories.find(c => c.id === '__uncategorized__');
+    if (!uncategorizedDeck) {
+      uncategorizedDeck = {
+        id: '__uncategorized__',
+        name: 'Uncategorized',
+        icon: '📂',
+        color: '#6B7280',
+        channelIds: [],
+        isCollapsed: true,
+        sortOrder: 999,
+        isSystem: true,
+      };
+    } else {
+      uncategorizedDeck = { ...uncategorizedDeck, channelIds: [] };
+    }
+
+    uncategorizedDeck.channelIds = unassignedChannelIds;
+    finalDecks.push(uncategorizedDeck);
+
+    // Return decks with channels (or uncategorized if it has channels)
+    return finalDecks.filter(d => d.channelIds.length > 0 || (d.id === '__uncategorized__' && d.channelIds.length > 0));
+  }
 }

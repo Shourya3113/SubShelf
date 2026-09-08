@@ -80,13 +80,32 @@ export class ExportImport {
           ucId: ch.ucId,
           title: ch.title.slice(0, 200),
           handle: typeof ch.handle === 'string' ? ch.handle.slice(0, 100) : '',
-          url: typeof ch.url === 'string' ? ch.url.slice(0, 300) : '',
-          avatarUrl: typeof ch.avatarUrl === 'string' ? ch.avatarUrl.slice(0, 500) : '',
-          categoryIds: Array.isArray(ch.categoryIds) ? ch.categoryIds : [],
+          url: typeof ch.url === 'string' && (ch.url.startsWith('https://') || ch.url.startsWith('/')) ? ch.url.slice(0, 300) : '',
+          avatarUrl: typeof ch.avatarUrl === 'string' && (ch.avatarUrl.startsWith('https://') || ch.avatarUrl.startsWith('http://')) ? ch.avatarUrl.slice(0, 500) : '',
+          categoryIds: Array.isArray(ch.categoryIds) ? ch.categoryIds.filter(id => typeof id === 'string') : [],
           discoveredAt: typeof ch.discoveredAt === 'number' ? ch.discoveredAt : Date.now(),
         };
         if (ch.handle) {
           validatedHandles[ch.handle] = ch.ucId;
+        }
+      }
+    }
+
+    // Validate channelExclusions & manualAssignments
+    const validatedExclusions: Record<string, string[]> = {};
+    if (payload.data.channelExclusions && typeof payload.data.channelExclusions === 'object') {
+      for (const [ucId, cats] of Object.entries(payload.data.channelExclusions)) {
+        if (typeof ucId === 'string' && Array.isArray(cats)) {
+          validatedExclusions[ucId] = cats.filter((c): c is string => typeof c === 'string');
+        }
+      }
+    }
+
+    const validatedManualAssignments: Record<string, string[]> = {};
+    if (payload.data.manualAssignments && typeof payload.data.manualAssignments === 'object') {
+      for (const [ucId, cats] of Object.entries(payload.data.manualAssignments)) {
+        if (typeof ucId === 'string' && Array.isArray(cats)) {
+          validatedManualAssignments[ucId] = cats.filter((c): c is string => typeof c === 'string');
         }
       }
     }
@@ -97,6 +116,8 @@ export class ExportImport {
         categories: validatedCategories,
         channels: validatedChannels,
         handleToUcId: validatedHandles,
+        channelExclusions: validatedExclusions,
+        manualAssignments: validatedManualAssignments,
         activeCategoryId: null,
         settings: current.settings, // Preserve user's local settings and API key
       });
@@ -109,11 +130,15 @@ export class ExportImport {
       ];
       const mergedChannels = { ...current.channels, ...validatedChannels };
       const mergedHandles = { ...current.handleToUcId, ...validatedHandles };
+      const mergedExclusions = { ...current.channelExclusions, ...validatedExclusions };
+      const mergedManualAssignments = { ...current.manualAssignments, ...validatedManualAssignments };
 
       await SubDeckStorage.setAll({
         categories: mergedCategories,
         channels: mergedChannels,
         handleToUcId: mergedHandles,
+        channelExclusions: mergedExclusions,
+        manualAssignments: mergedManualAssignments,
       });
     }
   }

@@ -25,6 +25,8 @@ export interface SubDeckStorageSchema {
   channels: Record<string, SubscribedChannel>;
   activeCategoryId: string | null;
   handleToUcId: Record<string, string>;
+  channelExclusions: Record<string, string[]>;
+  manualAssignments: Record<string, string[]>;
   settings: {
     aiProvider: 'gemini-nano' | 'gemini-api' | 'openai' | 'heuristic';
     apiKey?: string;
@@ -53,6 +55,8 @@ export const DEFAULT_STORAGE: SubDeckStorageSchema = {
   channels: {},
   activeCategoryId: null,
   handleToUcId: {},
+  channelExclusions: {},
+  manualAssignments: {},
   settings: {
     aiProvider: 'gemini-nano',
     autoSyncOnSubscribe: true,

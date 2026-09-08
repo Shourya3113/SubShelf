@@ -107,7 +107,7 @@ npm run package
 ```
 This compiles the production bundle in `dist/` and generates a Chrome Web Store-ready archive:
 ```
-subshelf-v1.0.2.zip (manifest.json at archive root)
+subshelf-v1.0.3.zip (manifest.json at archive root)
 ```
 
 ### 4. Load into Chrome

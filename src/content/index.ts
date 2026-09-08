@@ -19,6 +19,14 @@ class SubDeckCoordinator {
     });
     window.addEventListener('yt-navigate-finish', this.handleNavigation);
     window.addEventListener('yt-page-data-updated', this.handleDataUpdate);
+
+    // Cross-tab sync: re-render sidebar when storage changes from another tab or popup
+    chrome.storage.onChanged.addListener((changes, area) => {
+      if (area === 'local' && (changes.categories || changes.channels)) {
+        SidebarManager.render();
+      }
+    });
+
     this.waitForYouTubeReady();
   }
 

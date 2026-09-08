@@ -4,80 +4,123 @@ import { ChannelExtractor } from './channelExtractor';
 import { HeuristicCategorizer } from '@/ai/heuristic';
 import { FeedFilter } from './feedFilter';
 import { CategoryDeck } from '@/types';
+import { debounce } from '@/utils/debounce';
 
 export class SidebarManager {
   private static containerId = 'subdeck-sidebar-container';
   private static observer: MutationObserver | null = null;
   private static retryCount = 0;
+  private static retryTimeout: ReturnType<typeof setTimeout> | null = null;
+  private static isInjecting = false;
+  private static isRendering = false;
+  private static pendingRender = false;
+
+  private static debouncedSync = debounce(async () => {
+    await SidebarManager.syncWithNativeSubscriptions();
+  }, 300);
 
   static async ensureInjected(): Promise<void> {
-    const subSection = getSubscriptionSection();
-    if (!subSection) {
-      if (this.retryCount < 6) {
-        this.retryCount++;
-        setTimeout(() => this.ensureInjected(), 400);
+    if (this.isInjecting) return;
+    this.isInjecting = true;
+    try {
+      const subSection = getSubscriptionSection();
+      if (!subSection) {
+        if (this.retryCount < 6) {
+          this.retryCount++;
+          if (this.retryTimeout) clearTimeout(this.retryTimeout);
+          this.retryTimeout = setTimeout(() => {
+            this.retryTimeout = null;
+            this.ensureInjected();
+          }, 400);
+        }
+        return;
       }
-      return;
-    }
-    this.retryCount = 0;
+      this.retryCount = 0;
+      if (this.retryTimeout) {
+        clearTimeout(this.retryTimeout);
+        this.retryTimeout = null;
+      }
 
-    // Deduplicate: Clean up any containers not inside active subSection, or extra containers
-    const existingContainers = Array.from(document.querySelectorAll<HTMLElement>(`#${this.containerId}`));
-    let container: HTMLElement | null = null;
+      // Deduplicate: Clean up any containers not inside active subSection, or extra containers
+      const existingContainers = Array.from(document.querySelectorAll<HTMLElement>(`#${this.containerId}`));
+      let container: HTMLElement | null = null;
 
-    for (const el of existingContainers) {
-      if (subSection.contains(el)) {
-        if (!container) {
-          container = el;
+      for (const el of existingContainers) {
+        if (subSection.contains(el)) {
+          if (!container) {
+            container = el;
+          } else {
+            el.remove();
+          }
         } else {
+          // Remove stale container from other sections or off-screen drawers
           el.remove();
         }
-      } else {
-        // Remove stale container from other sections or off-screen drawers
-        el.remove();
       }
-    }
 
-    if (!container) {
-      container = document.createElement('div');
-      container.id = this.containerId;
-    }
+      if (!container) {
+        container = document.createElement('div');
+        container.id = this.containerId;
+      }
 
-    // Anchor inside or directly above the subscriptions list
-    const itemsContainer = subSection.querySelector('#items');
-    if (itemsContainer && container.nextElementSibling !== itemsContainer) {
-      itemsContainer.parentNode?.insertBefore(container, itemsContainer);
-    } else if (!itemsContainer && container.nextElementSibling !== subSection) {
-      subSection.parentNode?.insertBefore(container, subSection);
-    }
-
-    // Clean up old observer if attached to a stale node
-    if (this.observer) {
-      this.observer.disconnect();
-      this.observer = null;
-    }
-
-    this.observer = new MutationObserver((mutations) => {
-      // Ignore mutations originating from within our own container
-      const isInternal = mutations.some(m => {
-        let target: Node | null = m.target;
-        while (target) {
-          if (target instanceof Element && target.id === this.containerId) return true;
-          target = target.parentNode;
+      // Anchor inside subSection (strictly as a child of subSection)
+      const itemsContainer = subSection.querySelector('#items');
+      if (itemsContainer) {
+        if (container.nextElementSibling !== itemsContainer) {
+          itemsContainer.parentNode?.insertBefore(container, itemsContainer);
         }
-        return false;
-      });
-      if (!isInternal) {
-        this.syncWithNativeSubscriptions();
+      } else {
+        if (subSection.firstElementChild !== container) {
+          subSection.insertBefore(container, subSection.firstChild);
+        }
       }
-    });
 
-    this.observer.observe(subSection, { childList: true, subtree: true });
+      // Clean up old observer if attached to a stale node
+      if (this.observer) {
+        this.observer.disconnect();
+        this.observer = null;
+      }
 
-    await this.render();
+      this.observer = new MutationObserver((mutations) => {
+        // Ignore mutations originating from within our own container
+        const isInternal = mutations.some(m => {
+          let target: Node | null = m.target;
+          while (target) {
+            if (target instanceof Element && target.id === this.containerId) return true;
+            target = target.parentNode;
+          }
+          return false;
+        });
+        if (!isInternal) {
+          this.debouncedSync();
+        }
+      });
+
+      this.observer.observe(subSection, { childList: true, subtree: true });
+
+      await this.render();
+    } finally {
+      this.isInjecting = false;
+    }
   }
 
   static async render(): Promise<void> {
+    if (this.isRendering) {
+      this.pendingRender = true;
+      return;
+    }
+    this.isRendering = true;
+    try {
+      do {
+        this.pendingRender = false;
+        await this.executeRender();
+      } while (this.pendingRender);
+    } finally {
+      this.isRendering = false;
+    }
+  }
+
+  private static async executeRender(): Promise<void> {
     const subSection = getSubscriptionSection();
     if (!subSection) return;
 
@@ -97,7 +140,16 @@ export class SidebarManager {
       }
     }
 
-    if (!container) return;
+    if (!container) {
+      container = document.createElement('div');
+      container.id = this.containerId;
+      const itemsContainer = subSection.querySelector('#items');
+      if (itemsContainer) {
+        itemsContainer.parentNode?.insertBefore(container, itemsContainer);
+      } else {
+        subSection.insertBefore(container, subSection.firstChild);
+      }
+    }
 
     // Preserve scroll position and prevent height collapse during re-render
     const guideInner = document.querySelector<HTMLElement>('#guide-inner-content');
@@ -107,12 +159,17 @@ export class SidebarManager {
       container.style.minHeight = `${currentHeight}px`;
     }
 
-    container.innerHTML = '';
-
-    const categories = await SubDeckStorage.getCategories();
-    const channelsMap = await SubDeckStorage.getChannels();
-    const activeCategory = (await SubDeckStorage.getAll()).activeCategoryId;
+    // Fetch storage state concurrently BEFORE touching the DOM
+    const [categories, channelsMap, allState] = await Promise.all([
+      SubDeckStorage.getCategories(),
+      SubDeckStorage.getChannels(),
+      SubDeckStorage.getAll(),
+    ]);
+    const activeCategory = allState.activeCategoryId;
     const channelCount = Object.keys(channelsMap).length;
+
+    // Construct entire UI inside an in-memory DocumentFragment for an atomic swap
+    const fragment = document.createDocumentFragment();
 
     // 1. Categorize Subscriptions Action Bar Card (Built via DOM APIs)
     const actionCard = document.createElement('div');
@@ -272,7 +329,7 @@ export class SidebarManager {
       if (e.key === 'Escape') manualBox.style.display = 'none';
     });
 
-    container.appendChild(actionCard);
+    fragment.appendChild(actionCard);
 
     // 2. Show All Button
     const showAllBtn = document.createElement('button');
@@ -283,7 +340,7 @@ export class SidebarManager {
       await SubDeckStorage.setAll({ activeCategoryId: null });
       FeedFilter.setCategory(null);
     });
-    container.appendChild(showAllBtn);
+    fragment.appendChild(showAllBtn);
 
     // 3. Deduplicate Category Folders by normalized name
     const seenNames = new Set<string>();
@@ -475,8 +532,11 @@ export class SidebarManager {
         folder.appendChild(header);
         folder.appendChild(addPickerBox);
         folder.appendChild(list);
-        container.appendChild(folder);
+        fragment.appendChild(folder);
       });
+
+    // Atomic DOM replacement - single operation with zero interleaving window
+    container.replaceChildren(fragment);
 
     // Release minHeight and ensure scroll position was preserved
     requestAnimationFrame(() => {
@@ -511,7 +571,7 @@ export class SidebarManager {
     const SYSTEM_NAMES = new Set(['your videos', 'shopping', 'music', 'gaming', 'news', 'movies', 'live', 'podcasts', 'sports']);
     for (const [ucId, ch] of Object.entries(storageChannels)) {
       if (SYSTEM_NAMES.has(ch.title.toLowerCase())) {
-        await SubDeckStorage.removeChannel(ucId);
+        delete storageChannels[ucId];
         categories.forEach(cat => {
           cat.channelIds = cat.channelIds.filter(id => id !== ucId);
         });
@@ -519,16 +579,33 @@ export class SidebarManager {
       }
     }
 
+    let uncategorized = categories.find(c => c.id === '__uncategorized__');
+    if (!uncategorized) {
+      uncategorized = {
+        id: '__uncategorized__',
+        name: 'Uncategorized',
+        icon: '📂',
+        color: '#6B7280',
+        channelIds: [],
+        isCollapsed: true,
+        sortOrder: 999,
+        isSystem: true,
+      };
+      categories.push(uncategorized);
+    }
+
+    const uncatSet = new Set(uncategorized.channelIds);
     for (const ch of scraped) {
       if (!storageChannels[ch.ucId]) {
-        await SubDeckStorage.addChannel(ch);
-        await SubDeckStorage.addChannelToCategory(ch.ucId, '__uncategorized__');
+        storageChannels[ch.ucId] = ch;
+        uncatSet.add(ch.ucId);
         hasChanges = true;
       }
     }
+    uncategorized.channelIds = Array.from(uncatSet);
 
     if (hasChanges) {
-      await SubDeckStorage.setAll({ categories });
+      await SubDeckStorage.setAll({ channels: storageChannels, categories });
       await this.render();
     }
   }

@@ -24,7 +24,7 @@ export class ExportImport {
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `subdeck_backup_${new Date().toISOString().split('T')[0]}.json`;
+    a.download = `subshelf_backup_${new Date().toISOString().split('T')[0]}.json`;
     a.click();
     URL.revokeObjectURL(url);
   }

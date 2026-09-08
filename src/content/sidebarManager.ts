@@ -12,6 +12,7 @@ export class SidebarManager {
   private static retryCount = 0;
   private static retryTimeout: ReturnType<typeof setTimeout> | null = null;
   private static isInjecting = false;
+  private static pendingInject = false;
   private static isRendering = false;
   private static pendingRender = false;
 
@@ -20,9 +21,22 @@ export class SidebarManager {
   }, 300);
 
   static async ensureInjected(): Promise<void> {
-    if (this.isInjecting) return;
+    if (this.isInjecting) {
+      this.pendingInject = true;
+      return;
+    }
     this.isInjecting = true;
     try {
+      do {
+        this.pendingInject = false;
+        await this.executeInjection();
+      } while (this.pendingInject);
+    } finally {
+      this.isInjecting = false;
+    }
+  }
+
+  private static async executeInjection(): Promise<void> {
       const subSection = getSubscriptionSection();
       if (!subSection) {
         if (this.retryCount < 6) {
@@ -82,16 +96,16 @@ export class SidebarManager {
       }
 
       this.observer = new MutationObserver((mutations) => {
-        // Ignore mutations originating from within our own container
-        const isInternal = mutations.some(m => {
+        // Check if any mutation originates from outside our container
+        const hasExternal = mutations.some(m => {
           let target: Node | null = m.target;
           while (target) {
-            if (target instanceof Element && target.id === this.containerId) return true;
+            if (target instanceof Element && target.id === this.containerId) return false;
             target = target.parentNode;
           }
-          return false;
+          return true;
         });
-        if (!isInternal) {
+        if (hasExternal) {
           this.debouncedSync();
         }
       });
@@ -99,9 +113,6 @@ export class SidebarManager {
       this.observer.observe(subSection, { childList: true, subtree: true });
 
       await this.render();
-    } finally {
-      this.isInjecting = false;
-    }
   }
 
   static async render(): Promise<void> {
@@ -113,7 +124,11 @@ export class SidebarManager {
     try {
       do {
         this.pendingRender = false;
-        await this.executeRender();
+        try {
+          await this.executeRender();
+        } catch (err) {
+          console.error('[SubShelf] Render cycle failed:', err);
+        }
       } while (this.pendingRender);
     } finally {
       this.isRendering = false;

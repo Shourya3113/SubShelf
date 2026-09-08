@@ -241,6 +241,24 @@ export const SUBDECK_TAXONOMY: TaxonomyEntry[] = [
   },
 ];
 
+// Pre-compile keyword regexes once at module init (eliminates ~60k regex compilations per run)
+interface CompiledTaxonomy extends TaxonomyEntry {
+  compiledKeywords: RegExp[];
+  compiledSignatures: { clean: string; original: string }[];
+}
+
+const COMPILED_TAXONOMY: CompiledTaxonomy[] = SUBDECK_TAXONOMY.map(tax => ({
+  ...tax,
+  compiledKeywords: tax.keywords.map(kw => {
+    const escaped = kw.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    return new RegExp(`\\b${escaped}\\b`, 'i');
+  }),
+  compiledSignatures: (tax.exactSignatures || []).map(sig => ({
+    clean: sig.toLowerCase().replace(/[^a-z0-9]/g, ''),
+    original: sig.toLowerCase(),
+  })),
+}));
+
 export class HeuristicCategorizer {
   static categorize(channels: SubscribedChannel[]): CategoryDeck[] {
     const decks: CategoryDeck[] = SUBDECK_TAXONOMY.map((tax, idx) => ({
@@ -265,21 +283,34 @@ export class HeuristicCategorizer {
       let bestCatId: string | null = null;
       let highestScore = 0;
 
-      for (const tax of SUBDECK_TAXONOMY) {
+      for (const tax of COMPILED_TAXONOMY) {
         if (tax.id === 'general-other') continue;
         let score = 0;
 
         // 1. Direct Famous Signature Match (+250 points)
-        if (tax.exactSignatures) {
-          for (const sig of tax.exactSignatures) {
-            const cleanSig = sig.toLowerCase().replace(/[^a-z0-9]/g, '');
+        // Short signatures (<5 chars) require exact match to prevent false positives
+        for (const sig of tax.compiledSignatures) {
+          const isShort = sig.clean.length < 5;
+          if (isShort) {
+            // Exact match only for short signatures (e.g., "ign", "ncs", "f1")
             if (
-              titleLower === sig ||
-              handleLower === sig ||
-              cleanTitle === cleanSig ||
-              cleanHandle === cleanSig ||
-              cleanTitle.includes(cleanSig) ||
-              cleanHandle.includes(cleanSig)
+              titleLower === sig.original ||
+              handleLower === sig.original ||
+              cleanTitle === sig.clean ||
+              cleanHandle === sig.clean
+            ) {
+              score += 250;
+              break;
+            }
+          } else {
+            // Substring match allowed for longer signatures (e.g., "linustechtips")
+            if (
+              titleLower === sig.original ||
+              handleLower === sig.original ||
+              cleanTitle === sig.clean ||
+              cleanHandle === sig.clean ||
+              cleanTitle.includes(sig.clean) ||
+              cleanHandle.includes(sig.clean)
             ) {
               score += 250;
               break;
@@ -288,9 +319,9 @@ export class HeuristicCategorizer {
         }
 
         // 2. Word Boundary Matching on Title (+20 points per keyword match)
-        for (const kw of tax.keywords) {
-          const escaped = kw.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-          const regex = new RegExp(`\\b${escaped}\\b`, 'i');
+        for (let i = 0; i < tax.compiledKeywords.length; i++) {
+          const regex = tax.compiledKeywords[i];
+          const kw = tax.keywords[i];
 
           if (regex.test(titleLower)) {
             score += 20;
@@ -298,7 +329,7 @@ export class HeuristicCategorizer {
             score += 15;
           } else if (kw.includes(' ') && combined.includes(kw)) {
             score += 30;
-          } else if (cleanHandle.includes(escaped) && escaped.length >= 4) {
+          } else if (kw.length >= 4 && cleanHandle.includes(kw)) {
             score += 12;
           }
         }

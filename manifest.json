@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "SubShelf — Smart YouTube Subscription Folders",
-  "version": "1.0.2",
+  "version": "1.0.3",
   "description": "Smart Subscription Category Folders & Feed Curator for YouTube™",
   "permissions": ["storage"],
   "host_permissions": [

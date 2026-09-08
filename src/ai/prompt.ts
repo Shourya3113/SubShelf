@@ -7,11 +7,11 @@ export function buildCategorizationPrompt(channels: SubscribedChannel[]): string
     .map(t => `- "${t.id}": ${t.name} (Keywords: ${t.keywords.slice(0, 6).join(', ')})`)
     .join('\n');
 
-  // Sanitize titles and handles to protect against prompt injection
+  // Sanitize titles and handles to protect against prompt injection (strip XML-breakout chars)
   const channelList = channels
     .map(c => {
-      const safeTitle = c.title.replace(/[\r\n\t"]/g, ' ').slice(0, 100);
-      const safeHandle = (c.handle || '').replace(/[\r\n\t"]/g, ' ').slice(0, 50);
+      const safeTitle = c.title.replace(/[<>\r\n\t"]/g, ' ').slice(0, 100);
+      const safeHandle = (c.handle || '').replace(/[<>\r\n\t"]/g, ' ').slice(0, 50);
       const safeId = c.ucId.replace(/[^a-zA-Z0-9_-]/g, '').slice(0, 50);
       return `  <channel id="${safeId}" title="${safeTitle}" handle="${safeHandle}" />`;
     })

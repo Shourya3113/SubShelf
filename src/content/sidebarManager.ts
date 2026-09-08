@@ -2,6 +2,7 @@ import { getSubscriptionSection } from '@/config/selectors';
 import { SubDeckStorage } from '@/utils/storage';
 import { ChannelExtractor } from './channelExtractor';
 import { HeuristicCategorizer } from '@/ai/heuristic';
+import { AICategorizer } from '@/ai/categorizer';
 import { FeedFilter } from './feedFilter';
 import { CategoryDeck } from '@/types';
 import { debounce } from '@/utils/debounce';
@@ -569,7 +570,15 @@ export class SidebarManager {
     const channels = Object.values(channelsMap);
     if (channels.length === 0) return;
 
-    const finalDecks = HeuristicCategorizer.categorize(channels);
+    const state = await SubDeckStorage.getAll();
+    const rawDecks = HeuristicCategorizer.categorize(channels);
+    const finalDecks = AICategorizer.applyOverrides(
+      rawDecks,
+      state.categories,
+      state.manualAssignments || {},
+      state.channelExclusions || {},
+      channels
+    );
     await SubDeckStorage.setAll({ categories: finalDecks });
     await this.render();
   }

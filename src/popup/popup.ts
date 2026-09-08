@@ -281,20 +281,7 @@ class PopupManager {
   }
 
   private static async assignChannelToCategory(ucId: string, newCatId: string): Promise<void> {
-    const categories = await SubDeckStorage.getCategories();
-
-    // Remove from all categories
-    categories.forEach(cat => {
-      cat.channelIds = cat.channelIds.filter(id => id !== ucId);
-    });
-
-    // Add to selected category
-    const target = categories.find(c => c.id === newCatId);
-    if (target) {
-      target.channelIds.push(ucId);
-    }
-
-    await SubDeckStorage.setAll({ categories });
+    await SubDeckStorage.setChannelCategory(ucId, newCatId);
     this.state = await SubDeckStorage.getAll();
   }
 
@@ -303,6 +290,7 @@ class PopupManager {
     const aiProvider = document.getElementById('setting-ai-provider') as HTMLSelectElement;
     const apiKey = document.getElementById('setting-api-key') as HTMLInputElement;
     const hideShorts = document.getElementById('setting-hide-shorts') as HTMLInputElement;
+    const resetOverridesBtn = document.getElementById('reset-overrides-btn');
     const exportBtn = document.getElementById('export-backup-btn');
     const importFile = document.getElementById('import-backup-file') as HTMLInputElement;
 
@@ -311,6 +299,14 @@ class PopupManager {
     aiProvider.value = this.state.settings.aiProvider;
     apiKey.value = this.state.settings.apiKey || '';
     hideShorts.checked = this.state.settings.hideShortsFromFeed;
+
+    resetOverridesBtn?.addEventListener('click', async () => {
+      if (confirm('Reset all manual channel assignments and exclusions? Auto-AI will re-categorize all channels from scratch next time it runs.')) {
+        await SubDeckStorage.clearOverrides();
+        this.state = await SubDeckStorage.getAll();
+        alert('AI exclusions and manual assignments have been reset.');
+      }
+    });
 
     aiProvider.addEventListener('change', async () => {
       if (this.state) {

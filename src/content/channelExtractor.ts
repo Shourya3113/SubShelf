@@ -200,7 +200,6 @@ export class ChannelExtractor {
         handle: handle || `@${channelKey}`,
         url: anchor.href,
         avatarUrl,
-        categoryIds: [],
         discoveredAt: Date.now(),
       });
     });

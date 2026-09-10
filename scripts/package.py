@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-SubDeck Production Packaging Script
+SubShelf Production Packaging Script
 Packages the dist/ directory into a Chrome Web Store compliant zip file.
 Ensures manifest.json is at the root of the zip archive.
 """
@@ -31,6 +31,8 @@ def package_extension():
     with zipfile.ZipFile(zip_path, 'w', zipfile.ZIP_DEFLATED) as zipf:
         for root, dirs, files in os.walk(dist_dir):
             for file in files:
+                if file.startswith('.') or file == 'Thumbs.db':
+                    continue
                 file_path = os.path.join(root, file)
                 # Archive name relative to dist/ so manifest.json is at the root
                 arcname = os.path.relpath(file_path, dist_dir)

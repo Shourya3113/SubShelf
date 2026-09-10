@@ -25,8 +25,10 @@ export class ExportImport {
     const a = document.createElement('a');
     a.href = url;
     a.download = `subshelf_backup_${new Date().toISOString().split('T')[0]}.json`;
+    document.body.appendChild(a);
     a.click();
-    URL.revokeObjectURL(url);
+    a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 1500);
   }
 
   static async importFromFile(file: File, mode: 'merge' | 'overwrite' = 'merge'): Promise<void> {
@@ -40,7 +42,7 @@ export class ExportImport {
 
     // Strict schema validation
     if (!payload || typeof payload !== 'object' || !payload.data || payload.exportVersion !== 1) {
-      throw new Error('Invalid SubDeck backup file format');
+      throw new Error('Invalid SubShelf backup file format');
     }
 
     if (!Array.isArray(payload.data.categories) || typeof payload.data.channels !== 'object') {
@@ -82,7 +84,6 @@ export class ExportImport {
           handle: typeof ch.handle === 'string' ? ch.handle.slice(0, 100) : '',
           url: typeof ch.url === 'string' && (ch.url.startsWith('https://') || ch.url.startsWith('/')) ? ch.url.slice(0, 300) : '',
           avatarUrl: typeof ch.avatarUrl === 'string' && (ch.avatarUrl.startsWith('https://') || ch.avatarUrl.startsWith('http://')) ? ch.avatarUrl.slice(0, 500) : '',
-          categoryIds: Array.isArray(ch.categoryIds) ? ch.categoryIds.filter(id => typeof id === 'string') : [],
           discoveredAt: typeof ch.discoveredAt === 'number' ? ch.discoveredAt : Date.now(),
         };
         if (ch.handle) {
@@ -123,15 +124,46 @@ export class ExportImport {
       });
     } else {
       const current = await SubDeckStorage.getAll();
+
+      // Merge categories: union channelIds for existing categories, add new ones
+      const mergedCategories = current.categories.map(existing => {
+        const imported = validatedCategories.find(c => c.id === existing.id);
+        if (imported) {
+          const mergedIds = new Set([...existing.channelIds, ...imported.channelIds]);
+          return { ...existing, channelIds: Array.from(mergedIds) };
+        }
+        return existing;
+      });
       const existingCategoryIds = new Set(current.categories.map(c => c.id));
-      const mergedCategories = [
-        ...current.categories,
-        ...validatedCategories.filter(c => !existingCategoryIds.has(c.id)),
-      ];
+      for (const cat of validatedCategories) {
+        if (!existingCategoryIds.has(cat.id)) {
+          mergedCategories.push(cat);
+        }
+      }
+
       const mergedChannels = { ...current.channels, ...validatedChannels };
       const mergedHandles = { ...current.handleToUcId, ...validatedHandles };
-      const mergedExclusions = { ...current.channelExclusions, ...validatedExclusions };
-      const mergedManualAssignments = { ...current.manualAssignments, ...validatedManualAssignments };
+
+      // Union arrays per-key for exclusions and manual assignments
+      const mergedExclusions = { ...current.channelExclusions };
+      for (const [ucId, cats] of Object.entries(validatedExclusions)) {
+        if (mergedExclusions[ucId]) {
+          const merged = new Set([...mergedExclusions[ucId], ...cats]);
+          mergedExclusions[ucId] = Array.from(merged);
+        } else {
+          mergedExclusions[ucId] = cats;
+        }
+      }
+
+      const mergedManualAssignments = { ...current.manualAssignments };
+      for (const [ucId, cats] of Object.entries(validatedManualAssignments)) {
+        if (mergedManualAssignments[ucId]) {
+          const merged = new Set([...mergedManualAssignments[ucId], ...cats]);
+          mergedManualAssignments[ucId] = Array.from(merged);
+        } else {
+          mergedManualAssignments[ucId] = cats;
+        }
+      }
 
       await SubDeckStorage.setAll({
         categories: mergedCategories,

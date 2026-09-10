@@ -19,7 +19,7 @@ export class HealthMonitor {
     banner.className = 'subdeck-degradation-banner';
 
     const msgSpan = document.createElement('span');
-    msgSpan.textContent = '⚠️ YouTube layout has changed. SubDeck is running in degraded mode.';
+    msgSpan.textContent = '⚠️ YouTube layout has changed. SubShelf is running in degraded mode.';
 
     const dismissBtn = document.createElement('button');
     dismissBtn.className = 'subdeck-banner-dismiss';

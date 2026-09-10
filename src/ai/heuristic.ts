@@ -23,7 +23,7 @@ export const SUBDECK_TAXONOMY: TaxonomyEntry[] = [
       'clever programmer', 'theo - t3.gg', 'primeagen', 'the primeagen', 'george hotz', 'the verge',
       'engadget', 'techcrunch', 'android authority', 'macrumors', '9to5mac', 'mrwhosetheboss',
       'tech burner', 'beebom', 'geekyranjit', 'ltt', 'shortcircuit', 'hardware canucks',
-      'gamers nexus', 'pauls hardware', 'bytebytego', 'hussein nasser', 'arjancodes',
+      'pauls hardware', 'bytebytego', 'hussein nasser', 'arjancodes',
       'tech with tim', 'corey schafer', 'sentdex', 'derek banas', 'john savill', 'jeff geerling',
       'craft computing', 'retro man cave', 'ben eater', 'veritasium tech', 'mkbhd clips',
       'waveform', 'mister mobile', 'snazzy labs', 'jonathan morrison', 'flossy carter',
@@ -303,14 +303,11 @@ export class HeuristicCategorizer {
               break;
             }
           } else {
-            // Substring match allowed for longer signatures (e.g., "linustechtips")
             if (
               titleLower === sig.original ||
               handleLower === sig.original ||
               cleanTitle === sig.clean ||
-              cleanHandle === sig.clean ||
-              cleanTitle.includes(sig.clean) ||
-              cleanHandle.includes(sig.clean)
+              cleanHandle === sig.clean
             ) {
               score += 250;
               break;

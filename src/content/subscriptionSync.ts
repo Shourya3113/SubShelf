@@ -34,7 +34,7 @@ export class SubscriptionSync {
           }
           newUcIds.push(ch.ucId);
           hasChanges = true;
-          Logger.info(`[SubDeck] Discovered new subscription: ${ch.title} (${ch.ucId})`);
+          Logger.info(`[SubShelf] Discovered new subscription: ${ch.title} (${ch.ucId})`);
         }
       }
 
@@ -69,7 +69,7 @@ export class SubscriptionSync {
         await SidebarManager.render();
       }
     } catch (err) {
-      Logger.error('[SubDeck] Error during subscription sync:', err);
+      Logger.error('[SubShelf] Error during subscription sync:', err);
     } finally {
       this.isSyncing = false;
     }

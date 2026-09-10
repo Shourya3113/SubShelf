@@ -1,0 +1,160 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Privacy Policy - SubShelf for YouTube™</title>
+  <style>
+    :root {
+      --bg: #0f172a;
+      --card: #1e293b;
+      --text: #f8fafc;
+      --text-muted: #94a3b8;
+      --accent: #38bdf8;
+      --border: #334155;
+    }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      line-height: 1.6;
+      background-color: var(--bg);
+      color: var(--text);
+      margin: 0;
+      padding: 40px 20px;
+    }
+    .container {
+      max-width: 800px;
+      margin: 0 auto;
+      background: var(--card);
+      padding: 40px;
+      border-radius: 16px;
+      border: 1px solid var(--border);
+      box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+    }
+    h1 {
+      color: var(--text);
+      font-size: 28px;
+      margin-top: 0;
+      border-bottom: 2px solid var(--border);
+      padding-bottom: 16px;
+    }
+    h2 {
+      color: var(--accent);
+      font-size: 20px;
+      margin-top: 32px;
+    }
+    h3 {
+      color: #e2e8f0;
+      font-size: 16px;
+    }
+    p, li {
+      color: #cbd5e1;
+    }
+    .badge {
+      display: inline-block;
+      background: rgba(56, 189, 248, 0.15);
+      color: var(--accent);
+      padding: 4px 12px;
+      border-radius: 9999px;
+      font-size: 12px;
+      font-weight: 600;
+      margin-bottom: 20px;
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin: 20px 0;
+    }
+    th, td {
+      text-align: left;
+      padding: 12px;
+      border-bottom: 1px solid var(--border);
+    }
+    th {
+      background: rgba(255,255,255,0.05);
+      color: var(--text);
+    }
+    code {
+      background: rgba(255,255,255,0.1);
+      padding: 2px 6px;
+      border-radius: 4px;
+      font-family: monospace;
+      color: #38bdf8;
+    }
+    a {
+      color: var(--accent);
+      text-decoration: none;
+    }
+    a:hover {
+      text-decoration: underline;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <span class="badge">Chrome Web Store Policy Compliant</span>
+    <h1>Privacy Policy for SubShelf — Smart YouTube™ Subscription Folders</h1>
+    <p><strong>Effective Date:</strong> September 10, 2026<br>
+    <strong>Developer Repository:</strong> <a href="https://github.com/Shourya3113/SubShelf" target="_blank">https://github.com/Shourya3113/SubShelf</a></p>
+
+    <p>SubShelf ("we", "our", or "the extension") provides intelligent subscription categorization and feed curation for YouTube™. We are fundamentally committed to protecting user privacy through a local-first, zero-data-collection architecture.</p>
+
+    <h2>1. 100% Private & Local-First Architecture</h2>
+    <ul>
+      <li><strong>Zero Personal Data Collection:</strong> We do not collect, transmit, sell, or monetize any personal user data.</li>
+      <li><strong>Local Storage Only:</strong> All subscription metadata, custom folder names, category assignments, and user preferences are stored exclusively inside your web browser using Chrome's secure <code>chrome.storage.local</code> API.</li>
+      <li><strong>No External Servers:</strong> We do not operate remote tracking servers, analytics endpoints, or external user databases.</li>
+    </ul>
+
+    <h2>2. Information Accessed & Stored</h2>
+    <h3>A. YouTube™ Subscriptions Information</h3>
+    <p>The extension accesses channel names, handles, channel IDs (<code>ucId</code>), and channel avatars that are already visible in your native YouTube left sidebar. This is required strictly to enable folder organization and feed filtering on YouTube web pages. This data is never sent outside your computer.</p>
+
+    <h3>B. Custom Categories & Overrides</h3>
+    <p>Your folder structures, channel-to-folder mappings, and manual exclusions are stored locally on your device.</p>
+
+    <h3>C. Optional AI API Keys</h3>
+    <p>If you optionally choose to supply your own Google Gemini API key for cloud-based categorization, that key is stored locally in your browser's private storage and is only used to send direct requests from your browser to Google's official Gemini endpoint. We have zero access to your API key.</p>
+
+    <h2>3. Chrome Permissions Disclosure</h2>
+    <table>
+      <thead>
+        <tr>
+          <th>Permission</th>
+          <th>Justification & Usage</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><code>storage</code></td>
+          <td>Used to store your subscription folders, channel associations, manual overrides, and preferences locally.</td>
+        </tr>
+        <tr>
+          <td><code>https://*.youtube.com/*</code></td>
+          <td>Used exclusively to inject the folder accordion interface into YouTube's sidebar and filter subscription feeds.</td>
+        </tr>
+        <tr>
+          <td><code>https://generativelanguage.googleapis.com/*</code></td>
+          <td>(Optional) Used solely for direct communication with Google Gemini API when the user explicitly triggers AI categorization with their own API key.</td>
+        </tr>
+      </tbody>
+    </table>
+
+    <h2>4. AI Categorization & Privacy Guarantees</h2>
+    <p>SubShelf provides three tiers of categorization:</p>
+    <ul>
+      <li><strong>Chrome Built-in Gemini Nano:</strong> Executes 100% on-device on your local hardware. Zero network traffic.</li>
+      <li><strong>Offline Heuristic Engine:</strong> Evaluates channel names and handles using deterministic offline keywords and regular expressions. Completely offline.</li>
+      <li><strong>Optional Gemini Cloud API:</strong> Transmits only sanitized channel titles and handles directly to Google without user account identifiers.</li>
+    </ul>
+
+    <h2>5. Third-Party Sharing & Tracking</h2>
+    <p>SubShelf does not include third-party trackers, analytics packages, advertising networks, or telemetry scripts. Your viewing habits and subscriptions remain completely private to you.</p>
+
+    <h2>6. Data Deletion</h2>
+    <p>You can delete all stored data at any time by uninstalling SubShelf from Chrome (<code>chrome://extensions</code> -> "Remove") or using the backup reset option in the extension popup. Removal immediately purges all stored records.</p>
+
+    <h2>7. Contact</h2>
+    <p>For questions or feedback regarding this Privacy Policy, please submit an issue on our GitHub repository: <a href="https://github.com/Shourya3113/SubShelf/issues" target="_blank">https://github.com/Shourya3113/SubShelf/issues</a>.</p>
+  </div>
+</body>
+</html>

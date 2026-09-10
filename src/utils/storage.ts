@@ -4,8 +4,9 @@ export class SubDeckStorage {
   static async getAll(): Promise<SubDeckStorageSchema> {
     const data = await chrome.storage.local.get(null);
     if (!data.version) {
-      await chrome.storage.local.set(DEFAULT_STORAGE);
-      return DEFAULT_STORAGE;
+      const defaults = structuredClone(DEFAULT_STORAGE);
+      await chrome.storage.local.set(defaults);
+      return defaults;
     }
     // Backward compatibility: ensure exclusion and manual assignment maps exist
     if (!data.channelExclusions) data.channelExclusions = {};
@@ -37,11 +38,18 @@ export class SubDeckStorage {
       delete data.channels[ucId];
       if (data.channelExclusions[ucId]) delete data.channelExclusions[ucId];
       if (data.manualAssignments[ucId]) delete data.manualAssignments[ucId];
+
+      // Clean up channel from all category decks
+      data.categories.forEach(cat => {
+        cat.channelIds = cat.channelIds.filter(id => id !== ucId);
+      });
+
       await this.setAll({
         channels: data.channels,
         handleToUcId: data.handleToUcId,
         channelExclusions: data.channelExclusions,
         manualAssignments: data.manualAssignments,
+        categories: data.categories,
       });
     }
   }
@@ -182,10 +190,19 @@ export class SubDeckStorage {
       delete data.manualAssignments[ucId];
     } else {
       const target = data.categories.find(c => c.id === newCatId);
-      if (target && !target.channelIds.includes(ucId)) {
-        target.channelIds.push(ucId);
+      if (target) {
+        if (!target.channelIds.includes(ucId)) {
+          target.channelIds.push(ucId);
+        }
+        data.manualAssignments[ucId] = [newCatId];
+      } else {
+        // Target category doesn't exist — fall back to Uncategorized
+        let uncategorized = data.categories.find(c => c.id === '__uncategorized__');
+        if (uncategorized && !uncategorized.channelIds.includes(ucId)) {
+          uncategorized.channelIds.push(ucId);
+        }
+        delete data.manualAssignments[ucId];
       }
-      data.manualAssignments[ucId] = [newCatId];
     }
 
     await this.setAll({

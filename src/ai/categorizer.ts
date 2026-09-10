@@ -10,33 +10,55 @@ export class AICategorizer {
 
     const settings = (await SubDeckStorage.getAll()).settings;
 
-    // Tier 1: Chrome Built-in AI (Gemini Nano)
-    try {
-      const nanoResult = await this.tryGeminiNano(channels);
-      if (nanoResult) {
-        Logger.info('[SubDeck AI] Successfully organized using Gemini Nano');
-        return nanoResult;
-      }
-    } catch (err) {
-      Logger.warn('[SubDeck AI] Gemini Nano unavailable, falling back:', err);
-    }
-
-    // Tier 2: Gemini Cloud API (if user entered API key in settings)
-    if (settings.apiKey) {
-      try {
-        const cloudResult = await this.tryGeminiCloud(channels, settings.apiKey);
-        if (cloudResult) {
-          Logger.info('[SubDeck AI] Successfully organized using Gemini Cloud API');
-          return cloudResult;
+    switch (settings.aiProvider) {
+      case 'gemini-api':
+        if (settings.apiKey) {
+          try {
+            const cloudResult = await this.tryGeminiCloud(channels, settings.apiKey);
+            if (cloudResult) {
+              Logger.info('[SubShelf AI] Successfully organized using Gemini Cloud API');
+              return cloudResult;
+            }
+          } catch (err) {
+            Logger.warn('[SubShelf AI] Gemini Cloud failed, falling back to heuristic:', err);
+          }
         }
-      } catch (err) {
-        Logger.warn('[SubDeck AI] Gemini Cloud failed, falling back:', err);
-      }
-    }
+        return HeuristicCategorizer.categorize(channels);
 
-    // Tier 3: Deterministic Keyword/Regex Heuristic
-    Logger.info('[SubDeck AI] Organizing using Heuristic Categorizer');
-    return HeuristicCategorizer.categorize(channels);
+      case 'heuristic':
+        Logger.info('[SubShelf AI] Organizing using Heuristic Categorizer');
+        return HeuristicCategorizer.categorize(channels);
+
+      case 'gemini-nano':
+      default:
+        // Tier 1: Chrome Built-in AI (Gemini Nano)
+        try {
+          const nanoResult = await this.tryGeminiNano(channels);
+          if (nanoResult) {
+            Logger.info('[SubShelf AI] Successfully organized using Gemini Nano');
+            return nanoResult;
+          }
+        } catch (err) {
+          Logger.warn('[SubShelf AI] Gemini Nano unavailable, falling back:', err);
+        }
+
+        // Tier 2: Gemini Cloud API (if user entered API key)
+        if (settings.apiKey) {
+          try {
+            const cloudResult = await this.tryGeminiCloud(channels, settings.apiKey);
+            if (cloudResult) {
+              Logger.info('[SubShelf AI] Successfully organized using Gemini Cloud API');
+              return cloudResult;
+            }
+          } catch (err) {
+            Logger.warn('[SubShelf AI] Gemini Cloud failed, falling back:', err);
+          }
+        }
+
+        // Tier 3: Deterministic Keyword/Regex Heuristic
+        Logger.info('[SubShelf AI] Organizing using Heuristic Categorizer');
+        return HeuristicCategorizer.categorize(channels);
+    }
   }
 
   private static async tryGeminiNano(channels: SubscribedChannel[]): Promise<CategoryDeck[] | null> {
@@ -86,6 +108,7 @@ export class AICategorizer {
 
   private static parseAIResponse(raw: string, channels: SubscribedChannel[]): CategoryDeck[] | null {
     try {
+      const knownIds = new Set(channels.map(c => c.ucId));
       const cleaned = raw.replace(/```json/g, '').replace(/```/g, '').trim();
       const parsed = JSON.parse(cleaned);
       if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
@@ -97,7 +120,7 @@ export class AICategorizer {
       const decks: CategoryDeck[] = SUBDECK_TAXONOMY.map((tax, idx) => {
         const rawIds = safeParsed[tax.id];
         const validIds = Array.isArray(rawIds)
-          ? rawIds.filter((id): id is string => typeof id === 'string')
+          ? rawIds.filter((id): id is string => typeof id === 'string' && knownIds.has(id))
           : [];
 
         return {
@@ -135,7 +158,7 @@ export class AICategorizer {
 
       return decks.filter(d => d.channelIds.length > 0 || d.id === '__uncategorized__');
     } catch (err) {
-      Logger.warn('[SubDeck AI] Failed to parse AI JSON response:', err);
+      Logger.warn('[SubShelf AI] Failed to parse AI JSON response:', err);
       return null;
     }
   }
@@ -197,7 +220,9 @@ export class AICategorizer {
     }
 
     // 3. Ensure all manual assignments are respected and present in their target decks
+    const allChannelIds = new Set(allChannels.map(c => c.ucId));
     for (const [ucId, targetDeckIds] of Object.entries(manualAssignments)) {
+      if (!allChannelIds.has(ucId)) continue; // Skip unsubscribed channels
       for (const targetId of targetDeckIds) {
         if (targetId === '__uncategorized__') continue;
         let targetDeck = combinedDecks.find(d => d.id === targetId);
@@ -262,6 +287,6 @@ export class AICategorizer {
     finalDecks.push(uncategorizedDeck);
 
     // Return decks with channels (or uncategorized if it has channels)
-    return finalDecks.filter(d => d.channelIds.length > 0 || (d.id === '__uncategorized__' && d.channelIds.length > 0));
+    return finalDecks.filter(d => d.channelIds.length > 0 || !d.isSystem);
   }
 }

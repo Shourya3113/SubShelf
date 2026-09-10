@@ -4,7 +4,6 @@ export interface SubscribedChannel {
   handle: string;
   url: string;
   avatarUrl: string;
-  categoryIds: string[];
   discoveredAt: number;
 }
 

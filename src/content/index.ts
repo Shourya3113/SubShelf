@@ -8,7 +8,7 @@ import { Logger } from '@/utils/logger';
 
 class SubDeckCoordinator {
   static init(): void {
-    Logger.info('Initializing SubDeck Coordinator');
+    Logger.info('Initializing SubShelf Coordinator');
 
     window.addEventListener('yt-navigate-start', (e: any) => {
       const url = e?.detail?.url || window.location.pathname;
@@ -82,7 +82,7 @@ class SubDeckCoordinator {
         }
       }
     } catch (err) {
-      Logger.error('[SubDeck] Navigation handler error:', err);
+      Logger.error('[SubShelf] Navigation handler error:', err);
     }
   }, 350);
 
@@ -93,7 +93,7 @@ class SubDeckCoordinator {
         FeedFilter.applyFilter();
       }
     } catch (err) {
-      Logger.error('[SubDeck] Data update error:', err);
+      Logger.error('[SubShelf] Data update error:', err);
     }
   }, 350);
 }

@@ -9,9 +9,9 @@ chrome.runtime.onInstalled.addListener(async (details) => {
     const fromVersion = current.version || 1;
     const migrated = runMigrations(fromVersion, 1, current);
     await SubDeckStorage.setAll(migrated);
-    Logger.info(`[SubDeck] Migrated storage schema from v${fromVersion} to v1`);
+    Logger.info(`[SubShelf] Migrated storage schema from v${fromVersion} to v1`);
   } else {
-    Logger.info('[SubDeck] Service worker initialized with default storage');
+    Logger.info('[SubShelf] Service worker initialized with default storage');
   }
 });
 
@@ -19,14 +19,14 @@ chrome.runtime.onInstalled.addListener(async (details) => {
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   // Security: Validate message origin (must match our extension ID)
   if (sender.id !== chrome.runtime.id) {
-    Logger.warn('[SubDeck Background] Rejected message from unauthorized sender:', sender.id);
+    Logger.warn('[SubShelf Background] Rejected message from unauthorized sender:', sender.id);
     return false;
   }
 
   if (message?.type === 'subdeck-auto-organize') {
     (async () => {
       try {
-        Logger.info('[SubDeck Background] Running AI auto-categorization...');
+        Logger.info('[SubShelf Background] Running AI auto-categorization...');
         const channelsMap = await SubDeckStorage.getChannels();
         const channels = Object.values(channelsMap);
 
@@ -48,10 +48,10 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 
         await SubDeckStorage.setAll({ categories: finalDecks });
 
-        Logger.info(`[SubDeck Background] Categorized into ${finalDecks.length} unique decks`);
+        Logger.info(`[SubShelf Background] Categorized into ${finalDecks.length} unique decks`);
         sendResponse({ success: true, count: channels.length, decks: finalDecks.length });
       } catch (err) {
-        Logger.error('[SubDeck Background] Auto-organization failed:', err);
+        Logger.error('[SubShelf Background] Auto-organization failed:', err);
         // Security: Send sanitized error message without leaking sensitive strings
         const safeError = err instanceof Error ? err.message : 'Auto-organization failed';
         sendResponse({ success: false, error: safeError });

@@ -11,6 +11,10 @@ export class SubDeckStorage {
     // Backward compatibility: ensure exclusion and manual assignment maps exist
     if (!data.channelExclusions) data.channelExclusions = {};
     if (!data.manualAssignments) data.manualAssignments = {};
+    // Seamlessly purge any legacy __uncategorized__ deck from categories
+    if (Array.isArray(data.categories)) {
+      data.categories = data.categories.filter((c: CategoryDeck) => c.id !== '__uncategorized__');
+    }
     return data as SubDeckStorageSchema;
   }
 
@@ -84,14 +88,6 @@ export class SubDeckStorage {
       data.manualAssignments[ucId].push(categoryId);
     }
 
-    // 3. Remove from uncategorized if adding to a specific deck
-    if (categoryId !== '__uncategorized__') {
-      const uncategorized = data.categories.find(c => c.id === '__uncategorized__');
-      if (uncategorized) {
-        uncategorized.channelIds = uncategorized.channelIds.filter(id => id !== ucId);
-      }
-    }
-
     await this.setAll({
       categories: data.categories,
       channelExclusions: data.channelExclusions,
@@ -122,30 +118,6 @@ export class SubDeckStorage {
       }
     }
 
-    // 3. If channel is now in no non-uncategorized category, place in Uncategorized so it's not lost
-    const isStillCategorized = data.categories.some(
-      c => c.id !== '__uncategorized__' && c.channelIds.includes(ucId)
-    );
-    if (!isStillCategorized && categoryId !== '__uncategorized__') {
-      let uncategorized = data.categories.find(c => c.id === '__uncategorized__');
-      if (!uncategorized) {
-        uncategorized = {
-          id: '__uncategorized__',
-          name: 'Uncategorized',
-          icon: '📂',
-          color: '#6B7280',
-          channelIds: [],
-          isCollapsed: true,
-          sortOrder: 999,
-          isSystem: true,
-        };
-        data.categories.push(uncategorized);
-      }
-      if (!uncategorized.channelIds.includes(ucId)) {
-        uncategorized.channelIds.push(ucId);
-      }
-    }
-
     await this.setAll({
       categories: data.categories,
       channelExclusions: data.channelExclusions,
@@ -169,7 +141,7 @@ export class SubDeckStorage {
       data.channelExclusions[ucId] = [];
     }
 
-    // Exclude the previous non-uncategorized categories that the user moved it away from
+    // Exclude the previous categories that the user moved it away from
     prevCategoryIds.forEach(prevId => {
       if (prevId !== newCatId && prevId !== '__uncategorized__' && !data.channelExclusions[ucId].includes(prevId)) {
         data.channelExclusions[ucId].push(prevId);
@@ -177,16 +149,15 @@ export class SubDeckStorage {
     });
 
     // Remove newCatId from exclusions since user explicitly chose it
-    data.channelExclusions[ucId] = data.channelExclusions[ucId].filter(id => id !== newCatId);
-    if (data.channelExclusions[ucId].length === 0) {
-      delete data.channelExclusions[ucId];
+    if (newCatId) {
+      data.channelExclusions[ucId] = data.channelExclusions[ucId].filter(id => id !== newCatId);
+      if (data.channelExclusions[ucId].length === 0) {
+        delete data.channelExclusions[ucId];
+      }
     }
 
-    if (newCatId === '__uncategorized__') {
-      let uncategorized = data.categories.find(c => c.id === '__uncategorized__');
-      if (uncategorized && !uncategorized.channelIds.includes(ucId)) {
-        uncategorized.channelIds.push(ucId);
-      }
+    if (!newCatId || newCatId === '__uncategorized__' || newCatId === 'none') {
+      // User unassigned this channel
       delete data.manualAssignments[ucId];
     } else {
       const target = data.categories.find(c => c.id === newCatId);
@@ -196,11 +167,7 @@ export class SubDeckStorage {
         }
         data.manualAssignments[ucId] = [newCatId];
       } else {
-        // Target category doesn't exist — fall back to Uncategorized
-        let uncategorized = data.categories.find(c => c.id === '__uncategorized__');
-        if (uncategorized && !uncategorized.channelIds.includes(ucId)) {
-          uncategorized.channelIds.push(ucId);
-        }
+        // Target doesn't exist — keep unassigned
         delete data.manualAssignments[ucId];
       }
     }

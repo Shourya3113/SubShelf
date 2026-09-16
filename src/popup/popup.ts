@@ -178,18 +178,23 @@ class PopupManager {
   }
 
   private static async deleteDeck(deck: CategoryDeck): Promise<void> {
-    let categories = await SubDeckStorage.getCategories();
-    categories = categories.filter(c => c.id !== deck.id);
+    const state = await SubDeckStorage.getAll();
+    const categories = state.categories.filter(c => c.id !== deck.id && c.id !== '__uncategorized__');
 
-    // Add orphaned channels back to uncategorized
-    const uncategorized = categories.find(c => c.id === '__uncategorized__');
-    if (uncategorized) {
-      const currentIds = new Set(uncategorized.channelIds);
-      deck.channelIds.forEach(id => currentIds.add(id));
-      uncategorized.channelIds = Array.from(currentIds);
-    }
+    // Clean up manual assignments for channels that were in this deck
+    const manualAssignments = { ...state.manualAssignments };
+    deck.channelIds.forEach(id => {
+      if (manualAssignments[id]) {
+        manualAssignments[id] = manualAssignments[id].filter(catId => catId !== deck.id);
+        if (manualAssignments[id].length === 0) {
+          delete manualAssignments[id];
+        }
+      }
+    });
 
-    await SubDeckStorage.setAll({ categories });
+    const activeCategoryId = state.activeCategoryId === deck.id ? null : state.activeCategoryId;
+
+    await SubDeckStorage.setAll({ categories, manualAssignments, activeCategoryId });
     this.state = await SubDeckStorage.getAll();
     await this.renderDecks();
   }
@@ -216,11 +221,12 @@ class PopupManager {
     const categories = await SubDeckStorage.getCategories();
     const channels = Object.values(channelsMap);
 
-    const filtered = filter
+    const sorted = (filter
       ? channels.filter(c => c.title.toLowerCase().includes(filter) || c.handle.toLowerCase().includes(filter))
-      : channels;
+      : channels.slice()
+    ).sort((a, b) => a.title.localeCompare(b.title, undefined, { sensitivity: 'base' }));
 
-    if (filtered.length === 0) {
+    if (sorted.length === 0) {
       const emptyDiv = document.createElement('div');
       emptyDiv.style.textAlign = 'center';
       emptyDiv.style.padding = '20px';
@@ -231,14 +237,12 @@ class PopupManager {
       return;
     }
 
-    filtered.forEach(ch => {
+    sorted.forEach(ch => {
       // Safe DOM construction: Zero innerHTML
       const card = document.createElement('div');
       card.className = 'channel-card';
 
-      const currentDeck =
-        categories.find(c => c.channelIds.includes(ch.ucId)) ||
-        categories.find(c => c.id === '__uncategorized__');
+      const currentDeck = categories.find(c => c.id !== '__uncategorized__' && c.channelIds.includes(ch.ucId));
 
       const metaDiv = document.createElement('div');
       metaDiv.className = 'channel-meta';
@@ -255,27 +259,63 @@ class PopupManager {
       metaDiv.appendChild(titleDiv);
       metaDiv.appendChild(handleDiv);
 
+      const actionsDiv = document.createElement('div');
+      actionsDiv.style.display = 'flex';
+      actionsDiv.style.alignItems = 'center';
+      actionsDiv.style.gap = '6px';
+
       const select = document.createElement('select');
       select.className = 'channel-deck-select';
       select.setAttribute('data-ucid', ch.ucId);
 
-      categories.forEach(cat => {
-        const option = document.createElement('option');
-        option.value = cat.id;
-        option.textContent = `${cat.icon} ${cat.name}`;
-        if (currentDeck?.id === cat.id) {
-          option.selected = true;
-        }
-        select.appendChild(option);
-      });
+      // Option 1: Unassigned / No folder
+      const noneOpt = document.createElement('option');
+      noneOpt.value = '';
+      noneOpt.textContent = '— No Folder —';
+      if (!currentDeck) {
+        noneOpt.selected = true;
+      }
+      select.appendChild(noneOpt);
+
+      // Category options
+      categories
+        .filter(cat => cat.id !== '__uncategorized__')
+        .sort((a, b) => a.sortOrder - b.sortOrder)
+        .forEach(cat => {
+          const option = document.createElement('option');
+          option.value = cat.id;
+          option.textContent = `${cat.icon} ${cat.name}`;
+          if (currentDeck?.id === cat.id) {
+            option.selected = true;
+          }
+          select.appendChild(option);
+        });
 
       select.addEventListener('change', async () => {
         const newCatId = select.value;
         await this.assignChannelToCategory(ch.ucId, newCatId);
       });
 
+      // Manual delete button
+      const deleteBtn = document.createElement('button');
+      deleteBtn.className = 'action-btn delete';
+      deleteBtn.title = 'Remove channel from SubShelf';
+      deleteBtn.textContent = '🗑️';
+      deleteBtn.style.padding = '4px 6px';
+
+      deleteBtn.addEventListener('click', async () => {
+        if (confirm(`Remove "${ch.title}" from SubShelf?`)) {
+          await SubDeckStorage.removeChannel(ch.ucId);
+          this.state = await SubDeckStorage.getAll();
+          await this.renderChannels(filter);
+        }
+      });
+
+      actionsDiv.appendChild(select);
+      actionsDiv.appendChild(deleteBtn);
+
       card.appendChild(metaDiv);
-      card.appendChild(select);
+      card.appendChild(actionsDiv);
       container.appendChild(card);
     });
   }

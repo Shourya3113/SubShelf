@@ -27,6 +27,18 @@ class SubDeckCoordinator {
       }
     });
 
+    // Detect unsubscribe confirmation dialog clicks on YouTube pages
+    document.addEventListener('click', (e) => {
+      const target = e.target as HTMLElement | null;
+      if (!target) return;
+      const confirmBtn = target.closest('#confirm-button, yt-confirm-dialog-renderer #confirm-button');
+      if (confirmBtn) {
+        setTimeout(() => {
+          SubscriptionSync.diffAndSync();
+        }, 1200);
+      }
+    });
+
     this.waitForYouTubeReady();
   }
 

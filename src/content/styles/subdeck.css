@@ -430,16 +430,21 @@ html[dark],
   background: var(--sd-bg-hover);
 }
 
-.subdeck-manual-input-box {
+.subdeck-manual-input-box,
+.subdeck-folder-edit-box {
   display: flex;
   gap: 4px;
   margin-top: 6px;
   align-items: center;
 }
 
-.subdeck-manual-input-box input {
-  flex: 1;
-  min-width: 0;
+.subdeck-folder-edit-box {
+  padding: 4px 8px 6px;
+  margin-top: 2px;
+}
+
+.subdeck-manual-input-box input,
+.subdeck-folder-edit-box input {
   background: var(--sd-input-bg);
   border: 1px solid var(--sd-input-border);
   border-radius: 4px;
@@ -447,6 +452,19 @@ html[dark],
   font-size: 11px;
   padding: 4px 6px;
   outline: none;
+}
+
+.subdeck-input-icon {
+  width: 32px !important;
+  flex: 0 0 32px !important;
+  text-align: center;
+  font-size: 13px !important;
+  padding: 4px 2px !important;
+}
+
+.subdeck-input-name {
+  flex: 1;
+  min-width: 0;
 }
 
 .subdeck-btn-save {

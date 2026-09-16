@@ -31,6 +31,27 @@ export class ChannelExtractor {
   private static hasAttemptedExpand = false;
 
   /**
+   * Checks whether YouTube's native subscription list is fully expanded (all subscriptions rendered in DOM).
+   * Returns true if there is no collapsible expander (user has few channels) or if the expander is in expanded state.
+   */
+  static isSidebarFullyExpanded(): boolean {
+    const subSection = getSubscriptionSection();
+    if (!subSection) return false;
+
+    const collapsible = subSection.querySelector<HTMLElement>('ytd-guide-collapsible-entry-renderer, #expander-item');
+    if (!collapsible) {
+      // If there's no collapsible expander item, all channels are visible in DOM
+      return true;
+    }
+
+    return (
+      collapsible.hasAttribute('expanded') ||
+      collapsible.classList.contains('expanded') ||
+      collapsible.getAttribute('aria-expanded') === 'true'
+    );
+  }
+
+  /**
    * Safely expands YouTube's native collapsed "Show more" subscription section.
    * STRICT SAFEGUARD: Never clicks any link that has an href to prevent navigation loops.
    */

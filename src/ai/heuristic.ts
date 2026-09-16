@@ -354,18 +354,6 @@ export class HeuristicCategorizer {
       }
     }
 
-    // Keep __uncategorized__ for schema compatibility
-    decks.push({
-      id: '__uncategorized__',
-      name: 'Uncategorized',
-      icon: '📂',
-      color: '#6B7280',
-      channelIds: [],
-      isCollapsed: true,
-      sortOrder: 999,
-      isSystem: true,
-    });
-
     // Return decks that contain channels
     return decks.filter(d => d.channelIds.length > 0);
   }

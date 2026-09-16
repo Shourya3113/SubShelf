@@ -4,7 +4,7 @@ import { ChannelExtractor } from './channelExtractor';
 import { HeuristicCategorizer } from '@/ai/heuristic';
 import { AICategorizer } from '@/ai/categorizer';
 import { FeedFilter } from './feedFilter';
-import { CategoryDeck } from '@/types';
+import { CategoryDeck, SubscribedChannel } from '@/types';
 import { debounce } from '@/utils/debounce';
 
 export class SidebarManager {
@@ -226,9 +226,18 @@ export class SidebarManager {
     manualBox.id = 'subdeck-manual-box';
     manualBox.style.display = 'none';
 
+    const iconInput = document.createElement('input');
+    iconInput.type = 'text';
+    iconInput.id = 'subdeck-new-folder-icon';
+    iconInput.className = 'subdeck-input-icon';
+    iconInput.value = '📁';
+    iconInput.maxLength = 8;
+    iconInput.title = 'Folder icon (emoji)';
+
     const folderInput = document.createElement('input');
     folderInput.type = 'text';
     folderInput.id = 'subdeck-new-folder-name';
+    folderInput.className = 'subdeck-input-name';
     folderInput.placeholder = 'Folder name...';
 
     const saveBtn = document.createElement('button');
@@ -241,6 +250,7 @@ export class SidebarManager {
     cancelBtn.className = 'subdeck-btn-cancel';
     cancelBtn.textContent = '✕';
 
+    manualBox.appendChild(iconInput);
     manualBox.appendChild(folderInput);
     manualBox.appendChild(saveBtn);
     manualBox.appendChild(cancelBtn);
@@ -315,6 +325,7 @@ export class SidebarManager {
 
     const saveFolder = async () => {
       const name = folderInput.value.trim();
+      const icon = iconInput.value.trim() || '📁';
       if (!name) return;
 
       const currentCategories = await SubDeckStorage.getCategories();
@@ -326,7 +337,7 @@ export class SidebarManager {
         currentCategories.push({
           id: newId,
           name,
-          icon: '📁',
+          icon,
           color: '#3B82F6',
           channelIds: [],
           isCollapsed: false,
@@ -334,6 +345,7 @@ export class SidebarManager {
         });
         await SubDeckStorage.setAll({ categories: currentCategories });
         folderInput.value = '';
+        iconInput.value = '📁';
         manualBox.style.display = 'none';
         await this.render();
       }
@@ -341,6 +353,10 @@ export class SidebarManager {
 
     saveBtn.addEventListener('click', saveFolder);
     folderInput.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') saveFolder();
+      if (e.key === 'Escape') manualBox.style.display = 'none';
+    });
+    iconInput.addEventListener('keydown', (e) => {
       if (e.key === 'Enter') saveFolder();
       if (e.key === 'Escape') manualBox.style.display = 'none';
     });
@@ -362,7 +378,7 @@ export class SidebarManager {
     const seenNames = new Set<string>();
     const uniqueCategories: CategoryDeck[] = [];
     for (const cat of categories) {
-      if (cat.id === '__uncategorized__' && cat.channelIds.length === 0) continue;
+      if (cat.id === '__uncategorized__') continue;
       const norm = cat.name.toLowerCase().trim();
       if (!seenNames.has(norm)) {
         seenNames.add(norm);
@@ -412,6 +428,11 @@ export class SidebarManager {
         const actionsDiv = document.createElement('div');
         actionsDiv.className = 'subdeck-header-actions';
 
+        const editBtn = document.createElement('button');
+        editBtn.className = 'subdeck-header-btn edit';
+        editBtn.title = 'Rename folder & icon';
+        editBtn.textContent = '✏️';
+
         const addBtn = document.createElement('button');
         addBtn.className = 'subdeck-header-btn add';
         addBtn.title = 'Add channel to folder';
@@ -427,6 +448,7 @@ export class SidebarManager {
         chevronBtn.title = 'Toggle channels list';
         chevronBtn.textContent = '▼';
 
+        actionsDiv.appendChild(editBtn);
         actionsDiv.appendChild(addBtn);
         actionsDiv.appendChild(deleteBtn);
         actionsDiv.appendChild(chevronBtn);
@@ -434,7 +456,71 @@ export class SidebarManager {
         header.appendChild(folderMain);
         header.appendChild(actionsDiv);
 
-        // Safe DOM construction for channel picker (Zero innerHTML)
+        // Inline Folder Rename / Icon Edit Box
+        const editBox = document.createElement('div');
+        editBox.className = 'subdeck-folder-edit-box';
+        editBox.style.display = 'none';
+
+        const editIcon = document.createElement('input');
+        editIcon.type = 'text';
+        editIcon.className = 'subdeck-input-icon';
+        editIcon.value = cat.icon;
+        editIcon.maxLength = 8;
+        editIcon.title = 'Folder icon (emoji)';
+
+        const editName = document.createElement('input');
+        editName.type = 'text';
+        editName.className = 'subdeck-input-name';
+        editName.value = cat.name;
+
+        const editSaveBtn = document.createElement('button');
+        editSaveBtn.className = 'subdeck-btn-save';
+        editSaveBtn.textContent = 'Save';
+
+        const editCancelBtn = document.createElement('button');
+        editCancelBtn.className = 'subdeck-btn-cancel';
+        editCancelBtn.textContent = '✕';
+
+        editBox.appendChild(editIcon);
+        editBox.appendChild(editName);
+        editBox.appendChild(editSaveBtn);
+        editBox.appendChild(editCancelBtn);
+
+        editBtn.addEventListener('click', (e) => {
+          e.stopPropagation();
+          const isOpening = editBox.style.display === 'none';
+          editBox.style.display = isOpening ? 'flex' : 'none';
+          if (isOpening) editName.focus();
+        });
+
+        editCancelBtn.addEventListener('click', (e) => {
+          e.stopPropagation();
+          editBox.style.display = 'none';
+        });
+
+        const saveEdit = async (e: Event) => {
+          e.stopPropagation();
+          const newName = editName.value.trim();
+          const newIcon = editIcon.value.trim() || '📁';
+          if (!newName) return;
+
+          cat.name = newName;
+          cat.icon = newIcon;
+          await SubDeckStorage.setAll({ categories });
+          await this.render();
+        };
+
+        editSaveBtn.addEventListener('click', saveEdit);
+        editName.addEventListener('keydown', (e) => {
+          if (e.key === 'Enter') saveEdit(e);
+          if (e.key === 'Escape') editBox.style.display = 'none';
+        });
+        editIcon.addEventListener('keydown', (e) => {
+          if (e.key === 'Enter') saveEdit(e);
+          if (e.key === 'Escape') editBox.style.display = 'none';
+        });
+
+        // Safe DOM construction for channel picker (Zero innerHTML, sorted alphabetically)
         const addPickerBox = document.createElement('div');
         addPickerBox.className = 'subdeck-add-picker';
         addPickerBox.style.display = 'none';
@@ -442,7 +528,10 @@ export class SidebarManager {
         const select = document.createElement('select');
         select.className = 'subdeck-add-select';
 
-        const availableChannels = Object.values(channelsMap).filter(ch => !cat.channelIds.includes(ch.ucId));
+        const availableChannels = Object.values(channelsMap)
+          .filter(ch => !cat.channelIds.includes(ch.ucId))
+          .sort((a, b) => a.title.localeCompare(b.title, undefined, { sensitivity: 'base' }));
+
         if (availableChannels.length === 0) {
           const opt = document.createElement('option');
           opt.value = '';
@@ -481,9 +570,19 @@ export class SidebarManager {
         deleteBtn.addEventListener('click', async (e) => {
           e.stopPropagation();
           if (confirm(`Delete folder "${cat.name}"?`)) {
-            const currentCats = await SubDeckStorage.getCategories();
-            const updated = currentCats.filter(c => c.id !== cat.id);
-            await SubDeckStorage.setAll({ categories: updated });
+            const state = await SubDeckStorage.getAll();
+            const updated = state.categories.filter(c => c.id !== cat.id && c.id !== '__uncategorized__');
+            const manualAssignments = { ...state.manualAssignments };
+            cat.channelIds.forEach(id => {
+              if (manualAssignments[id]) {
+                manualAssignments[id] = manualAssignments[id].filter(catId => catId !== cat.id);
+                if (manualAssignments[id].length === 0) {
+                  delete manualAssignments[id];
+                }
+              }
+            });
+            const activeCategoryId = state.activeCategoryId === cat.id ? null : state.activeCategoryId;
+            await SubDeckStorage.setAll({ categories: updated, manualAssignments, activeCategoryId });
             await this.render();
           }
         });
@@ -491,11 +590,14 @@ export class SidebarManager {
         const list = document.createElement('div');
         list.className = `subdeck-channel-list ${cat.isCollapsed ? 'collapsed' : ''}`;
 
-        // Safe DOM construction for channel items (Zero innerHTML)
-        cat.channelIds.forEach(id => {
-          const ch = channelsMap[id];
-          if (!ch) return;
+        // Safe DOM construction for channel items sorted alphabetically
+        const sortedFolderChannels = cat.channelIds
+          .map(id => channelsMap[id])
+          .filter((ch): ch is SubscribedChannel => Boolean(ch))
+          .sort((a, b) => a.title.localeCompare(b.title, undefined, { sensitivity: 'base' }));
 
+        sortedFolderChannels.forEach(ch => {
+          const id = ch.ucId;
           const item = document.createElement('div');
           item.className = 'subdeck-channel-item';
 
@@ -546,6 +648,7 @@ export class SidebarManager {
         });
 
         folder.appendChild(header);
+        folder.appendChild(editBox);
         folder.appendChild(addPickerBox);
         folder.appendChild(list);
         fragment.appendChild(folder);
@@ -589,6 +692,7 @@ export class SidebarManager {
 
     const storageChannels = await SubDeckStorage.getChannels();
     const categories = await SubDeckStorage.getCategories();
+    const handleToUcId = await SubDeckStorage.getHandleToUcIdMap();
     let hasChanges = false;
 
     // Purge any accidental system topics from storage
@@ -603,33 +707,43 @@ export class SidebarManager {
       }
     }
 
-    let uncategorized = categories.find(c => c.id === '__uncategorized__');
-    if (!uncategorized) {
-      uncategorized = {
-        id: '__uncategorized__',
-        name: 'Uncategorized',
-        icon: '📂',
-        color: '#6B7280',
-        channelIds: [],
-        isCollapsed: true,
-        sortOrder: 999,
-        isSystem: true,
-      };
-      categories.push(uncategorized);
-    }
-
-    const uncatSet = new Set(uncategorized.channelIds);
+    // 1. Reconcile newly discovered channels
     for (const ch of scraped) {
       if (!storageChannels[ch.ucId]) {
         storageChannels[ch.ucId] = ch;
-        uncatSet.add(ch.ucId);
+        if (ch.handle) {
+          handleToUcId[ch.handle] = ch.ucId;
+        }
         hasChanges = true;
       }
     }
-    uncategorized.channelIds = Array.from(uncatSet);
+
+    // 2. Reconcile deleted/unsubscribed channels if sidebar is fully expanded
+    if (ChannelExtractor.isSidebarFullyExpanded()) {
+      const scrapedUcIds = new Set(scraped.map(c => c.ucId));
+      const scrapedHandles = new Set(scraped.map(c => (c.handle || '').toLowerCase()));
+
+      for (const [ucId, ch] of Object.entries(storageChannels)) {
+        const handleLower = (ch.handle || '').toLowerCase();
+        if (!scrapedUcIds.has(ucId) && !scrapedHandles.has(handleLower)) {
+          delete storageChannels[ucId];
+          if (ch.handle) delete handleToUcId[ch.handle];
+          categories.forEach(cat => {
+            cat.channelIds = cat.channelIds.filter(id => id !== ucId);
+          });
+          hasChanges = true;
+        }
+      }
+    }
+
+    // 3. Purge legacy __uncategorized__
+    const cleanCategories = categories.filter(c => c.id !== '__uncategorized__');
+    if (cleanCategories.length !== categories.length) {
+      hasChanges = true;
+    }
 
     if (hasChanges) {
-      await SubDeckStorage.setAll({ channels: storageChannels, categories });
+      await SubDeckStorage.setAll({ channels: storageChannels, categories: cleanCategories, handleToUcId });
       await this.render();
     }
   }

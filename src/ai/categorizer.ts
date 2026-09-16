@@ -137,26 +137,7 @@ export class AICategorizer {
       const assignedIds = new Set<string>();
       decks.forEach(d => d.channelIds.forEach(id => assignedIds.add(id)));
 
-      // Collect uncategorized
-      const unassigned = channels.filter(c => !assignedIds.has(c.ucId)).map(c => c.ucId);
-      const rawAiUncategorized = safeParsed['__uncategorized__'];
-      const aiUncategorized = Array.isArray(rawAiUncategorized)
-        ? rawAiUncategorized.filter((id): id is string => typeof id === 'string')
-        : [];
-      const allUncategorized = Array.from(new Set([...unassigned, ...aiUncategorized]));
-
-      decks.push({
-        id: '__uncategorized__',
-        name: 'Uncategorized',
-        icon: '📂',
-        color: '#6B7280',
-        channelIds: allUncategorized,
-        isCollapsed: true,
-        sortOrder: 999,
-        isSystem: true,
-      });
-
-      return decks.filter(d => d.channelIds.length > 0 || d.id === '__uncategorized__');
+      return decks.filter(d => d.channelIds.length > 0);
     } catch (err) {
       Logger.warn('[SubShelf AI] Failed to parse AI JSON response:', err);
       return null;
@@ -259,34 +240,7 @@ export class AICategorizer {
       }
     }
 
-    // 5. Handle unassigned channels -> place in Uncategorized
-    const allAssignedIds = new Set<string>();
-    finalDecks.forEach(d => d.channelIds.forEach(id => allAssignedIds.add(id)));
-
-    const unassignedChannelIds = allChannels
-      .map(c => c.ucId)
-      .filter(ucId => !allAssignedIds.has(ucId));
-
-    let uncategorizedDeck = currentCategories.find(c => c.id === '__uncategorized__');
-    if (!uncategorizedDeck) {
-      uncategorizedDeck = {
-        id: '__uncategorized__',
-        name: 'Uncategorized',
-        icon: '📂',
-        color: '#6B7280',
-        channelIds: [],
-        isCollapsed: true,
-        sortOrder: 999,
-        isSystem: true,
-      };
-    } else {
-      uncategorizedDeck = { ...uncategorizedDeck, channelIds: [] };
-    }
-
-    uncategorizedDeck.channelIds = unassignedChannelIds;
-    finalDecks.push(uncategorizedDeck);
-
-    // Return decks with channels (or uncategorized if it has channels)
+    // Return decks with channels or user-created custom decks
     return finalDecks.filter(d => d.channelIds.length > 0 || !d.isSystem);
   }
 }

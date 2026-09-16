@@ -35,8 +35,7 @@ ${channelList}
 
 Output strict JSON ONLY with this schema:
 {
-${schemaExample},
-  "__uncategorized__": []
+${schemaExample}
 }
 Do not include markdown codeblocks or conversational filler. Only valid JSON.`;
 }

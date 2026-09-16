@@ -50,7 +50,7 @@ export const UNCATEGORIZED_DECK: CategoryDeck = {
 
 export const DEFAULT_STORAGE: SubDeckStorageSchema = {
   version: 1,
-  categories: [UNCATEGORIZED_DECK],
+  categories: [],
   channels: {},
   activeCategoryId: null,
   handleToUcId: {},

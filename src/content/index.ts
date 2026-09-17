@@ -31,6 +31,29 @@ class SubDeckCoordinator {
       });
     } catch {}
 
+    // Receive avatar broadcast from MAIN-world script
+    const handleAvatarBroadcast = (rawAvatars: Record<string, string>) => {
+      if (!SubDeckStorage.isContextValid() || !rawAvatars) return;
+      const avatarMap = new Map<string, string>(Object.entries(rawAvatars));
+      ChannelExtractor.mergeAvatars(avatarMap);
+      SubscriptionSync.applyAvatarMap(avatarMap);
+    };
+
+    document.addEventListener('subshelf-avatars-broadcast', ((e: CustomEvent) => {
+      if (e.detail) handleAvatarBroadcast(e.detail);
+    }) as EventListener);
+
+    window.addEventListener('message', (e) => {
+      if (e.data?.type === 'SUBSHELF_AVATARS_BROADCAST' && e.data.avatars) {
+        handleAvatarBroadcast(e.data.avatars);
+      }
+    });
+
+    // Request avatars from MAIN-world script
+    this.requestAvatars();
+    setTimeout(() => this.requestAvatars(), 1000);
+    setTimeout(() => this.requestAvatars(), 3000);
+
     // Detect unsubscribe confirmation dialog clicks on YouTube pages
     document.addEventListener('click', (e) => {
       if (!SubDeckStorage.isContextValid()) return;
@@ -151,11 +174,17 @@ class SubDeckCoordinator {
           FeedFilter.stopObserving();
           SidebarManager.clearActiveFilterHighlight();
         }
+        this.requestAvatars();
       }
     } catch (err) {
       Logger.error('Navigation handler error:', err);
     }
   }, 350);
+
+  static requestAvatars(): void {
+    document.dispatchEvent(new CustomEvent('subshelf-request-avatars'));
+    window.postMessage({ type: 'SUBSHELF_REQUEST_AVATARS' }, '*');
+  }
 
   static handleDataUpdate = debounce(async () => {
     if (!SubDeckStorage.isContextValid()) return;

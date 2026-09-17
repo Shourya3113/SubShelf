@@ -7,6 +7,7 @@ import { FeedFilter } from './feedFilter';
 import { CategoryDeck, SubscribedChannel } from '@/types';
 import { debounce } from '@/utils/debounce';
 import { SubscriptionSync } from './subscriptionSync';
+import { Logger } from '@/utils/logger';
 
 export class SidebarManager {
   private static containerId = 'subdeck-sidebar-container';
@@ -19,10 +20,18 @@ export class SidebarManager {
   private static pendingRender = false;
 
   private static debouncedSync = debounce(async () => {
+    if (!SubDeckStorage.isContextValid()) {
+      if (SidebarManager.observer) {
+        SidebarManager.observer.disconnect();
+        SidebarManager.observer = null;
+      }
+      return;
+    }
     await SidebarManager.syncWithNativeSubscriptions();
   }, 300);
 
   static async ensureInjected(): Promise<void> {
+    if (!SubDeckStorage.isContextValid()) return;
     if (this.isInjecting) {
       this.pendingInject = true;
       return;
@@ -39,7 +48,8 @@ export class SidebarManager {
   }
 
   private static async executeInjection(): Promise<void> {
-      const subSection = getSubscriptionSection();
+    if (!SubDeckStorage.isContextValid()) return;
+    const subSection = getSubscriptionSection();
       if (!subSection) {
         if (this.retryCount < 6) {
           this.retryCount++;
@@ -118,6 +128,7 @@ export class SidebarManager {
   }
 
   static async render(): Promise<void> {
+    if (!SubDeckStorage.isContextValid()) return;
     if (this.isRendering) {
       this.pendingRender = true;
       return;
@@ -129,7 +140,7 @@ export class SidebarManager {
         try {
           await this.executeRender();
         } catch (err) {
-          console.error('[SubShelf] Render cycle failed:', err);
+          Logger.error('Render cycle failed:', err);
         }
       } while (this.pendingRender);
     } finally {
@@ -138,6 +149,7 @@ export class SidebarManager {
   }
 
   private static async executeRender(): Promise<void> {
+    if (!SubDeckStorage.isContextValid()) return;
     const subSection = getSubscriptionSection();
     if (!subSection) return;
 

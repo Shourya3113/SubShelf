@@ -22,14 +22,18 @@ class SubDeckCoordinator {
     window.addEventListener('yt-page-data-updated', this.handleDataUpdate);
 
     // Cross-tab sync: re-render sidebar when storage changes from another tab or popup
-    chrome.storage.onChanged.addListener((changes, area) => {
-      if (area === 'local' && (changes.categories || changes.channels)) {
-        SidebarManager.render();
-      }
-    });
+    try {
+      chrome.storage.onChanged.addListener((changes, area) => {
+        if (!SubDeckStorage.isContextValid()) return;
+        if (area === 'local' && (changes.categories || changes.channels)) {
+          SidebarManager.render();
+        }
+      });
+    } catch {}
 
     // Detect unsubscribe confirmation dialog clicks on YouTube pages
     document.addEventListener('click', (e) => {
+      if (!SubDeckStorage.isContextValid()) return;
       const target = e.target as HTMLElement | null;
       if (!target) return;
       const confirmBtn = target.closest('#confirm-button, yt-confirm-dialog-renderer #confirm-button');
@@ -37,9 +41,11 @@ class SubDeckCoordinator {
         // Unsubscribe confirmed — remove channel by current page URL and also run full sync
         const currentUrl = window.location.href;
         setTimeout(() => {
+          if (!SubDeckStorage.isContextValid()) return;
           SubscriptionSync.removeChannelByUrl(currentUrl);
         }, 800);
         setTimeout(() => {
+          if (!SubDeckStorage.isContextValid()) return;
           SubscriptionSync.diffAndSync();
         }, 2000);
       }
@@ -47,6 +53,7 @@ class SubDeckCoordinator {
 
     // Real-time subscribe/unsubscribe detection via YouTube's internal action events
     document.addEventListener('yt-action', ((e: CustomEvent) => {
+      if (!SubDeckStorage.isContextValid()) return;
       const actionName = e.detail?.actionName;
       if (!actionName) return;
 
@@ -54,11 +61,13 @@ class SubDeckCoordinator {
         Logger.info('[SubShelf] Subscribe action detected');
         // Delay to let YouTube's sidebar update, then sync (picks up new channel + auto-categorizes)
         setTimeout(() => {
+          if (!SubDeckStorage.isContextValid()) return;
           ChannelExtractor.autoExpandNativeSubscriptions(true);
           SubscriptionSync.diffAndSync();
         }, 1500);
         // Second pass after sidebar fully renders
         setTimeout(() => {
+          if (!SubDeckStorage.isContextValid()) return;
           SubscriptionSync.diffAndSync();
         }, 3500);
       }
@@ -67,9 +76,11 @@ class SubDeckCoordinator {
         Logger.info('[SubShelf] Unsubscribe action detected');
         const currentUrl = window.location.href;
         setTimeout(() => {
+          if (!SubDeckStorage.isContextValid()) return;
           SubscriptionSync.removeChannelByUrl(currentUrl);
         }, 800);
         setTimeout(() => {
+          if (!SubDeckStorage.isContextValid()) return;
           SubscriptionSync.diffAndSync();
         }, 2500);
       }
@@ -77,8 +88,10 @@ class SubDeckCoordinator {
 
     // Visibility-change fallback: sync when user switches back to YouTube tab
     document.addEventListener('visibilitychange', () => {
+      if (!SubDeckStorage.isContextValid()) return;
       if (document.visibilityState === 'visible') {
         setTimeout(() => {
+          if (!SubDeckStorage.isContextValid()) return;
           SubscriptionSync.diffAndSync();
         }, 500);
       }
@@ -112,6 +125,7 @@ class SubDeckCoordinator {
   }
 
   static handleNavigation = debounce(async () => {
+    if (!SubDeckStorage.isContextValid()) return;
     try {
       if (!HealthMonitor.validateSelectors()) {
         HealthMonitor.showDegradationBanner();
@@ -139,18 +153,19 @@ class SubDeckCoordinator {
         }
       }
     } catch (err) {
-      Logger.error('[SubShelf] Navigation handler error:', err);
+      Logger.error('Navigation handler error:', err);
     }
   }, 350);
 
   static handleDataUpdate = debounce(async () => {
+    if (!SubDeckStorage.isContextValid()) return;
     try {
       await SubscriptionSync.diffAndSync();
       if (window.location.pathname.startsWith('/feed/subscriptions')) {
         FeedFilter.applyFilter();
       }
     } catch (err) {
-      Logger.error('[SubShelf] Data update error:', err);
+      Logger.error('Data update error:', err);
     }
   }, 350);
 }

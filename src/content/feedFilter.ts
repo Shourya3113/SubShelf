@@ -13,6 +13,7 @@ export class FeedFilter {
   private static readonly MAX_SCROLL_ATTEMPTS = 3;
 
   static async setCategory(category: CategoryDeck | null): Promise<void> {
+    if (!SubDeckStorage.isContextValid()) return;
     this.activeCategory = category;
     this.scrollAttempts = 0;
     await SubDeckStorage.setAll({ activeCategoryId: category ? category.id : null });
@@ -34,6 +35,7 @@ export class FeedFilter {
   }
 
   static applyFilter(): void {
+    if (!SubDeckStorage.isContextValid()) return;
     if (!window.location.pathname.startsWith('/feed/subscriptions')) return;
     if (!this.activeCategory) return;
 

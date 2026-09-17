@@ -1,25 +1,50 @@
 import { SubDeckStorageSchema, DEFAULT_STORAGE, SubscribedChannel, CategoryDeck } from '@/types';
 
 export class SubDeckStorage {
+  static isContextValid(): boolean {
+    try {
+      return typeof chrome !== 'undefined' && Boolean(chrome.runtime?.id);
+    } catch {
+      return false;
+    }
+  }
+
   static async getAll(): Promise<SubDeckStorageSchema> {
-    const data = await chrome.storage.local.get(null);
-    if (!data.version) {
-      const defaults = structuredClone(DEFAULT_STORAGE);
-      await chrome.storage.local.set(defaults);
-      return defaults;
+    if (!this.isContextValid()) {
+      return structuredClone(DEFAULT_STORAGE);
     }
-    // Backward compatibility: ensure exclusion and manual assignment maps exist
-    if (!data.channelExclusions) data.channelExclusions = {};
-    if (!data.manualAssignments) data.manualAssignments = {};
-    // Seamlessly purge any legacy __uncategorized__ deck from categories
-    if (Array.isArray(data.categories)) {
-      data.categories = data.categories.filter((c: CategoryDeck) => c.id !== '__uncategorized__');
+    try {
+      const data = await chrome.storage.local.get(null);
+      if (!data || !data.version) {
+        if (!this.isContextValid()) return structuredClone(DEFAULT_STORAGE);
+        const defaults = structuredClone(DEFAULT_STORAGE);
+        await chrome.storage.local.set(defaults);
+        return defaults;
+      }
+      // Backward compatibility: ensure exclusion and manual assignment maps exist
+      if (!data.channelExclusions) data.channelExclusions = {};
+      if (!data.manualAssignments) data.manualAssignments = {};
+      // Seamlessly purge any legacy __uncategorized__ deck from categories
+      if (Array.isArray(data.categories)) {
+        data.categories = data.categories.filter((c: CategoryDeck) => c.id !== '__uncategorized__');
+      }
+      return data as SubDeckStorageSchema;
+    } catch (err: any) {
+      if (err?.message?.includes('Extension context invalidated')) {
+        return structuredClone(DEFAULT_STORAGE);
+      }
+      throw err;
     }
-    return data as SubDeckStorageSchema;
   }
 
   static async setAll(data: Partial<SubDeckStorageSchema>): Promise<void> {
-    await chrome.storage.local.set(data);
+    if (!this.isContextValid()) return;
+    try {
+      await chrome.storage.local.set(data);
+    } catch (err: any) {
+      if (err?.message?.includes('Extension context invalidated')) return;
+      throw err;
+    }
   }
 
   static async getChannels(): Promise<Record<string, SubscribedChannel>> {

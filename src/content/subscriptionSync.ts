@@ -2,7 +2,8 @@ import { ChannelExtractor } from './channelExtractor';
 import { SubDeckStorage } from '@/utils/storage';
 import { SidebarManager } from './sidebarManager';
 import { Logger } from '@/utils/logger';
-import { CategoryDeck } from '@/types';
+import { CategoryDeck, SubscribedChannel } from '@/types';
+import { HeuristicCategorizer } from '@/ai/heuristic';
 
 export class SubscriptionSync {
   private static isSyncing = false;
@@ -24,6 +25,7 @@ export class SubscriptionSync {
       const handleToUcId = { ...state.handleToUcId };
 
       let hasChanges = false;
+      const newChannels: SubscribedChannel[] = [];
 
       // 1. Reconcile new subscriptions
       for (const ch of scraped) {
@@ -32,12 +34,35 @@ export class SubscriptionSync {
           if (ch.handle) {
             handleToUcId[ch.handle] = ch.ucId;
           }
+          newChannels.push(ch);
           hasChanges = true;
           Logger.info(`[SubShelf] Discovered new subscription: ${ch.title} (${ch.ucId})`);
+        } else {
+          // Update avatar URL if it changed (keep avatars fresh)
+          if (ch.avatarUrl && ch.avatarUrl !== currentChannels[ch.ucId].avatarUrl) {
+            currentChannels[ch.ucId].avatarUrl = ch.avatarUrl;
+            hasChanges = true;
+          }
         }
       }
 
-      // 2. Reconcile deleted/unsubscribed channels if sidebar is fully expanded
+      // 2. Auto-categorize newly discovered channels if folders already exist
+      if (newChannels.length > 0 && categories.length > 0) {
+        const heuristicResults = HeuristicCategorizer.categorize(newChannels);
+        for (const deck of heuristicResults) {
+          // Find matching existing category by id
+          const existingCat = categories.find(c => c.id === deck.id);
+          if (existingCat) {
+            for (const id of deck.channelIds) {
+              if (!existingCat.channelIds.includes(id)) {
+                existingCat.channelIds.push(id);
+              }
+            }
+          }
+        }
+      }
+
+      // 3. Reconcile deleted/unsubscribed channels if sidebar is fully expanded
       if (ChannelExtractor.isSidebarFullyExpanded()) {
         const scrapedUcIds = new Set(scraped.map(c => c.ucId));
         const scrapedHandles = new Set(scraped.map(c => (c.handle || '').toLowerCase()));
@@ -57,7 +82,7 @@ export class SubscriptionSync {
         }
       }
 
-      // 3. Purge any legacy __uncategorized__ deck from categories
+      // 4. Purge any legacy __uncategorized__ deck from categories
       const cleanCategories = categories.filter(c => c.id !== '__uncategorized__');
       if (cleanCategories.length !== categories.length) {
         hasChanges = true;
@@ -79,5 +104,34 @@ export class SubscriptionSync {
     } finally {
       this.isSyncing = false;
     }
+  }
+
+  /**
+   * Remove a channel by URL (used for unsubscribe detection on channel pages
+   * where the sidebar may not be fully expanded).
+   */
+  static async removeChannelByUrl(url: string): Promise<void> {
+    const handleMatch = url.match(/\/@([^\/\?]+)/);
+    if (!handleMatch) return;
+    const handle = `@${handleMatch[1]}`;
+
+    const state = await SubDeckStorage.getAll();
+    const ucId = state.handleToUcId[handle];
+    if (!ucId || !state.channels[ucId]) return;
+
+    const channels = { ...state.channels };
+    const handleToUcId = { ...state.handleToUcId };
+    const categories = state.categories.map(c => ({
+      ...c,
+      channelIds: c.channelIds.filter(id => id !== ucId),
+    }));
+
+    const ch = channels[ucId];
+    delete channels[ucId];
+    if (ch.handle) delete handleToUcId[ch.handle];
+
+    await SubDeckStorage.setAll({ channels, handleToUcId, categories });
+    await SidebarManager.render();
+    Logger.info(`[SubShelf] Removed unsubscribed channel by URL: ${ch.title} (${ucId})`);
   }
 }

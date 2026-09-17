@@ -27,6 +27,26 @@ export const SUBDECK_TAXONOMY: TaxonomyEntry[] = [
       'tech with tim', 'corey schafer', 'sentdex', 'derek banas', 'john savill', 'jeff geerling',
       'craft computing', 'retro man cave', 'ben eater', 'veritasium tech', 'mkbhd clips',
       'waveform', 'mister mobile', 'snazzy labs', 'jonathan morrison', 'flossy carter',
+      // Extended signatures
+      'unbox therapy', 'techlinked', 'tech linked', 'linus media group', 'techquickie',
+      'digital foundry', 'joma tech', 'techaltar', 'tailosive tech', 'sara dietschy',
+      'karl conrad', 'ijustine', 'justine ezarik', 'booredatwork', 'supersaf',
+      'phone arena', 'gsmarena', 'sam beckman', 'matthewmoniz',
+      'tld', 'techlinked daily', 'tech with nana', 'nana janashia', 'bro code',
+      'coder coder', 'the net ninja', 'developedbyed', 'jack herrington',
+      'james q quick', 'brad traversy', 'techworld with nana', 'continuous delivery',
+      'code with antonio', 'the coding train', 'coding garden', 'code with harry',
+      'apna college', 'love babbar', 'striver', 'take u forward', 'pepcoding',
+      'neetcode', 'neetcodeio', 'techdose', 'errichto', 'william lin',
+      'clément mihailescu', 'clement mihailescu', 'tech with lucy',
+      'github', 'visual studio code', 'google developers', 'android developers',
+      'apple developer', 'microsoft developer', 'aws', 'amazon web services',
+      'google cloud tech', 'hashicorp', 'docker', 'kubernetes',
+      'dave lee', 'dave2d', 'tailosive tech', 'arun maini',
+      'ishan agarwal', 'technical guruji', 'techbar', 'trakin tech', 'c4etech',
+      'geeky ranjit', 'technical sagar', 'tech with sagar', 'gadgets 360',
+      'stuff made here', 'simone giertz', 'coldfusion', 'cold fusion',
+      'wendover', 'thoughty2', 'polymatter', 'neo',
     ],
     keywords: [
       'tech', 'technology', 'code', 'coding', 'programming', 'developer', 'software',
@@ -37,7 +57,8 @@ export const SUBDECK_TAXONOMY: TaxonomyEntry[] = [
       'cloud', 'aws', 'data science', 'algorithms', 'github', 'macos', 'ios',
       'android', 'smartphone', 'benchmark', 'overclock', 'pc build', 'tech review',
       'unboxing', 'gadget', 'robotics', 'sysadmin', 'kubernetes', 'docker', 'git',
-      'sql', 'dev', 'fullstack', 'semiconductor',
+      'sql', 'dev', 'fullstack', 'semiconductor', 'leetcode', 'dsa', 'api',
+      'nextjs', 'nodejs', 'flutter', 'swift', 'kotlin', 'java', 'golang',
     ],
   },
   {
@@ -51,10 +72,27 @@ export const SUBDECK_TAXONOMY: TaxonomyEntry[] = [
       'game theory', 'nintendo', 'playstation', 'xbox', 'call of duty', 'minecraft',
       'valve', 'riot games', 'rockstar games', 'ubisoft', 'ea sports', 'gamers nexus',
       'total gaming', 'carryislive', 'dynamo gaming', 'mortal', 'techno gamerz', 'mythpat gaming',
-      'typical gamer', 'ali-a', 'lazarbeam', 'ludwig', 'moistcrItikal', 'penguinz0',
+      'typical gamer', 'ali-a', 'lazarbeam', 'ludwig', 'moistcritikal', 'penguinz0',
       'xqc', 'sykkuno', 'valkyrae', 'timthetatman', 'dr disrespect', 'videogamedunkey',
       'dunkey', 'scott the woz', 'spawn wave', 'angryjoeshow', 'kotaku', 'polygon',
       'pc gamer', 'eurogamer', 'skill up', 'acg', 'radbrad', 'the rad brad',
+      // Extended signatures
+      'ibai', 'rubius', 'vegetta777', 'elrubius', 'auronplay',
+      'nick eh 30', 'nickeh30', 'sypherpk', 'fresh', 'lachlan',
+      'coryxkenshin', 'dashiexp', 'dashiegames', 'sssniperwolf',
+      'theradbrad', 'gamer tag', 'matpat', 'game theorists',
+      'jaiden animations gaming', 'jschlatt', 'slimecicle', 'callmekevin',
+      'rtgame', 'lets game it out', 'letsgameitout',
+      'iron pineapple', 'vaatividya', 'prod', 'zanny', 'max0r',
+      'blitz', 'brawl stars', 'supercell', 'clash royale',
+      'mr fruit', 'fallout plays', 'aztecross', 'datto',
+      'the act man', 'upper echelon gamers', 'bellular',
+      'kinda funny games', 'easy allies', 'digital foundry gaming',
+      'noclip', 'gameranx', 'whatculture gaming', 'outsidexbox', 'outsidextra',
+      'stampylonghead', 'stampy', 'popularmmos', 'captainsparklez',
+      'hermitcraft', 'grian', 'mumbo jumbo', 'bdoubleo100', 'ethoslab',
+      'ibxtoycat', 'wadzee', 'philza', 'technoblade', 'ranboo',
+      'epicnate315', 'theepicnate315', 'mathasgames',
     ],
     keywords: [
       'game', 'games', 'gaming', 'playthrough', 'walkthrough', 'gameplay',
@@ -63,6 +101,7 @@ export const SUBDECK_TAXONOMY: TaxonomyEntry[] = [
       'league of legends', 'minecraft', 'gta', 'pokemon', 'zelda', 'overwatch',
       'counter-strike', 'apex legends', 'console', 'emulator', 'nintendo switch',
       'ps5', 'xbox series', 'boss fight', 'mmo', 'mmorpg', 'let\'s play',
+      'elden ring', 'dark souls', 'baldur', 'diablo', 'warzone',
     ],
   },
   {
@@ -86,6 +125,17 @@ export const SUBDECK_TAXONOMY: TaxonomyEntry[] = [
       'ap dhillon', 'anuv jain', 'prateek kuhad', 'coke studio', 'zee music company',
       'speed records', 'tips official', 'saregama music', 'rajshri', 'nocopyrightsounds',
       'ncs', 'chillhop music', 'npr music', 'tiny desk', 'boiler room',
+      // Extended signatures
+      'the first take', 'colors', 'colors show', 'genius', 'genius lyrics',
+      'rick beato', 'adam neely', 'andrew huang', 'roomie', 'roomieofficial',
+      'jacob collier', 'marc rebillet', 'polyphonic', 'charles cornell',
+      'nahre sol', 'sideways', 'david bennett piano', '12tone',
+      'listening in', 'middle 8', 'mic the snare', 'todd in the shadows',
+      'anthony fantano', 'theneedledrop', 'the needle drop', 'fantano',
+      'classical mph', 'two set violin', 'twosetviolin', 'daniel thrasher',
+      'samurai guitarist', 'signals music studio', 'paul davids',
+      'music is win', 'andertons', 'sweetwater',
+      'yt music', 'spotify', 'apple music', 'tidal',
     ],
     keywords: [
       'music', 'vevo', 'records', 'sound', 'audio', 'song', 'songs', 'band',
@@ -94,6 +144,7 @@ export const SUBDECK_TAXONOMY: TaxonomyEntry[] = [
       'album', 'melody', 'instrumental', 'jazz', 'lo-fi', 'lofi', 'trap',
       'guitar', 'piano', 'singer', 'chords', 'studio', 'synthesizer', 'official audio',
       'official video', 'lyric video', 'discography', 'mixtape', 'symphony', 'cover song',
+      'karaoke', 'playlist', 'edm', 'classical', 'choir', 'composer',
     ],
   },
   {
@@ -112,6 +163,24 @@ export const SUBDECK_TAXONOMY: TaxonomyEntry[] = [
       'sixty symbols', 'tom scott', 'practical engineering', 'anton petrov',
       'sabine hossenfelder', 'pbs space time', 'pbs eons', 'asapscience', 'tierzoo',
       'kurzgesagt – in a nutshell', 'steve mould', 'nilered', 'nileblue',
+      // Extended signatures
+      'cody\'s lab', 'codyslab', 'styropyro', 'applied science',
+      'technology connections', 'techmoan', 'big think', 'ted talks',
+      'tedx talks', 'mit opencourseware', 'stanford', 'yale courses',
+      'harvard', 'brilliant', 'the organic chemistry tutor', 'professor leonard',
+      'professor dave explains', 'tibees', 'mathologer', 'matt parker',
+      'zach star', 'flammable maths', 'blackpenredpen',
+      'dr trefor bazett', 'dr. trefor bazett', 'michael penn',
+      'history matters', 'feature history', 'kings and generals',
+      'history with cy', 'fire of learning', 'overly sarcastic productions',
+      'extra credits', 'extra history', 'historia civilis', 'invicta',
+      'knowing better', 'sam o\'nella', 'sam onella', 'internet historian',
+      'lemmino', 'aperture', 'exurb1a', 'vsauce2', 'vsauce3', 'michael stevens',
+      'today i found out', 'infographics show', 'be smart', 'it\'s okay to be smart',
+      'minuteearth', 'atlas pro', 'geography now', 'joe scott',
+      'answers with joe', 'cool worlds', 'isaac arthur', 'event horizon',
+      'dr becky', 'astrum', 'everyday astronaut', 'scott manley',
+      'destin', 'smartereveryday', 'stuff made here',
     ],
     keywords: [
       'science', 'education', 'learn', 'course', 'academy', 'physics', 'math',
@@ -119,7 +188,8 @@ export const SUBDECK_TAXONOMY: TaxonomyEntry[] = [
       'explained', 'lecture', 'documentary', 'demos', 'geography', 'tutorial',
       'philosophy', 'discovery', 'cosmos', 'curious', 'experiments', 'scientific',
       'quantum', 'gravity', 'evolution', 'anatomy', 'calculus', 'algebra', 'lesson',
-      'exam', 'study', 'astrophysics',
+      'exam', 'study', 'astrophysics', 'linguistics', 'psychology', 'sociology',
+      'anthropology', 'archaeology', 'paleontology', 'ecology', 'geology',
     ],
   },
   {
@@ -140,6 +210,22 @@ export const SUBDECK_TAXONOMY: TaxonomyEntry[] = [
       'flying beast', 'sourav joshi vlogs', 'sidemen', 'ksi', 'miniminter',
       'w2s', 'vikkstar123', 'tbjzl', 'zerkaa', 'beta squad', 'amp', 'kai cenat',
       'fanum', 'agent00', 'duke dennis', 'ishowspeed', 'speed',
+      // Extended signatures
+      'ryan trahan', 'airrack', 'yes theory', 'faze rug', 'faze clan',
+      'david dobrik', 'emma chamberlain', 'safiya nygaard', 'jenna marbles',
+      'h3h3productions', 'h3 podcast', 'ethan klein', 'idubbbz',
+      'theodd1sout', 'jaiden animations', 'domics', 'swoozie',
+      'casually explained', 'exurb1a', 'cgp grey',
+      'penguinz0 clips', 'hasanabi', 'hasan piker',
+      'chris ramsay', 'zach king', 'nigahiga', 'ryan higa',
+      'lily singh', 'lilly singh', 'superwoman', 'jus reign',
+      'looper', 'new rockstars', 'heavy spoilers', 'emergency awesome',
+      'comic book cast', 'everything always', 'the cosmonaut variety hour',
+      'ralphthemoviemaker', 'chris stuckmann', 'jeremy jahns',
+      'yms', 'your movie sucks', 'i hate everything', 'cynical reviews',
+      'nerdwriter', 'nerdwriter1', 'every frame a painting', 'lessons from the screenplay',
+      'patrick h willems', 'thomas flight', 'just write',
+      'captain midnight', 'like stories of old', 'storytellers',
     ],
     keywords: [
       'entertainment', 'comedy', 'vlog', 'vlogs', 'show', 'cinema', 'movie', 'movies',
@@ -147,6 +233,7 @@ export const SUBDECK_TAXONOMY: TaxonomyEntry[] = [
       'anime', 'cartoon', 'studios', 'interview', 'talk show', 'late night',
       'memes', 'hollywood', 'parody', 'acting', 'shorts', 'clips', 'bloopers',
       'episode', 'season', 'scene', 'trailer', 'teaser', 'stand-up', 'sketches',
+      'commentary', 'video essay', 'tier list', 'ranking',
     ],
   },
   {
@@ -161,6 +248,17 @@ export const SUBDECK_TAXONOMY: TaxonomyEntry[] = [
       'wsj', 'ankur warikoo', 'rachana ranade', 'ca rachana ranade', 'pranjal kamra',
       'akshat shrivastava', 'labour law advisor', 'lla', 'asset yogi', 'finology legal',
       'shark tank', 'shark tank india', 'garyvee', 'patrick bet-david', 'valuetainment',
+      // Extended signatures
+      'the plain bagel', 'two cents', 'the financial diet', 'nerdwallet',
+      'the dave ramsey show', 'dave ramsey', 'suze orman', 'the motley fool',
+      'benzinga', 'yahoo finance', 'marketwatch', 'seeking alpha',
+      'coin desk', 'crypto daily', 'bitboy crypto', 'sheldon evans',
+      'biaheza', 'noah kagan', 'my first million', 'the hustle',
+      'y combinator', 'a16z', 'naval ravikant', 'ycombinator',
+      'the futur', 'chris do', 'alex hormozi', 'hormozi',
+      'think media', 'roberto blake', 'vanessa lau',
+      'ca rachana', 'zerodha', 'groww', 'moneycontrol',
+      'economic times', 'business today', 'business insider',
     ],
     keywords: [
       'finance', 'money', 'business', 'invest', 'investing', 'investment', 'stocks', 'crypto',
@@ -168,6 +266,7 @@ export const SUBDECK_TAXONOMY: TaxonomyEntry[] = [
       'trading', 'real estate', 'bank', 'passive income', 'wall street', 'shares',
       'capital', 'dividends', 'portfolio', 'financial independence', 'personal finance',
       'budget', 'credit card', 'taxation', 'mutual funds', 'forex', 'side hustle',
+      'saas', 'revenue', 'profit', 'growth hacking', 'ecommerce',
     ],
   },
   {
@@ -181,6 +280,19 @@ export const SUBDECK_TAXONOMY: TaxonomyEntry[] = [
       'red bull', 'espn', 'sky sports', 'thenx', 'hybrid calisthenics', 'formula 1',
       'f1', 'nfl', 'mlb', 'nhl', 'cricket australia', 'icc', 'bcci', 'guru mann',
       'rohit khatri', 'jeet selal', 'tarun gill', 'yatinder singh',
+      // Extended signatures
+      'noel deyzel', 'greg doucette', 'renaissance periodization', 'mike israetel',
+      'jeremy ethier', 'blogilates', 'pamela reif', 'sydney cummings',
+      'fitness blender', 'popsugar fitness', 'hasfit', 'yoga with adriene',
+      'adriene mishler', 'boho beautiful', 'tom merrick', 'the bioneer',
+      'strength side', 'anabolic aliens', 'buff dudes',
+      'brian shaw', 'larry wheels', 'eddie hall', 'hafthor bjornsson',
+      'cbum', 'chris bumstead', 'ronnie coleman', 'arnold schwarzenegger',
+      'bleacher report', 'bt sport', 'dazn', 'the score',
+      'jomboy media', 'jomboy', 'secret base', 'sb nation',
+      'tifo football', 'tifo irl', 'footballia', 'copa90',
+      'star sports', 'sony sports', 'hotstar cricket',
+      'wilty', 'pat mcafee', 'the pat mcafee show',
     ],
     keywords: [
       'fitness', 'gym', 'workout', 'health', 'nutrition', 'bodybuilding',
@@ -188,6 +300,7 @@ export const SUBDECK_TAXONOMY: TaxonomyEntry[] = [
       'football', 'soccer', 'basketball', 'boxing', 'running', 'muscle',
       'athlete', 'crossfit', 'lifting', 'cardio', 'weight loss', 'hypertrophy',
       'cricket', 'mma', 'wrestling', 'tennis', 'badminton', 'physique',
+      'marathon', 'triathlon', 'swimming', 'rugby', 'f1', 'motorsport',
     ],
   },
   {
@@ -201,13 +314,30 @@ export const SUBDECK_TAXONOMY: TaxonomyEntry[] = [
       'proko', 'architectural digest', 'buzzfeed tasty', 'ranveer brar', 'sanjeev kapoor',
       'kabitas kitchen', 'nisha madhulika', 'village cooking channel', 'uncle roger',
       'nigel ng', 'epicurious', 'binging with babish', 'americas test kitchen',
+      // Extended signatures
+      'matt stonie', 'mark wiens', 'mikey chen', 'strictly dumpling',
+      'best ever food review show', 'sonny side', 'worth it', 'buzzfeed video',
+      'sorted food', 'food wishes', 'chef john', 'adam ragusea',
+      'internet shaquille', 'pro home cooks', 'french cooking academy',
+      'preppy kitchen', 'laura in the kitchen', 'maangchi',
+      'marion\'s kitchen', 'chinese cooking demystified', 'souped up recipes',
+      'yes i can cook', 'hebbar\'s kitchen', 'hebbars kitchen', 'rajshri food',
+      'kunal kapur', 'vahchef', 'bharatzkitchen',
+      'peter mckinnon', 'mango street', 'jessica kobeissi', 'the slanted lens',
+      'thomas heaton', 'first we feast', 'hot ones',
+      'the try guys', 'buzzfeed unsolved', 'watcher',
+      'marie kondo', 'cleanmyspace', 'marie forleo',
+      'donut media', 'donut', 'throttle house', 'savagegeese',
+      'doug demuro', 'carwow', 'top gear', 'the grand tour',
+      'jay leno garage', 'straight pipes', 'everyday driver',
     ],
     keywords: [
       'food', 'cook', 'cooking', 'recipe', 'recipes', 'kitchen', 'chef', 'travel',
       'adventure', 'trip', 'tour', 'lifestyle', 'house', 'interior design',
       'diy', 'craft', 'car', 'cars', 'automotive', 'motor', 'photography', 'art',
       'baking', 'restaurant', 'street food', 'eating', 'asmr', 'mukbang', 'grill',
-      'culinary', 'woodworking',
+      'culinary', 'woodworking', 'gardening', 'home improvement', 'renovation',
+      'fashion', 'beauty', 'makeup', 'skincare', 'hairstyle',
     ],
   },
   {
@@ -223,13 +353,25 @@ export const SUBDECK_TAXONOMY: TaxonomyEntry[] = [
       'daily news', 'associated press', 'ndtv', 'india today', 'aaj tak', 'zee news',
       'abp news', 'republic world', 'the print', 'the wire', 'quint', 'wion',
       'firstpost', 'the economist', 'nbc news', 'cbs news',
+      // Extended signatures
+      'johnny harris', 'j.j. mccullough', 'tldr news', 'tldr daily',
+      'visual politik', 'caspian report', 'good times bad times',
+      'the daily show', 'last week tonight', 'john oliver', 'trevor noah',
+      'bbc world service', 'channel 4 news', 'france 24 english',
+      'euronews', 'nhk world', 'arirang', 'cgtn',
+      'the atlantic', 'politico', 'axios', 'the hill',
+      'breaking points', 'the majority report', 'secular talk',
+      'pbs', 'pbs digital studios', 'frontline pbs',
+      'gravitas wion', 'palki sharma', 'dhruv rathee', 'soch',
+      'newslaundry', 'the lallantop', 'print',
     ],
     keywords: [
       'news', 'politics', 'journalism', 'breaking news',
       'commentary', 'current affairs', 'election', 'live news',
       'geopolitics', 'press conference', 'daily wire', 'daily beast',
       'huffpost', 'political', 'congress', 'parliament', 'government',
-      'prime minister', 'president',
+      'prime minister', 'president', 'foreign policy', 'diplomacy',
+      'legislation', 'supreme court', 'policy', 'democracy',
     ],
   },
   {
@@ -323,7 +465,7 @@ export class HeuristicCategorizer {
           if (regex.test(titleLower)) {
             score += 20;
           } else if (regex.test(handleLower)) {
-            score += 15;
+            score += 20; // Bumped from 15 → 20 (handles are equally descriptive)
           } else if (kw.includes(' ') && combined.includes(kw)) {
             score += 30;
           } else if (kw.length >= 4 && cleanHandle.includes(kw)) {
@@ -337,8 +479,8 @@ export class HeuristicCategorizer {
         }
       }
 
-      // Assign to winner if threshold met (>= 12 points)
-      if (bestCatId && highestScore >= 12) {
+      // Assign to winner if threshold met (>= 10 points, lowered from 12)
+      if (bestCatId && highestScore >= 10) {
         const deck = decks.find(d => d.id === bestCatId);
         deck?.channelIds.push(ch.ucId);
         assigned.add(ch.ucId);

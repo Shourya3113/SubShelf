@@ -196,7 +196,7 @@ export class SidebarManager {
 
     const brandSpan = document.createElement('span');
     brandSpan.className = 'subdeck-brand';
-    brandSpan.textContent = '⚡ SubShelf';
+    brandSpan.textContent = 'SubShelf';
 
     const subtextSpan = document.createElement('span');
     subtextSpan.className = 'subdeck-subtext';
@@ -600,6 +600,28 @@ export class SidebarManager {
           const id = ch.ucId;
           const item = document.createElement('div');
           item.className = 'subdeck-channel-item';
+
+          // Channel avatar (20px circular profile picture)
+          if (ch.avatarUrl) {
+            const avatar = document.createElement('img');
+            avatar.className = 'subdeck-channel-avatar';
+            avatar.src = ch.avatarUrl;
+            avatar.alt = '';
+            avatar.loading = 'lazy';
+            avatar.onerror = () => {
+              avatar.style.display = 'none';
+              const fallback = document.createElement('span');
+              fallback.className = 'subdeck-channel-avatar-fallback';
+              fallback.textContent = ch.title.charAt(0).toUpperCase();
+              item.insertBefore(fallback, link);
+            };
+            item.appendChild(avatar);
+          } else {
+            const fallback = document.createElement('span');
+            fallback.className = 'subdeck-channel-avatar-fallback';
+            fallback.textContent = ch.title.charAt(0).toUpperCase();
+            item.appendChild(fallback);
+          }
 
           const link = document.createElement('a');
           link.className = 'subdeck-channel-link';

@@ -254,19 +254,39 @@ export class ChannelExtractor {
     return channels;
   }
 
-  private static initialAvatarsCache: Map<string, string> | null = null;
+  private static initialAvatarsCache = new Map<string, string>();
 
   /**
-   * Extracts channel avatars from YouTube's server-rendered ytInitialData JSON payload.
+   * Merges avatars received from the MAIN-world injected script into the cache.
+   */
+  static mergeAvatars(recordOrMap: Record<string, string> | Map<string, string>): void {
+    if (!recordOrMap) return;
+    if (recordOrMap instanceof Map) {
+      for (const [k, v] of recordOrMap.entries()) {
+        if (v && !v.startsWith('data:image')) {
+          this.initialAvatarsCache.set(k, v);
+        }
+      }
+    } else {
+      for (const [k, v] of Object.entries(recordOrMap)) {
+        if (v && !v.startsWith('data:image')) {
+          this.initialAvatarsCache.set(k, v);
+        }
+      }
+    }
+  }
+
+  /**
+   * Returns channel avatars extracted from YouTube's server-rendered JSON payloads.
    * This provides instant, high-resolution avatar URLs for ALL subscribed channels,
    * even if they haven't been scrolled into view in YouTube's native sidebar.
    */
   static getInitialAvatars(): Map<string, string> {
-    if (this.initialAvatarsCache && this.initialAvatarsCache.size > 0) {
+    if (this.initialAvatarsCache.size > 0) {
       return this.initialAvatarsCache;
     }
 
-    const map = new Map<string, string>();
+    const map = this.initialAvatarsCache;
 
     try {
       const scripts = Array.from(document.querySelectorAll('script'));

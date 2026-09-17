@@ -9,6 +9,7 @@ export class SubscriptionSync {
   private static isSyncing = false;
 
   static async diffAndSync(): Promise<void> {
+    if (!SubDeckStorage.isContextValid()) return;
     if (this.isSyncing) return;
     this.isSyncing = true;
 
@@ -120,7 +121,7 @@ export class SubscriptionSync {
         await SidebarManager.render();
       }
     } catch (err) {
-      Logger.error('[SubShelf] Error during subscription sync:', err);
+      Logger.error('Error during subscription sync:', err);
     } finally {
       this.isSyncing = false;
     }
@@ -131,6 +132,7 @@ export class SubscriptionSync {
    * where the sidebar may not be fully expanded).
    */
   static async removeChannelByUrl(url: string): Promise<void> {
+    if (!SubDeckStorage.isContextValid()) return;
     const handleMatch = url.match(/\/@([^\/\?]+)/);
     if (!handleMatch) return;
     const handle = `@${handleMatch[1]}`;

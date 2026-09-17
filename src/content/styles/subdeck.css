@@ -295,12 +295,20 @@ html[dark],
 }
 
 .subdeck-channel-link {
+  display: flex;
+  align-items: center;
   flex: 1;
   min-width: 0;
   text-decoration: none;
+  color: var(--sd-text-primary) !important;
+}
+
+.subdeck-channel-title {
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+  flex: 1;
+  min-width: 0;
   color: var(--sd-text-primary) !important;
 }
 
@@ -326,29 +334,29 @@ html[dark],
   background: rgba(239, 68, 68, 0.15);
 }
 
-/* Channel Avatar */
+/* Channel Avatar (24px matching YouTube native sidebar) */
 .subdeck-channel-avatar {
-  width: 20px;
-  height: 20px;
+  width: 24px;
+  height: 24px;
   border-radius: 50%;
   flex-shrink: 0;
-  margin-right: 8px;
+  margin-right: 10px;
   object-fit: cover;
 }
 
 /* Letter-initial fallback when avatar URL is missing/broken */
 .subdeck-channel-avatar-fallback {
-  width: 20px;
-  height: 20px;
+  width: 24px;
+  height: 24px;
   border-radius: 50%;
   flex-shrink: 0;
-  margin-right: 8px;
+  margin-right: 10px;
   background: var(--sd-bg-card-border);
   color: var(--sd-text-secondary);
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 600;
   text-transform: uppercase;
 }

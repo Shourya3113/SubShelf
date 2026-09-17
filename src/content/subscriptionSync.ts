@@ -46,6 +46,26 @@ export class SubscriptionSync {
         }
       }
 
+      // 1b. Backfill missing avatars for ANY channel currently missing one in storage
+      const initialAvatars = ChannelExtractor.getInitialAvatars();
+      if (initialAvatars.size > 0) {
+        for (const [ucId, ch] of Object.entries(currentChannels)) {
+          if (!ch.avatarUrl || ch.avatarUrl.startsWith('data:image')) {
+            const cleanHandle = (ch.handle || '').replace(/^[\/@]+/, '').toLowerCase();
+            const found =
+              initialAvatars.get(ucId) ||
+              initialAvatars.get(ch.handle) ||
+              initialAvatars.get(cleanHandle) ||
+              initialAvatars.get('@' + cleanHandle) ||
+              initialAvatars.get(ch.title.toLowerCase().trim());
+            if (found && found !== ch.avatarUrl && !found.startsWith('data:image')) {
+              currentChannels[ucId].avatarUrl = found;
+              hasChanges = true;
+            }
+          }
+        }
+      }
+
       // 2. Auto-categorize newly discovered channels if folders already exist
       if (newChannels.length > 0 && categories.length > 0) {
         const heuristicResults = HeuristicCategorizer.categorize(newChannels);

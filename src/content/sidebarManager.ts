@@ -6,6 +6,7 @@ import { AICategorizer } from '@/ai/categorizer';
 import { FeedFilter } from './feedFilter';
 import { CategoryDeck, SubscribedChannel } from '@/types';
 import { debounce } from '@/utils/debounce';
+import { SubscriptionSync } from './subscriptionSync';
 
 export class SidebarManager {
   private static containerId = 'subdeck-sidebar-container';
@@ -601,8 +602,18 @@ export class SidebarManager {
           const item = document.createElement('div');
           item.className = 'subdeck-channel-item';
 
-          // Channel avatar (20px circular profile picture)
-          if (ch.avatarUrl) {
+          const link = document.createElement('a');
+          link.className = 'subdeck-channel-link';
+          const safeUrl = ch.url.startsWith('https://') || ch.url.startsWith('/') ? ch.url : '#';
+          link.href = safeUrl;
+          link.title = ch.title;
+
+          const titleSpan = document.createElement('span');
+          titleSpan.className = 'subdeck-channel-title';
+          titleSpan.textContent = ch.title;
+
+          // Channel avatar (24px circular profile picture)
+          if (ch.avatarUrl && !ch.avatarUrl.startsWith('data:image')) {
             const avatar = document.createElement('img');
             avatar.className = 'subdeck-channel-avatar';
             avatar.src = ch.avatarUrl;
@@ -613,22 +624,17 @@ export class SidebarManager {
               const fallback = document.createElement('span');
               fallback.className = 'subdeck-channel-avatar-fallback';
               fallback.textContent = ch.title.charAt(0).toUpperCase();
-              item.insertBefore(fallback, link);
+              link.insertBefore(fallback, titleSpan);
             };
-            item.appendChild(avatar);
+            link.appendChild(avatar);
           } else {
             const fallback = document.createElement('span');
             fallback.className = 'subdeck-channel-avatar-fallback';
             fallback.textContent = ch.title.charAt(0).toUpperCase();
-            item.appendChild(fallback);
+            link.appendChild(fallback);
           }
 
-          const link = document.createElement('a');
-          link.className = 'subdeck-channel-link';
-          const safeUrl = ch.url.startsWith('https://') || ch.url.startsWith('/') ? ch.url : '#';
-          link.href = safeUrl;
-          link.title = ch.title;
-          link.textContent = ch.title;
+          link.appendChild(titleSpan);
 
           const removeBtn = document.createElement('button');
           removeBtn.className = 'subdeck-channel-remove-btn';
@@ -709,65 +715,7 @@ export class SidebarManager {
   }
 
   static async syncWithNativeSubscriptions(): Promise<void> {
-    const scraped = ChannelExtractor.scrapeFromSidebar();
-    if (scraped.length === 0) return;
-
-    const storageChannels = await SubDeckStorage.getChannels();
-    const categories = await SubDeckStorage.getCategories();
-    const handleToUcId = await SubDeckStorage.getHandleToUcIdMap();
-    let hasChanges = false;
-
-    // Purge any accidental system topics from storage
-    const SYSTEM_NAMES = new Set(['your videos', 'shopping', 'music', 'gaming', 'news', 'movies', 'live', 'podcasts', 'sports']);
-    for (const [ucId, ch] of Object.entries(storageChannels)) {
-      if (SYSTEM_NAMES.has(ch.title.toLowerCase())) {
-        delete storageChannels[ucId];
-        categories.forEach(cat => {
-          cat.channelIds = cat.channelIds.filter(id => id !== ucId);
-        });
-        hasChanges = true;
-      }
-    }
-
-    // 1. Reconcile newly discovered channels
-    for (const ch of scraped) {
-      if (!storageChannels[ch.ucId]) {
-        storageChannels[ch.ucId] = ch;
-        if (ch.handle) {
-          handleToUcId[ch.handle] = ch.ucId;
-        }
-        hasChanges = true;
-      }
-    }
-
-    // 2. Reconcile deleted/unsubscribed channels if sidebar is fully expanded
-    if (ChannelExtractor.isSidebarFullyExpanded()) {
-      const scrapedUcIds = new Set(scraped.map(c => c.ucId));
-      const scrapedHandles = new Set(scraped.map(c => (c.handle || '').toLowerCase()));
-
-      for (const [ucId, ch] of Object.entries(storageChannels)) {
-        const handleLower = (ch.handle || '').toLowerCase();
-        if (!scrapedUcIds.has(ucId) && !scrapedHandles.has(handleLower)) {
-          delete storageChannels[ucId];
-          if (ch.handle) delete handleToUcId[ch.handle];
-          categories.forEach(cat => {
-            cat.channelIds = cat.channelIds.filter(id => id !== ucId);
-          });
-          hasChanges = true;
-        }
-      }
-    }
-
-    // 3. Purge legacy __uncategorized__
-    const cleanCategories = categories.filter(c => c.id !== '__uncategorized__');
-    if (cleanCategories.length !== categories.length) {
-      hasChanges = true;
-    }
-
-    if (hasChanges) {
-      await SubDeckStorage.setAll({ channels: storageChannels, categories: cleanCategories, handleToUcId });
-      await this.render();
-    }
+    await SubscriptionSync.diffAndSync();
   }
 
   static clearActiveFilterHighlight(): void {

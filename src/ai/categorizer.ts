@@ -9,6 +9,7 @@ export class AICategorizer {
     if (channels.length === 0) return [];
 
     const settings = (await SubDeckStorage.getAll()).settings;
+    let result: CategoryDeck[];
 
     switch (settings.aiProvider) {
       case 'gemini-api':
@@ -17,17 +18,20 @@ export class AICategorizer {
             const cloudResult = await this.tryGeminiCloud(channels, settings.apiKey);
             if (cloudResult) {
               Logger.info('[SubShelf AI] Successfully organized using Gemini Cloud API');
-              return cloudResult;
+              result = cloudResult;
+              break;
             }
           } catch (err) {
             Logger.warn('[SubShelf AI] Gemini Cloud failed, falling back to heuristic:', err);
           }
         }
-        return HeuristicCategorizer.categorize(channels);
+        result = HeuristicCategorizer.categorize(channels);
+        break;
 
       case 'heuristic':
         Logger.info('[SubShelf AI] Organizing using Heuristic Categorizer');
-        return HeuristicCategorizer.categorize(channels);
+        result = HeuristicCategorizer.categorize(channels);
+        break;
 
       case 'gemini-nano':
       default:
@@ -36,7 +40,8 @@ export class AICategorizer {
           const nanoResult = await this.tryGeminiNano(channels);
           if (nanoResult) {
             Logger.info('[SubShelf AI] Successfully organized using Gemini Nano');
-            return nanoResult;
+            result = nanoResult;
+            break;
           }
         } catch (err) {
           Logger.warn('[SubShelf AI] Gemini Nano unavailable, falling back:', err);
@@ -48,7 +53,8 @@ export class AICategorizer {
             const cloudResult = await this.tryGeminiCloud(channels, settings.apiKey);
             if (cloudResult) {
               Logger.info('[SubShelf AI] Successfully organized using Gemini Cloud API');
-              return cloudResult;
+              result = cloudResult;
+              break;
             }
           } catch (err) {
             Logger.warn('[SubShelf AI] Gemini Cloud failed, falling back:', err);
@@ -57,8 +63,58 @@ export class AICategorizer {
 
         // Tier 3: Deterministic Keyword/Regex Heuristic
         Logger.info('[SubShelf AI] Organizing using Heuristic Categorizer');
-        return HeuristicCategorizer.categorize(channels);
+        result = HeuristicCategorizer.categorize(channels);
+        break;
     }
+
+    // Second pass: Run channels stuck in "general-other" through heuristic to rescue them
+    return this.rescueGeneralOther(result!, channels);
+  }
+
+  /**
+   * Takes channels assigned to "general-other" by AI and tries to place them
+   * via heuristic signatures/keywords. Only moves them if the heuristic finds
+   * a match (i.e. they don't stay in general-other in the heuristic result too).
+   */
+  private static rescueGeneralOther(decks: CategoryDeck[], allChannels: SubscribedChannel[]): CategoryDeck[] {
+    const generalDeck = decks.find(d => d.id === 'general-other');
+    if (!generalDeck || generalDeck.channelIds.length === 0) return decks;
+
+    const channelMap = new Map(allChannels.map(ch => [ch.ucId, ch]));
+    const stuckChannels = generalDeck.channelIds
+      .map(id => channelMap.get(id))
+      .filter((ch): ch is SubscribedChannel => Boolean(ch));
+
+    if (stuckChannels.length === 0) return decks;
+
+    const heuristicResult = HeuristicCategorizer.categorize(stuckChannels);
+    let rescued = 0;
+
+    for (const hDeck of heuristicResult) {
+      if (hDeck.id === 'general-other') continue;
+      if (hDeck.channelIds.length === 0) continue;
+
+      const targetDeck = decks.find(d => d.id === hDeck.id);
+      for (const ucId of hDeck.channelIds) {
+        // Move from general-other to the heuristic-matched deck
+        generalDeck.channelIds = generalDeck.channelIds.filter(id => id !== ucId);
+        if (targetDeck) {
+          if (!targetDeck.channelIds.includes(ucId)) {
+            targetDeck.channelIds.push(ucId);
+          }
+        } else {
+          // Create the deck if AI didn't produce it
+          decks.push({ ...hDeck, channelIds: [ucId] });
+        }
+        rescued++;
+      }
+    }
+
+    if (rescued > 0) {
+      Logger.info(`[SubShelf AI] Rescued ${rescued} channels from General & Others via heuristic fallback`);
+    }
+
+    return decks.filter(d => d.channelIds.length > 0);
   }
 
   private static async tryGeminiNano(channels: SubscribedChannel[]): Promise<CategoryDeck[] | null> {

@@ -2,6 +2,7 @@ import { SidebarManager } from './sidebarManager';
 import { HealthMonitor } from './healthMonitor';
 import { FeedFilter } from './feedFilter';
 import { SubscriptionSync } from './subscriptionSync';
+import { ChannelExtractor } from './channelExtractor';
 import { SubDeckStorage } from '@/utils/storage';
 import { debounce } from '@/utils/debounce';
 import { Logger } from '@/utils/logger';
@@ -33,9 +34,53 @@ class SubDeckCoordinator {
       if (!target) return;
       const confirmBtn = target.closest('#confirm-button, yt-confirm-dialog-renderer #confirm-button');
       if (confirmBtn) {
+        // Unsubscribe confirmed — remove channel by current page URL and also run full sync
+        const currentUrl = window.location.href;
+        setTimeout(() => {
+          SubscriptionSync.removeChannelByUrl(currentUrl);
+        }, 800);
         setTimeout(() => {
           SubscriptionSync.diffAndSync();
-        }, 1200);
+        }, 2000);
+      }
+    });
+
+    // Real-time subscribe/unsubscribe detection via YouTube's internal action events
+    document.addEventListener('yt-action', ((e: CustomEvent) => {
+      const actionName = e.detail?.actionName;
+      if (!actionName) return;
+
+      if (actionName === 'yt-subscribe' || actionName === 'yt-subscribe-endpoint') {
+        Logger.info('[SubShelf] Subscribe action detected');
+        // Delay to let YouTube's sidebar update, then sync (picks up new channel + auto-categorizes)
+        setTimeout(() => {
+          ChannelExtractor.autoExpandNativeSubscriptions(true);
+          SubscriptionSync.diffAndSync();
+        }, 1500);
+        // Second pass after sidebar fully renders
+        setTimeout(() => {
+          SubscriptionSync.diffAndSync();
+        }, 3500);
+      }
+
+      if (actionName === 'yt-unsubscribe' || actionName === 'yt-unsubscribe-endpoint') {
+        Logger.info('[SubShelf] Unsubscribe action detected');
+        const currentUrl = window.location.href;
+        setTimeout(() => {
+          SubscriptionSync.removeChannelByUrl(currentUrl);
+        }, 800);
+        setTimeout(() => {
+          SubscriptionSync.diffAndSync();
+        }, 2500);
+      }
+    }) as EventListener);
+
+    // Visibility-change fallback: sync when user switches back to YouTube tab
+    document.addEventListener('visibilitychange', () => {
+      if (document.visibilityState === 'visible') {
+        setTimeout(() => {
+          SubscriptionSync.diffAndSync();
+        }, 500);
       }
     });
 

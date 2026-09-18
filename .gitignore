@@ -35,3 +35,14 @@ coverage/
 # Temporary files
 *.tmp
 *.temp
+
+# Internal specifications & planning
+*BLUEPRINT*
+STORE_LISTING.md
+
+# Store submission promotional graphics & local marketing assets
+assets/store/
+assets/apple_ads/
+assets/*.jpeg
+assets/*.jpg
+scripts/generate_store_assets.py

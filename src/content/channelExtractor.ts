@@ -2,6 +2,7 @@ import { YT_SELECTORS, getSubscriptionSection } from '@/config/selectors';
 import { IdNormalizer } from '@/utils/idNormalizer';
 import { SubscribedChannel } from '@/types';
 import { isValidYouTubeAvatarUrl } from '@/utils/validators';
+import { Logger } from '@/utils/logger';
 
 // YouTube navigation items and system topics to exclude
 const SYSTEM_NAMES = new Set([
@@ -188,7 +189,7 @@ export class ChannelExtractor {
       if (SYSTEM_NAMES.has(title.toLowerCase())) return;
 
       // Extract real channel avatar directly from sidebar DOM entry
-      const imgEl = entry.querySelector('yt-img-shadow img, img') as HTMLImageElement | null;
+      const imgEl = entry.querySelector('yt-img-shadow img, yt-avatar-shape img, #avatar img, img') as HTMLImageElement | null;
       const ytImgShadow = entry.querySelector('yt-img-shadow') as HTMLElement | null;
       let avatarUrl = '';
       if (imgEl) {
@@ -221,6 +222,19 @@ export class ChannelExtractor {
 
       const channelKey = ucId || handle || '';
 
+      // Check extracted initial avatars cache as fallback (catches off-screen/unrendered items)
+      if (!avatarUrl || avatarUrl.startsWith('data:image')) {
+        const avatars = this.getInitialAvatars();
+        const cleanHandle = (handle || '').replace(/^[\/@]+/, '').toLowerCase();
+        avatarUrl =
+          avatars.get(channelKey) ||
+          avatars.get(handle || '') ||
+          avatars.get(cleanHandle) ||
+          avatars.get('@' + cleanHandle) ||
+          avatars.get(title.toLowerCase().trim()) ||
+          '';
+      }
+
       channels.push({
         ucId: channelKey,
         title,
@@ -232,6 +246,218 @@ export class ChannelExtractor {
     });
 
     return channels;
+  }
+
+  private static initialAvatarsCache = new Map<string, string>();
+
+  /**
+   * Merges avatars received externally into the cache.
+   */
+  static mergeAvatars(recordOrMap: Record<string, string> | Map<string, string>): void {
+    if (!recordOrMap) return;
+    if (recordOrMap instanceof Map) {
+      for (const [k, v] of recordOrMap.entries()) {
+        if (isValidYouTubeAvatarUrl(v)) {
+          this.initialAvatarsCache.set(k, v);
+        }
+      }
+    } else {
+      for (const [k, v] of Object.entries(recordOrMap)) {
+        if (isValidYouTubeAvatarUrl(v)) {
+          this.initialAvatarsCache.set(k, v);
+        }
+      }
+    }
+  }
+
+  /**
+   * Returns channel avatars extracted from YouTube's server-rendered JSON payloads.
+   * Provides instant, high-resolution avatar URLs for ALL subscribed channels,
+   * even if they haven't been scrolled into view in YouTube's native sidebar.
+   */
+  static getInitialAvatars(): Map<string, string> {
+    if (this.initialAvatarsCache.size > 0) {
+      return this.initialAvatarsCache;
+    }
+
+    const map = this.initialAvatarsCache;
+
+    try {
+      const scripts = Array.from(document.querySelectorAll('script'));
+      for (const script of scripts) {
+        const text = script.textContent || '';
+        if (!text.includes('ytInitialData') && !text.includes('ytInitialGuideData')) continue;
+
+        for (const varName of ['ytInitialGuideData', 'ytInitialData']) {
+          const marker = text.indexOf(varName);
+          if (marker === -1) continue;
+
+          const equalsIndex = text.indexOf('=', marker);
+          if (equalsIndex === -1) continue;
+
+          // Support JSON.parse('...') and direct inline JSON object
+          const parseIndex = text.indexOf('JSON.parse(', equalsIndex);
+          if (parseIndex !== -1 && parseIndex < equalsIndex + 20) {
+            const quoteChar = text[parseIndex + 11];
+            if (quoteChar === '\'' || quoteChar === '"') {
+              const startQuote = parseIndex + 11;
+              let endQuote = -1;
+              let escape = false;
+              for (let q = startQuote + 1; q < text.length; q++) {
+                if (escape) { escape = false; continue; }
+                if (text[q] === '\\') { escape = true; continue; }
+                if (text[q] === quoteChar) { endQuote = q; break; }
+              }
+              if (endQuote !== -1) {
+                try {
+                  const rawEscaped = text.substring(startQuote + 1, endQuote);
+                  const unescaped = JSON.parse(`"${rawEscaped.replace(/"/g, '\\"')}"`);
+                  const data = JSON.parse(unescaped);
+                  this.collectAvatarsFromData(data, map, 0);
+                  continue;
+                } catch {}
+              }
+            }
+          }
+
+          const braceStart = text.indexOf('{', equalsIndex);
+          if (braceStart === -1) continue;
+
+          let depth = 0;
+          let inString = false;
+          let escape = false;
+          let jsonStr = '';
+
+          for (let j = braceStart; j < text.length; j++) {
+            const char = text[j];
+            if (escape) {
+              escape = false;
+              continue;
+            }
+            if (char === '\\') {
+              escape = true;
+              continue;
+            }
+            if (char === '"') {
+              inString = !inString;
+              continue;
+            }
+            if (!inString) {
+              if (char === '{') depth++;
+              else if (char === '}') {
+                depth--;
+                if (depth === 0) {
+                  jsonStr = text.substring(braceStart, j + 1);
+                  break;
+                }
+              }
+            }
+          }
+
+          if (jsonStr) {
+            try {
+              const data = JSON.parse(jsonStr);
+              this.collectAvatarsFromData(data, map, 0);
+            } catch {}
+          }
+        }
+      }
+    } catch (err) {
+      Logger.warn('[SubShelf] Error extracting initial avatars from script tags:', err);
+    }
+
+    return map;
+  }
+
+  private static collectAvatarsFromData(obj: any, map: Map<string, string>, depth = 0): void {
+    if (!obj || typeof obj !== 'object' || depth > 20) return;
+
+    const addAvatar = (key: string | undefined | null, rawUrl: string | undefined | null) => {
+      if (!key || !rawUrl) return;
+      let url = rawUrl;
+      if (url.startsWith('//')) url = 'https:' + url;
+      if (url.startsWith('data:image')) return;
+      if (!isValidYouTubeAvatarUrl(url)) return;
+      const crispUrl = url.replace(/=s\d+(-c-k)?/, '=s88$1');
+      const cleanKey = key.trim();
+      if (cleanKey) map.set(cleanKey, crispUrl);
+    };
+
+    const extractThumb = (thumbObj: any): string | null => {
+      if (!thumbObj) return null;
+      const arr = thumbObj.thumbnails || thumbObj.sources || (Array.isArray(thumbObj) ? thumbObj : null);
+      if (Array.isArray(arr) && arr.length > 0) {
+        return arr[arr.length - 1]?.url || null;
+      }
+      return null;
+    };
+
+    // 1. guideEntryRenderer
+    if (obj.guideEntryRenderer) {
+      const ger = obj.guideEntryRenderer;
+      const ucId = ger.navigationEndpoint?.browseEndpoint?.browseId;
+      const handle = ger.navigationEndpoint?.browseEndpoint?.canonicalBaseUrl;
+      const thumbUrl = extractThumb(ger.thumbnail);
+      if (thumbUrl) {
+        addAvatar(ucId, thumbUrl);
+        if (handle) {
+          const clean = handle.replace(/^[\/@]+/, '').toLowerCase();
+          addAvatar(clean, thumbUrl);
+          addAvatar('@' + clean, thumbUrl);
+        }
+        const title =
+          typeof ger.title === 'string'
+            ? ger.title
+            : (ger.title?.runs?.[0]?.text || ger.title?.simpleText || ger.formattedTitle?.simpleText);
+        if (title) addAvatar(title.toLowerCase().trim(), thumbUrl);
+      }
+    }
+
+    // 2. guideEntryViewModel (modern YouTube Web Components)
+    if (obj.guideEntryViewModel) {
+      const vm = obj.guideEntryViewModel;
+      const browseEp = vm.rendererContext?.commandContext?.onTap?.innertubeCommand?.browseEndpoint;
+      const ucId = browseEp?.browseId;
+      const handle = browseEp?.canonicalBaseUrl;
+      const thumbUrl = extractThumb(vm.thumbnail);
+      if (thumbUrl) {
+        addAvatar(ucId, thumbUrl);
+        if (handle) {
+          const clean = handle.replace(/^[\/@]+/, '').toLowerCase();
+          addAvatar(clean, thumbUrl);
+          addAvatar('@' + clean, thumbUrl);
+        }
+        const title = vm.title?.content || vm.formattedTitle?.content;
+        if (title) addAvatar(title.toLowerCase().trim(), thumbUrl);
+      }
+    }
+
+    // 3. channelRenderer, compactChannelRenderer, gridChannelRenderer
+    if (obj.channelRenderer || obj.compactChannelRenderer || obj.gridChannelRenderer) {
+      const cr = obj.channelRenderer || obj.compactChannelRenderer || obj.gridChannelRenderer;
+      const ucId = cr.channelId;
+      const handle = cr.navigationEndpoint?.browseEndpoint?.canonicalBaseUrl;
+      const thumbUrl = extractThumb(cr.thumbnail);
+      if (thumbUrl) {
+        addAvatar(ucId, thumbUrl);
+        if (handle) {
+          const clean = handle.replace(/^[\/@]+/, '').toLowerCase();
+          addAvatar(clean, thumbUrl);
+          addAvatar('@' + clean, thumbUrl);
+        }
+        const title =
+          typeof cr.title === 'string'
+            ? cr.title
+            : (cr.title?.runs?.[0]?.text || cr.title?.simpleText);
+        if (title) addAvatar(title.toLowerCase().trim(), thumbUrl);
+      }
+    }
+
+    for (const key of Object.keys(obj)) {
+      if (typeof obj[key] === 'object' && obj[key] !== null) {
+        this.collectAvatarsFromData(obj[key], map, depth + 1);
+      }
+    }
   }
 
   static scrapeFromFeedCard(card: HTMLElement): { ucId: string | null; handle: string | null } | null {

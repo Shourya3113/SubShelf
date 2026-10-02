@@ -23,6 +23,38 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     return false;
   }
 
+  if (message?.type === 'subshelf-get-api-key') {
+    // Security: Only allow extension pages (popup) to request the API key; reject content scripts
+    const isExtensionPage = sender.url?.startsWith(chrome.runtime.getURL(''));
+    if (!isExtensionPage) {
+      Logger.warn('[SubShelf Background] Blocked unauthorized API key request from:', sender.url);
+      sendResponse({ success: false, apiKey: '' });
+      return false;
+    }
+    (async () => {
+      const apiKey = await SubDeckStorage.getApiKey();
+      sendResponse({ success: true, apiKey: apiKey || '' });
+    })();
+    return true;
+  }
+
+  if (message?.type === 'subshelf-set-api-key') {
+    // Security: Only allow extension pages (popup) to set the API key; reject content scripts
+    const isExtensionPage = sender.url?.startsWith(chrome.runtime.getURL(''));
+    if (!isExtensionPage) {
+      Logger.warn('[SubShelf Background] Blocked unauthorized API key update from:', sender.url);
+      sendResponse({ success: false });
+      return false;
+    }
+    (async () => {
+      if (typeof message.apiKey === 'string') {
+        await SubDeckStorage.setApiKey(message.apiKey);
+      }
+      sendResponse({ success: true });
+    })();
+    return true;
+  }
+
   if (message?.type === 'subdeck-auto-organize') {
     (async () => {
       try {
@@ -42,7 +74,8 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
           return;
         }
 
-        const { decks: categorizedDecks, fallbackNotice } = await AICategorizer.categorizeAll(channels);
+        const apiKey = await SubDeckStorage.getApiKey();
+        const { decks: categorizedDecks, fallbackNotice } = await AICategorizer.categorizeAll(channels, apiKey);
         const state = await SubDeckStorage.getAll();
 
         const finalDecks = AICategorizer.applyOverrides(

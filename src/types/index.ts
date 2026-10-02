@@ -29,6 +29,7 @@ export interface SubDeckStorageSchema {
   settings: {
     aiProvider: 'gemini-nano' | 'gemini-api' | 'openai' | 'heuristic';
     apiKey?: string;
+    geminiModel?: string;
     autoSyncOnSubscribe: boolean;
     hideShortsFromFeed: boolean;
     themeMode: 'auto' | 'dark' | 'light';
@@ -36,6 +37,8 @@ export interface SubDeckStorageSchema {
   };
   lastScrapedAt: number;
 }
+
+export const DEFAULT_GEMINI_CLOUD_MODEL = 'gemini-2.5-flash';
 
 export const UNCATEGORIZED_DECK: CategoryDeck = {
   id: '__uncategorized__',
@@ -58,6 +61,7 @@ export const DEFAULT_STORAGE: SubDeckStorageSchema = {
   manualAssignments: {},
   settings: {
     aiProvider: 'gemini-nano',
+    geminiModel: DEFAULT_GEMINI_CLOUD_MODEL,
     autoSyncOnSubscribe: true,
     hideShortsFromFeed: false,
     themeMode: 'auto',

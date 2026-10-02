@@ -42,7 +42,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
           return;
         }
 
-        const categorizedDecks = await AICategorizer.categorizeAll(channels);
+        const { decks: categorizedDecks, fallbackNotice } = await AICategorizer.categorizeAll(channels);
         const state = await SubDeckStorage.getAll();
 
         const finalDecks = AICategorizer.applyOverrides(
@@ -56,7 +56,12 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         await SubDeckStorage.setAll({ categories: finalDecks });
 
         Logger.info(`[SubShelf Background] Categorized into ${finalDecks.length} unique decks`);
-        sendResponse({ success: true, count: channels.length, decks: finalDecks.length });
+        sendResponse({
+          success: true,
+          count: channels.length,
+          decks: finalDecks.length,
+          fallbackNotice,
+        });
       } catch (err) {
         Logger.error('[SubShelf Background] Auto-organization failed:', err);
         // Security: Send sanitized error message without leaking sensitive strings

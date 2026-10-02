@@ -57,7 +57,7 @@
         <label class="settings-label">AI Categorization Model</label>
         <select id="setting-ai-provider" class="select-input">
           <option value="gemini-nano">Gemini Nano (Chrome Built-in AI)</option>
-          <option value="gemini-api">Google Gemini 1.5 Flash (Cloud API)</option>
+          <option value="gemini-api">Google Gemini (Cloud API)</option>
           <option value="heuristic">Offline Regex & Keywords</option>
         </select>
       </div>
@@ -66,6 +66,12 @@
         <label class="settings-label">Gemini API Key (Optional)</label>
         <input type="password" id="setting-api-key" class="text-input" placeholder="AIzaSy..." />
         <span class="settings-help">Required only for Gemini Cloud API tier.</span>
+      </div>
+
+      <div class="settings-group" id="model-group">
+        <label class="settings-label">Gemini Cloud Model ID</label>
+        <input type="text" id="setting-gemini-model" class="text-input" placeholder="gemini-2.5-flash" />
+        <span class="settings-help">Default: gemini-2.5-flash (e.g. gemini-2.5-flash, gemini-2.5-pro)</span>
       </div>
 
       <div class="settings-group toggle-group">

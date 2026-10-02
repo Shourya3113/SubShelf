@@ -4,7 +4,6 @@ import { SidebarManager } from './sidebarManager';
 import { Logger } from '@/utils/logger';
 import { CategoryDeck, SubscribedChannel } from '@/types';
 import { HeuristicCategorizer } from '@/ai/heuristic';
-import { isValidYouTubeAvatarUrl } from '@/utils/validators';
 
 export class SubscriptionSync {
   private static isSyncing = false;
@@ -40,30 +39,10 @@ export class SubscriptionSync {
           hasChanges = true;
           Logger.info(`[SubShelf] Discovered new subscription: ${ch.title} (${ch.ucId})`);
         } else {
-          // Update avatar URL if it changed (keep avatars fresh)
+          // Update avatar URL if it changed or was previously missing
           if (ch.avatarUrl && ch.avatarUrl !== currentChannels[ch.ucId].avatarUrl) {
             currentChannels[ch.ucId].avatarUrl = ch.avatarUrl;
             hasChanges = true;
-          }
-        }
-      }
-
-      // 1b. Backfill missing avatars for ANY channel currently missing one in storage
-      const initialAvatars = ChannelExtractor.getInitialAvatars();
-      if (initialAvatars.size > 0) {
-        for (const [ucId, ch] of Object.entries(currentChannels)) {
-          if (!ch.avatarUrl || ch.avatarUrl.startsWith('data:image')) {
-            const cleanHandle = (ch.handle || '').replace(/^[\/@]+/, '').toLowerCase();
-            const found =
-              initialAvatars.get(ucId) ||
-              initialAvatars.get(ch.handle) ||
-              initialAvatars.get(cleanHandle) ||
-              initialAvatars.get('@' + cleanHandle) ||
-              initialAvatars.get(ch.title.toLowerCase().trim());
-            if (found && found !== ch.avatarUrl && !found.startsWith('data:image')) {
-              currentChannels[ucId].avatarUrl = found;
-              hasChanges = true;
-            }
           }
         }
       }
@@ -145,44 +124,5 @@ export class SubscriptionSync {
     await SubDeckStorage.removeChannel(ucId);
     await SidebarManager.render();
     Logger.info(`[SubShelf] Removed unsubscribed channel by URL: ${handle} (${ucId})`);
-  }
-
-  /**
-   * Applies an avatar map (from ytInitialData / MAIN-world broadcast) to channels in storage
-   * and triggers a re-render if any channel avatars were updated.
-   */
-  static async applyAvatarMap(avatarMap: Map<string, string>): Promise<boolean> {
-    if (!SubDeckStorage.isContextValid() || avatarMap.size === 0) return false;
-    try {
-      const state = await SubDeckStorage.getAll();
-      const currentChannels = { ...state.channels };
-      let hasChanges = false;
-
-      for (const [ucId, ch] of Object.entries(currentChannels)) {
-        if (!ch.avatarUrl || ch.avatarUrl.startsWith('data:image')) {
-          const cleanHandle = (ch.handle || '').replace(/^[\/@]+/, '').toLowerCase();
-          const found =
-            avatarMap.get(ucId) ||
-            avatarMap.get(ch.handle) ||
-            avatarMap.get(cleanHandle) ||
-            avatarMap.get('@' + cleanHandle) ||
-            avatarMap.get(ch.title.toLowerCase().trim());
-          if (found && found !== ch.avatarUrl && isValidYouTubeAvatarUrl(found)) {
-            currentChannels[ucId] = { ...ch, avatarUrl: found };
-            hasChanges = true;
-          }
-        }
-      }
-
-      if (hasChanges) {
-        await chrome.storage.local.set({ channels: currentChannels });
-        await SidebarManager.render();
-        Logger.info('[SubShelf] Backfilled channel avatars from broadcast');
-        return true;
-      }
-    } catch (err) {
-      Logger.error('Failed to apply avatar map:', err);
-    }
-    return false;
   }
 }

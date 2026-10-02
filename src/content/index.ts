@@ -6,7 +6,6 @@ import { ChannelExtractor } from './channelExtractor';
 import { SubDeckStorage } from '@/utils/storage';
 import { debounce } from '@/utils/debounce';
 import { Logger } from '@/utils/logger';
-import { isValidYouTubeAvatarUrl } from '@/utils/validators';
 
 class SubDeckCoordinator {
   static init(): void {
@@ -31,32 +30,6 @@ class SubDeckCoordinator {
         }
       });
     } catch {}
-
-    // Receive avatar broadcast from MAIN-world script exclusively via CustomEvent
-    const handleAvatarBroadcast = (rawAvatars: Record<string, string>) => {
-      if (!SubDeckStorage.isContextValid() || !rawAvatars || typeof rawAvatars !== 'object') return;
-      const safeEntries: [string, string][] = [];
-      for (const [k, v] of Object.entries(rawAvatars)) {
-        if (isValidYouTubeAvatarUrl(v)) {
-          safeEntries.push([k, v]);
-        }
-      }
-      if (safeEntries.length === 0) return;
-      const avatarMap = new Map<string, string>(safeEntries);
-      ChannelExtractor.mergeAvatars(avatarMap);
-      SubscriptionSync.applyAvatarMap(avatarMap);
-    };
-
-    document.addEventListener('subshelf-avatars-broadcast', ((e: CustomEvent) => {
-      if (e.detail && typeof e.detail === 'object') {
-        handleAvatarBroadcast(e.detail);
-      }
-    }) as EventListener);
-
-    // Request avatars from MAIN-world script
-    this.requestAvatars();
-    setTimeout(() => this.requestAvatars(), 1000);
-    setTimeout(() => this.requestAvatars(), 3000);
 
     // Detect unsubscribe confirmation dialog clicks on YouTube pages
     document.addEventListener('click', (e) => {
@@ -178,17 +151,11 @@ class SubDeckCoordinator {
           FeedFilter.stopObserving();
           SidebarManager.clearActiveFilterHighlight();
         }
-        this.requestAvatars();
       }
     } catch (err) {
       Logger.error('Navigation handler error:', err);
     }
   }, 350);
-
-  static requestAvatars(): void {
-    document.dispatchEvent(new CustomEvent('subshelf-request-avatars'));
-    window.postMessage({ type: 'SUBSHELF_REQUEST_AVATARS' }, '*');
-  }
 
   static handleDataUpdate = debounce(async () => {
     if (!SubDeckStorage.isContextValid()) return;

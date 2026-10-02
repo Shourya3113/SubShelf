@@ -123,6 +123,7 @@ export class AICategorizer {
           channelIds: [],
           isCollapsed: true,
           sortOrder: 99,
+          isSystem: true,
         };
         result!.push(generalDeck);
       }
@@ -176,7 +177,7 @@ export class AICategorizer {
           }
         } else {
           // Create the deck if AI didn't produce it
-          decks.push({ ...hDeck, channelIds: [ucId] });
+          decks.push({ ...hDeck, channelIds: [ucId], isSystem: true });
         }
         rescued++;
       }
@@ -368,6 +369,7 @@ export class AICategorizer {
       channelIds: Array.from(aggregatedCategories.get(tax.id) || []),
       isCollapsed: true,
       sortOrder: idx,
+      isSystem: true,
     }));
 
     return finalDecks.filter(d => d.channelIds.length > 0);
@@ -464,6 +466,7 @@ export class AICategorizer {
           channelIds: validIds,
           isCollapsed: true,
           sortOrder: idx,
+          isSystem: true,
         };
       });
 
@@ -486,6 +489,7 @@ export class AICategorizer {
             channelIds: [],
             isCollapsed: true,
             sortOrder: 99,
+            isSystem: true,
           };
           decks.push(generalDeck);
         }
@@ -520,16 +524,30 @@ export class AICategorizer {
     channelExclusions: Record<string, string[]>,
     allChannels: SubscribedChannel[]
   ): CategoryDeck[] {
-    const obsoleteSystemIds = new Set([
-      'education', 'tech', 'music', 'gaming', 'entertainment',
-      'news-politics', 'general-other', '__uncategorized__',
+    // Dynamically derive known system deck IDs from taxonomy, plus uncategorized and legacy IDs
+    const systemDeckIds = new Set<string>([
+      ...SUBDECK_TAXONOMY.map(t => t.id),
+      '__uncategorized__',
+      'education',
+      'tech',
+      'music',
+      'gaming',
+      'entertainment',
+      'news-politics',
+      'general-other',
+      'finance',
+      'fitness',
+      'lifestyle',
     ]);
-    const systemDeckNames = new Set(categorizedDecks.map(d => d.name.toLowerCase().trim()));
+    const systemDeckNames = new Set<string>([
+      ...SUBDECK_TAXONOMY.map(t => t.name.toLowerCase().trim()),
+      ...categorizedDecks.map(d => d.name.toLowerCase().trim()),
+    ]);
 
-    // 1. Preserve custom user-created decks
+    // 1. Preserve custom user-created decks (exclude any system or taxonomy decks)
     const customDecks = currentCategories.filter(c =>
       !c.isSystem &&
-      !obsoleteSystemIds.has(c.id) &&
+      !systemDeckIds.has(c.id) &&
       !systemDeckNames.has(c.name.toLowerCase().trim()) &&
       !categorizedDecks.some(d => d.id === c.id)
     );
@@ -574,6 +592,21 @@ export class AICategorizer {
           if (existing) {
             targetDeck = { ...existing, channelIds: [] };
             combinedDecks.push(targetDeck);
+          } else {
+            const tax = SUBDECK_TAXONOMY.find(t => t.id === targetId);
+            if (tax) {
+              targetDeck = {
+                id: tax.id,
+                name: tax.name,
+                icon: tax.icon,
+                color: tax.color,
+                channelIds: [],
+                isCollapsed: true,
+                sortOrder: 90,
+                isSystem: true,
+              };
+              combinedDecks.push(targetDeck);
+            }
           }
         }
         if (targetDeck && !targetDeck.channelIds.includes(ucId)) {

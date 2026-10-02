@@ -90,6 +90,7 @@ class PopupManager {
           channelIds: [],
           isCollapsed: true,
           sortOrder: categories.length,
+          isSystem: false,
         });
       }
 

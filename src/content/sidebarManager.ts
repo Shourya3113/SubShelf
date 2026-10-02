@@ -360,6 +360,7 @@ export class SidebarManager {
           channelIds: [],
           isCollapsed: false,
           sortOrder: currentCategories.length,
+          isSystem: false,
         });
         await SubDeckStorage.setAll({ categories: currentCategories });
         folderInput.value = '';

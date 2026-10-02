@@ -39,7 +39,8 @@ export interface SubDeckStorageSchema {
 }
 
 export const DEFAULT_GEMINI_CLOUD_MODEL = 'gemini-2.5-flash';
-export const CURRENT_SCHEMA_VERSION = 1;
+export const CURRENT_SCHEMA_VERSION = 2;
+export const API_KEY_FIELD = 'geminiApiKey';
 
 export const UNCATEGORIZED_DECK: CategoryDeck = {
   id: '__uncategorized__',

@@ -23,18 +23,6 @@ def package_extension():
         manifest = json.load(f)
         version = manifest.get('version', '1.0.0')
 
-    # Security: Ensure web_accessible_resources has use_dynamic_url: true to prevent fingerprinting
-    if 'web_accessible_resources' in manifest and isinstance(manifest['web_accessible_resources'], list):
-        updated = False
-        for entry in manifest['web_accessible_resources']:
-            if isinstance(entry, dict) and entry.get('use_dynamic_url') is not True:
-                entry['use_dynamic_url'] = True
-                updated = True
-        if updated:
-            with open(manifest_path, 'w', encoding='utf-8') as f:
-                json.dump(manifest, f, indent=2)
-            print("  ✓ Set use_dynamic_url: true on web_accessible_resources in dist/manifest.json")
-
     zip_filename = f"subshelf-v{version}.zip"
     zip_path = os.path.join(project_root, zip_filename)
 

@@ -1,6 +1,7 @@
-import { SubDeckStorageSchema, DEFAULT_STORAGE, SubscribedChannel, CategoryDeck, CURRENT_SCHEMA_VERSION } from '@/types';
+import { SubDeckStorageSchema, DEFAULT_STORAGE, SubscribedChannel, CategoryDeck, CURRENT_SCHEMA_VERSION, API_KEY_FIELD } from '@/types';
 
-export const SUBSHELF_SECURE_API_KEY = 'subshelf_gemini_api_key';
+export const SUBSHELF_SECURE_API_KEY = API_KEY_FIELD;
+export { API_KEY_FIELD };
 
 export class SubDeckStorage {
   static isContextValid(): boolean {
@@ -37,7 +38,7 @@ export class SubDeckStorage {
           const legacyKey = data.settings.apiKey;
           delete data.settings.apiKey;
           chrome.storage.local.set({
-            [SUBSHELF_SECURE_API_KEY]: legacyKey,
+            [API_KEY_FIELD]: legacyKey,
             settings: data.settings,
           }).catch(() => {});
         } else {
@@ -46,7 +47,8 @@ export class SubDeckStorage {
       }
 
       // Security: Strip internal dedicated keys and any apiKey from the returned state
-      delete (data as any)[SUBSHELF_SECURE_API_KEY];
+      delete (data as any)[API_KEY_FIELD];
+      delete (data as any)['subshelf_gemini_api_key'];
       if (data.settings) {
         delete data.settings.apiKey;
       }
@@ -431,8 +433,8 @@ export class SubDeckStorage {
       return undefined;
     }
     try {
-      const res = await chrome.storage.local.get(SUBSHELF_SECURE_API_KEY);
-      return res[SUBSHELF_SECURE_API_KEY] || undefined;
+      const res = await chrome.storage.local.get([API_KEY_FIELD, 'subshelf_gemini_api_key']);
+      return res[API_KEY_FIELD] || res['subshelf_gemini_api_key'] || undefined;
     } catch {
       return undefined;
     }
@@ -449,9 +451,10 @@ export class SubDeckStorage {
     try {
       const trimmed = apiKey ? apiKey.trim() : '';
       if (!trimmed) {
-        await chrome.storage.local.remove(SUBSHELF_SECURE_API_KEY);
+        await chrome.storage.local.remove([API_KEY_FIELD, 'subshelf_gemini_api_key']);
       } else {
-        await chrome.storage.local.set({ [SUBSHELF_SECURE_API_KEY]: trimmed });
+        await chrome.storage.local.set({ [API_KEY_FIELD]: trimmed });
+        await chrome.storage.local.remove('subshelf_gemini_api_key');
       }
     } catch {
       // Ignore if context is invalidated

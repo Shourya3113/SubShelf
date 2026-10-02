@@ -92,7 +92,47 @@ export class AICategorizer {
         break;
     }
 
-    // Second pass: Run channels stuck in "general-other" through heuristic to rescue them
+    // Second pass: Deduplicate across all decks and guarantee 100% assignment
+    const globalAssigned = new Set<string>();
+    result!.forEach(d => {
+      d.channelIds = d.channelIds.filter(id => {
+        if (globalAssigned.has(id)) return false;
+        globalAssigned.add(id);
+        return true;
+      });
+    });
+
+    const unassignedChannels = channels.filter(c => !globalAssigned.has(c.ucId));
+    if (unassignedChannels.length > 0) {
+      Logger.info(`[SubShelf AI] Pushing ${unassignedChannels.length} unassigned channels to general-other for rescue`);
+      let generalDeck = result!.find(d => d.id === 'general-other');
+      if (!generalDeck) {
+        const genTax = SUBDECK_TAXONOMY.find(t => t.id === 'general-other') || {
+          id: 'general-other',
+          name: 'General & Others',
+          icon: '🌐',
+          color: '#6B7280',
+        };
+        generalDeck = {
+          id: genTax.id,
+          name: genTax.name,
+          icon: genTax.icon,
+          color: genTax.color,
+          channelIds: [],
+          isCollapsed: true,
+          sortOrder: 99,
+        };
+        result!.push(generalDeck);
+      }
+      for (const ch of unassignedChannels) {
+        if (!globalAssigned.has(ch.ucId)) {
+          globalAssigned.add(ch.ucId);
+          generalDeck.channelIds.push(ch.ucId);
+        }
+      }
+    }
+
+    // Third pass: Run channels in "general-other" through heuristic to rescue them
     const rescuedDecks = this.rescueGeneralOther(result!, channels);
     return {
       decks: rescuedDecks,
@@ -398,12 +438,21 @@ export class AICategorizer {
       }
 
       const safeParsed = parsed as Record<string, unknown>;
+      const seenAssigned = new Set<string>();
 
       const decks: CategoryDeck[] = SUBDECK_TAXONOMY.map((tax, idx) => {
         const rawIds = safeParsed[tax.id];
-        const validIds = Array.isArray(rawIds)
-          ? rawIds.filter((id): id is string => typeof id === 'string' && knownIds.has(id))
-          : [];
+        const validIds: string[] = [];
+
+        if (Array.isArray(rawIds)) {
+          for (const id of rawIds) {
+            // Deduplicate: Each channel may only belong to one category deck
+            if (typeof id === 'string' && knownIds.has(id) && !seenAssigned.has(id)) {
+              seenAssigned.add(id);
+              validIds.push(id);
+            }
+          }
+        }
 
         return {
           id: tax.id,
@@ -416,8 +465,36 @@ export class AICategorizer {
         };
       });
 
-      const assignedIds = new Set<string>();
-      decks.forEach(d => d.channelIds.forEach(id => assignedIds.add(id)));
+      // Guarantee 100% assignment: push any channels omitted by the model to general-other
+      const omittedChannels = channels.filter(c => !seenAssigned.has(c.ucId));
+      if (omittedChannels.length > 0) {
+        let generalDeck = decks.find(d => d.id === 'general-other');
+        if (!generalDeck) {
+          const genTax = SUBDECK_TAXONOMY.find(t => t.id === 'general-other') || {
+            id: 'general-other',
+            name: 'General & Others',
+            icon: '🌐',
+            color: '#6B7280',
+          };
+          generalDeck = {
+            id: genTax.id,
+            name: genTax.name,
+            icon: genTax.icon,
+            color: genTax.color,
+            channelIds: [],
+            isCollapsed: true,
+            sortOrder: 99,
+          };
+          decks.push(generalDeck);
+        }
+
+        for (const ch of omittedChannels) {
+          if (!seenAssigned.has(ch.ucId)) {
+            seenAssigned.add(ch.ucId);
+            generalDeck.channelIds.push(ch.ucId);
+          }
+        }
+      }
 
       return decks.filter(d => d.channelIds.length > 0);
     } catch (err) {

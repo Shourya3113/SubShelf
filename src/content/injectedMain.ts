@@ -122,16 +122,6 @@
         })
       );
     } catch {}
-
-    try {
-      window.postMessage(
-        {
-          type: 'SUBSHELF_AVATARS_BROADCAST',
-          avatars: globalAvatars,
-        },
-        '*'
-      );
-    } catch {}
   }
 
   function processData(data: any) {

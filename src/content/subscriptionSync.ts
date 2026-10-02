@@ -4,6 +4,7 @@ import { SidebarManager } from './sidebarManager';
 import { Logger } from '@/utils/logger';
 import { CategoryDeck, SubscribedChannel } from '@/types';
 import { HeuristicCategorizer } from '@/ai/heuristic';
+import { isValidYouTubeAvatarUrl } from '@/utils/validators';
 
 export class SubscriptionSync {
   private static isSyncing = false;
@@ -177,7 +178,7 @@ export class SubscriptionSync {
             avatarMap.get(cleanHandle) ||
             avatarMap.get('@' + cleanHandle) ||
             avatarMap.get(ch.title.toLowerCase().trim());
-          if (found && found !== ch.avatarUrl && !found.startsWith('data:image')) {
+          if (found && found !== ch.avatarUrl && isValidYouTubeAvatarUrl(found)) {
             currentChannels[ucId] = { ...ch, avatarUrl: found };
             hasChanges = true;
           }

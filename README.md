@@ -171,6 +171,12 @@ SubShelf/
 * [Privacy Policy (`PRIVACY_POLICY.md`)](./PRIVACY_POLICY.md) — Certified zero-data collection policy for Web Store submission.
 * [Architecture Blueprint (`SUBDECK_BLUEPRINT.md`)](./SUBDECK_BLUEPRINT.md) — Full 6-day build specifications and domain models.
 
+## ☕ Support the Project
+
+SubShelf is 100% free with no subscriptions, paywalls, or locked features. If SubShelf has saved you time and decluttered your YouTube experience, consider supporting ongoing development:
+
+[![Buy Me A Coffee](https://img.shields.io/badge/Buy%20Me%20A%20Coffee-Donate-yellow.svg?logo=buy-me-a-coffee)](https://buymeacoffee.com/subshelf)
+
 ---
 
 ## 📄 License

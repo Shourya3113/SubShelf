@@ -1,5 +1,6 @@
 import { SubDeckExportPayload, SubDeckStorageSchema, CategoryDeck, SubscribedChannel } from '@/types';
 import { SubDeckStorage } from './storage';
+import { isValidYouTubeAvatarUrl } from './validators';
 
 export class ExportImport {
   static async exportToFile(): Promise<void> {
@@ -83,7 +84,7 @@ export class ExportImport {
           title: ch.title.slice(0, 200),
           handle: typeof ch.handle === 'string' ? ch.handle.slice(0, 100) : '',
           url: typeof ch.url === 'string' && (ch.url.startsWith('https://') || ch.url.startsWith('/')) ? ch.url.slice(0, 300) : '',
-          avatarUrl: typeof ch.avatarUrl === 'string' && (ch.avatarUrl.startsWith('https://') || ch.avatarUrl.startsWith('http://')) ? ch.avatarUrl.slice(0, 500) : '',
+          avatarUrl: isValidYouTubeAvatarUrl(ch.avatarUrl) ? (ch.avatarUrl as string).slice(0, 500) : '',
           discoveredAt: typeof ch.discoveredAt === 'number' ? ch.discoveredAt : Date.now(),
         };
         if (ch.handle) {

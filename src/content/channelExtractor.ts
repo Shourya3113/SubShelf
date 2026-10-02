@@ -1,6 +1,7 @@
 import { YT_SELECTORS, getSubscriptionSection } from '@/config/selectors';
 import { IdNormalizer } from '@/utils/idNormalizer';
 import { SubscribedChannel } from '@/types';
+import { isValidYouTubeAvatarUrl } from '@/utils/validators';
 
 // YouTube navigation items and system topics to exclude
 const SYSTEM_NAMES = new Set([
@@ -263,13 +264,13 @@ export class ChannelExtractor {
     if (!recordOrMap) return;
     if (recordOrMap instanceof Map) {
       for (const [k, v] of recordOrMap.entries()) {
-        if (v && !v.startsWith('data:image')) {
+        if (isValidYouTubeAvatarUrl(v)) {
           this.initialAvatarsCache.set(k, v);
         }
       }
     } else {
       for (const [k, v] of Object.entries(recordOrMap)) {
-        if (v && !v.startsWith('data:image')) {
+        if (isValidYouTubeAvatarUrl(v)) {
           this.initialAvatarsCache.set(k, v);
         }
       }

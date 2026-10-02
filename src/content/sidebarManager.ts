@@ -7,6 +7,7 @@ import { CategoryDeck, SubscribedChannel } from '@/types';
 import { debounce } from '@/utils/debounce';
 import { SubscriptionSync } from './subscriptionSync';
 import { Logger } from '@/utils/logger';
+import { isValidYouTubeAvatarUrl } from '@/utils/validators';
 
 export class SidebarManager {
   private static containerId = 'subdeck-sidebar-container';
@@ -629,7 +630,7 @@ export class SidebarManager {
           titleSpan.textContent = ch.title;
 
           // Channel avatar (24px circular profile picture)
-          if (ch.avatarUrl && !ch.avatarUrl.startsWith('data:image')) {
+          if (isValidYouTubeAvatarUrl(ch.avatarUrl)) {
             const avatar = document.createElement('img');
             avatar.className = 'subdeck-channel-avatar';
             avatar.src = ch.avatarUrl;

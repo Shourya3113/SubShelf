@@ -457,6 +457,7 @@ export class HeuristicCategorizer {
       channelIds: [],
       isCollapsed: true,
       sortOrder: idx,
+      isSystem: true,
     }));
 
     const assigned = new Set<string>();

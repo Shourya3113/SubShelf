@@ -405,19 +405,16 @@ class PopupManager {
       }
     });
 
-    const coffeeBtn = document.getElementById('coffee-btn');
-    const footerCoffeeLink = document.getElementById('footer-coffee-link');
-    const openDonation = (e: Event) => {
+    const footerGithubLink = document.getElementById('footer-github-link');
+    footerGithubLink?.addEventListener('click', (e: Event) => {
       e.preventDefault();
-      const url = (e.currentTarget as HTMLAnchorElement)?.href || 'https://buymeacoffee.com/subshelf';
+      const url = (e.currentTarget as HTMLAnchorElement)?.href || 'https://github.com/Shourya3113/SubShelf';
       if (chrome.tabs?.create) {
         chrome.tabs.create({ url });
       } else {
         window.open(url, '_blank');
       }
-    };
-    coffeeBtn?.addEventListener('click', openDonation);
-    footerCoffeeLink?.addEventListener('click', openDonation);
+    });
   }
 }
 

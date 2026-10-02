@@ -1,4 +1,4 @@
-import { SubDeckStorageSchema, DEFAULT_STORAGE, SubscribedChannel, CategoryDeck } from '@/types';
+import { SubDeckStorageSchema, DEFAULT_STORAGE, SubscribedChannel, CategoryDeck, CURRENT_SCHEMA_VERSION } from '@/types';
 
 export const SUBSHELF_SECURE_API_KEY = 'subshelf_gemini_api_key';
 
@@ -21,11 +21,14 @@ export class SubDeckStorage {
     }
     try {
       const data = await chrome.storage.local.get(null);
-      if (!data || !data.version) {
+      if (!data || Object.keys(data).length === 0) {
         if (!this.isContextValid()) return structuredClone(DEFAULT_STORAGE);
         const defaults = structuredClone(DEFAULT_STORAGE);
         await chrome.storage.local.set(defaults);
         return defaults;
+      }
+      if (typeof data.version !== 'number') {
+        data.version = CURRENT_SCHEMA_VERSION;
       }
 
       // Security: Migrate legacy apiKey out of settings into isolated dedicated storage

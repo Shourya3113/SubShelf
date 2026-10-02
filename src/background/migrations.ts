@@ -1,4 +1,4 @@
-import { SubDeckStorageSchema, DEFAULT_STORAGE, CURRENT_SCHEMA_VERSION } from '@/types';
+import { SubDeckStorageSchema, DEFAULT_STORAGE, CURRENT_SCHEMA_VERSION, API_KEY_FIELD } from '@/types';
 import { Logger } from '@/utils/logger';
 
 export type MigrationStep = (data: SubDeckStorageSchema) => SubDeckStorageSchema;
@@ -22,8 +22,21 @@ export const MIGRATION_REGISTRY: Record<number, MigrationStep> = {
       version: 1,
     };
   },
-  // Future migrations are registered here:
-  // e.g. 2: (data) => { ... return { ...data, version: 2 }; }
+  2: (data) => {
+    // Migration 1 -> 2: Isolate apiKey into dedicated storage key and remove legacy settings
+    const migrated = { ...data };
+    if (migrated.settings && 'apiKey' in migrated.settings) {
+      if (typeof migrated.settings.apiKey === 'string' && migrated.settings.apiKey.length > 0) {
+        (migrated as any)[API_KEY_FIELD] = migrated.settings.apiKey;
+      }
+      delete migrated.settings.apiKey;
+    }
+    if (migrated.settings && 'telemetryOptIn' in (migrated.settings as any)) {
+      delete (migrated.settings as any).telemetryOptIn;
+    }
+    migrated.version = 2;
+    return migrated;
+  },
 };
 
 /**

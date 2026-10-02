@@ -5,14 +5,15 @@ import { runMigrations } from './migrations';
 import { CURRENT_SCHEMA_VERSION } from '@/types';
 
 chrome.runtime.onInstalled.addListener(async (details) => {
-  const current = await SubDeckStorage.getAll();
-  const fromVersion = typeof current?.version === 'number' ? current.version : 0;
+  const raw = await chrome.storage.local.get(null);
+  if (!raw || Object.keys(raw).length === 0) return;
+  const fromVersion = typeof raw.version === 'number' ? raw.version : 1;
 
   if (details.reason === 'update' || details.reason === 'install') {
     if (fromVersion < CURRENT_SCHEMA_VERSION) {
       try {
-        const migrated = runMigrations(fromVersion, CURRENT_SCHEMA_VERSION, current);
-        await SubDeckStorage.setAll(migrated);
+        const migrated = runMigrations(fromVersion, CURRENT_SCHEMA_VERSION, raw as any);
+        await chrome.storage.local.set(migrated);
         Logger.info(`[SubShelf] Successfully migrated storage schema from v${fromVersion} to v${CURRENT_SCHEMA_VERSION}`);
       } catch (err) {
         Logger.error(`[SubShelf] Storage schema migration failed from v${fromVersion} to v${CURRENT_SCHEMA_VERSION}:`, err);
@@ -22,6 +23,22 @@ chrome.runtime.onInstalled.addListener(async (details) => {
     }
   }
 });
+
+// Self-healing migration check on service worker wake-up
+(async () => {
+  try {
+    const raw = await chrome.storage.local.get(null);
+    if (!raw || Object.keys(raw).length === 0) return;
+    const v = typeof raw.version === 'number' ? raw.version : 1;
+    if (v < CURRENT_SCHEMA_VERSION) {
+      const migrated = runMigrations(v, CURRENT_SCHEMA_VERSION, raw as any);
+      await chrome.storage.local.set(migrated);
+      Logger.info(`[SubShelf] Background startup applied schema migration from v${v} to v${CURRENT_SCHEMA_VERSION}`);
+    }
+  } catch (err) {
+    Logger.error('[SubShelf] Startup schema migration check failed:', err);
+  }
+})();
 
 // FIFO write queue to serialize all storage mutations and eliminate write races
 class StorageWriteQueue {

@@ -194,6 +194,39 @@ export class SidebarManager {
       SubDeckStorage.getChannels(),
       SubDeckStorage.getAll(),
     ]);
+
+    // Auto-repair any channels missing avatars from YouTube's initial guide payload
+    const initialAvatars = ChannelExtractor.getInitialAvatars();
+    if (initialAvatars.size > 0) {
+      const repaired: Record<string, string> = {};
+      for (const ch of Object.values(channelsMap)) {
+        if (!ch.avatarUrl) {
+          const cleanHandle = (ch.handle || '').replace(/^[\/@]+/, '').toLowerCase();
+          const found =
+            initialAvatars.get(ch.ucId) ||
+            initialAvatars.get(ch.handle) ||
+            initialAvatars.get(cleanHandle) ||
+            initialAvatars.get('@' + cleanHandle) ||
+            initialAvatars.get(ch.title.toLowerCase().trim());
+          if (found) {
+            ch.avatarUrl = found;
+            repaired[ch.ucId] = found;
+          }
+        }
+      }
+      if (Object.keys(repaired).length > 0) {
+        SubDeckStorage.update(['channels'], cur => {
+          const channels = { ...(cur.channels || {}) };
+          for (const [id, url] of Object.entries(repaired)) {
+            if (channels[id]) {
+              channels[id].avatarUrl = url;
+            }
+          }
+          return { channels };
+        }).catch(() => {});
+      }
+    }
+
     const activeCategory = allState.activeCategoryId;
     const channelCount = Object.keys(channelsMap).length;
 
@@ -427,7 +460,7 @@ export class SidebarManager {
 
         // Safe DOM construction for folder header (Zero innerHTML)
         const folderMain = document.createElement('a');
-        folderMain.className = 'subdeck-folder-main yt-simple-endpoint';
+        folderMain.className = 'subdeck-folder-main';
         folderMain.href = '/feed/subscriptions';
         folderMain.title = `Open feed for ${cat.name}`;
 
@@ -622,7 +655,20 @@ export class SidebarManager {
           titleSpan.textContent = ch.title;
 
           // Channel avatar (24px circular profile picture)
-          const safe = safeAvatarUrl(ch.avatarUrl);
+          let avatarSrc = ch.avatarUrl;
+          if (!avatarSrc) {
+            const cleanHandle = (ch.handle || '').replace(/^[\/@]+/, '').toLowerCase();
+            avatarSrc =
+              initialAvatars.get(ch.ucId) ||
+              initialAvatars.get(ch.handle) ||
+              initialAvatars.get(cleanHandle) ||
+              initialAvatars.get('@' + cleanHandle) ||
+              initialAvatars.get(ch.title.toLowerCase().trim()) ||
+              '';
+            if (avatarSrc) ch.avatarUrl = avatarSrc;
+          }
+
+          const safe = safeAvatarUrl(avatarSrc);
           if (safe) {
             const avatar = document.createElement('img');
             avatar.className = 'subdeck-channel-avatar';

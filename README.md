@@ -25,7 +25,7 @@ Powered by a 3-tier categorization engine (on-device **Gemini Nano**, cloud **Go
 | 📺 **In-Sidebar Channel Controls** | Add channels via the inline picker (`+`), remove channels (`✕`), or create new custom folders (`+ Folder`) without leaving YouTube. |
 | 🎛️ **Full Popup Manager** | 3-tab dashboard to search channels, reassign folders via inline dropdowns, rename/delete decks, and configure AI providers. |
 | 🚫 **Hide Shorts Shelves** | Optional one-click toggle in Settings to remove distracting Shorts carousels from your subscription feed. |
-| 📥 **Backup & Restore** | Export and import timestamped JSON backups (`subdeck_backup_YYYY-MM-DD.json`) with automated API key sanitization. |
+| 📥 **Backup & Restore** | Export and import timestamped JSON backups (`subshelf_backup_YYYY-MM-DD.json`) with automated API key sanitization. |
 
 ---
 
@@ -158,8 +158,6 @@ SubShelf/
 │       └── storage.ts      # Typed chrome.storage wrapper
 ├── manifest.json           # Manifest V3 configuration
 ├── PRIVACY_POLICY.md       # Privacy policy compliance document
-├── STORE_LISTING.md        # Chrome Web Store listing metadata & descriptions
-├── SUBDECK_BLUEPRINT.md    # Master architectural specification
 └── vite.config.ts          # Vite extension build configuration
 ```
 
@@ -167,9 +165,8 @@ SubShelf/
 
 ## 📜 Documentation
 
-* [Store Listing Copy (`STORE_LISTING.md`)](./STORE_LISTING.md) — Store descriptions, feature bullet points, and store metadata.
 * [Privacy Policy (`PRIVACY_POLICY.md`)](./PRIVACY_POLICY.md) — Certified zero-data collection policy for Web Store submission.
-* [Architecture Blueprint (`SUBDECK_BLUEPRINT.md`)](./SUBDECK_BLUEPRINT.md) — Full 6-day build specifications and domain models.
+* [Chrome Web Store Listing](https://chromewebstore.google.com/detail/subdeck-smart-subscripti/elmeglemgjhfadeahmlbcgkjkfkfkfgd) — Official extension installation page.
 
 ## 📄 License
 

@@ -117,21 +117,188 @@ export class AICategorizer {
     return decks.filter(d => d.channelIds.length > 0);
   }
 
-  private static async tryGeminiNano(channels: SubscribedChannel[]): Promise<CategoryDeck[] | null> {
-    const ai = (self as unknown as { ai?: { languageModel?: { capabilities: () => Promise<{ available: string }>; create: () => Promise<{ prompt: (p: string) => Promise<string>; destroy: () => void }> } } }).ai;
-    if (!ai?.languageModel) return null;
+  private static readonly NANO_BATCH_SIZE = 30;
 
-    const capabilities = await ai.languageModel.capabilities();
-    if (capabilities.available === 'no') return null;
+  /**
+   * Resolves the on-device Prompt API interface across globalThis, self, and window scopes.
+   * Handles modern W3C Prompt API (LanguageModel) and Chrome namespaces (ai.languageModel).
+   */
+  private static getLanguageModelAPI(): {
+    source: string;
+    api: {
+      availability?: (options?: unknown) => Promise<string | { available: string }>;
+      capabilities?: (options?: unknown) => Promise<{ available: string }>;
+      create: (options?: unknown) => Promise<{
+        prompt: (input: string) => Promise<string>;
+        destroy?: () => void;
+      }>;
+    };
+  } | null {
+    const g = globalThis as any;
+    const s = typeof self !== 'undefined' ? (self as any) : null;
+    const w = typeof window !== 'undefined' ? (window as any) : null;
 
-    const session = await ai.languageModel.create();
-    try {
-      const prompt = buildCategorizationPrompt(channels);
-      const raw = await session.prompt(prompt);
-      return this.parseAIResponse(raw, channels);
-    } finally {
-      session.destroy();
+    // 1. Modern W3C Standard: global LanguageModel class
+    if (typeof g?.LanguageModel?.create === 'function') {
+      return { source: 'globalThis.LanguageModel', api: g.LanguageModel };
     }
+    if (s && typeof s.LanguageModel?.create === 'function') {
+      return { source: 'self.LanguageModel', api: s.LanguageModel };
+    }
+    if (w && typeof w.LanguageModel?.create === 'function') {
+      return { source: 'window.LanguageModel', api: w.LanguageModel };
+    }
+
+    // 2. Chrome ai.languageModel namespace
+    if (typeof g?.ai?.languageModel?.create === 'function') {
+      return { source: 'globalThis.ai.languageModel', api: g.ai.languageModel };
+    }
+    if (s && typeof s.ai?.languageModel?.create === 'function') {
+      return { source: 'self.ai.languageModel', api: s.ai.languageModel };
+    }
+    if (w && typeof w.ai?.languageModel?.create === 'function') {
+      return { source: 'window.ai.languageModel', api: w.ai.languageModel };
+    }
+
+    return null;
+  }
+
+  /**
+   * Checks whether on-device Gemini Nano is downloaded and ready to process prompts.
+   */
+  private static async isNanoAvailable(factory: {
+    availability?: (options?: unknown) => Promise<string | { available: string }>;
+    capabilities?: (options?: unknown) => Promise<{ available: string }>;
+  }): Promise<boolean> {
+    try {
+      // Modern W3C / Chrome 131+: availability()
+      if (typeof factory.availability === 'function') {
+        const status = await factory.availability();
+        Logger.info('[SubShelf AI] LanguageModel.availability() returned:', status);
+        if (typeof status === 'string') {
+          return status === 'readily' || status === 'downloadable' || status === 'after-download';
+        }
+        if (status && typeof status === 'object') {
+          return (status as any).available !== 'no' && (status as any).available !== 'unavailable';
+        }
+      }
+
+      // Legacy Canary / Chrome 127-128: capabilities()
+      if (typeof factory.capabilities === 'function') {
+        const caps = await factory.capabilities();
+        Logger.info('[SubShelf AI] LanguageModel.capabilities() returned:', caps);
+        return caps?.available !== 'no';
+      }
+
+      // If availability/capabilities checks are omitted by the browser but create exists
+      return true;
+    } catch (err) {
+      Logger.warn('[SubShelf AI] LanguageModel availability check failed:', err);
+      return false;
+    }
+  }
+
+  private static async tryGeminiNano(channels: SubscribedChannel[]): Promise<CategoryDeck[] | null> {
+    const contextType = typeof window !== 'undefined' ? 'window' : typeof self !== 'undefined' ? 'service-worker' : 'unknown';
+    const modelMeta = this.getLanguageModelAPI();
+
+    Logger.info(`[SubShelf AI] Gemini Nano diagnostic in ${contextType} context:`, {
+      hasAPI: Boolean(modelMeta),
+      source: modelMeta?.source || 'none',
+      typeofGlobalLanguageModel: typeof (globalThis as any).LanguageModel,
+      typeofSelfAi: typeof (self as any)?.ai,
+      typeofAiLanguageModel: typeof (self as any)?.ai?.languageModel,
+    });
+
+    if (!modelMeta) {
+      return null;
+    }
+
+    const available = await this.isNanoAvailable(modelMeta.api);
+    if (!available) {
+      Logger.warn(`[SubShelf AI] Gemini Nano (${modelMeta.source}) reported unavailable or not yet downloaded`);
+      return null;
+    }
+
+    Logger.info(`[SubShelf AI] Gemini Nano active via ${modelMeta.source}. Processing ${channels.length} channels in batches of ${this.NANO_BATCH_SIZE}...`);
+
+    // Partition channels into batches to prevent overflowing Gemini Nano's context window (~4K tokens)
+    const batches: SubscribedChannel[][] = [];
+    for (let i = 0; i < channels.length; i += this.NANO_BATCH_SIZE) {
+      batches.push(channels.slice(i, i + this.NANO_BATCH_SIZE));
+    }
+
+    // Accumulate channels per category ID across all batches
+    const aggregatedCategories = new Map<string, Set<string>>();
+    SUBDECK_TAXONOMY.forEach(t => aggregatedCategories.set(t.id, new Set<string>()));
+
+    let successfulBatches = 0;
+
+    for (let b = 0; b < batches.length; b++) {
+      const batch = batches[b];
+      Logger.info(`[SubShelf AI] Nano processing batch ${b + 1}/${batches.length} (${batch.length} channels)...`);
+
+      let session: { prompt: (p: string) => Promise<string>; destroy?: () => void } | null = null;
+      try {
+        session = await modelMeta.api.create();
+        const prompt = buildCategorizationPrompt(batch);
+        const raw = await session.prompt(prompt);
+        const parsedDecks = this.parseAIResponse(raw, batch);
+
+        if (parsedDecks && parsedDecks.length > 0) {
+          for (const deck of parsedDecks) {
+            const set = aggregatedCategories.get(deck.id);
+            if (set) {
+              deck.channelIds.forEach(id => set.add(id));
+            }
+          }
+          successfulBatches++;
+        } else {
+          Logger.warn(`[SubShelf AI] Batch ${b + 1} produced unparseable output; falling back to heuristics for this batch`);
+          const heuristicDecks = HeuristicCategorizer.categorize(batch);
+          for (const deck of heuristicDecks) {
+            const set = aggregatedCategories.get(deck.id);
+            if (set) {
+              deck.channelIds.forEach(id => set.add(id));
+            }
+          }
+        }
+      } catch (batchErr) {
+        Logger.warn(`[SubShelf AI] Batch ${b + 1} threw an error; falling back to heuristics for this batch:`, batchErr);
+        const heuristicDecks = HeuristicCategorizer.categorize(batch);
+        for (const deck of heuristicDecks) {
+          const set = aggregatedCategories.get(deck.id);
+          if (set) {
+            deck.channelIds.forEach(id => set.add(id));
+          }
+        }
+      } finally {
+        try {
+          session?.destroy?.();
+        } catch {
+          // Ignore session destroy errors
+        }
+      }
+    }
+
+    // If all batches failed to execute on Nano, return null so outer caller can fall back
+    if (successfulBatches === 0 && batches.length > 0) {
+      Logger.warn('[SubShelf AI] All Gemini Nano batches failed. Falling back to alternative tier.');
+      return null;
+    }
+
+    // Construct CategoryDeck[] from aggregated category sets
+    const finalDecks: CategoryDeck[] = SUBDECK_TAXONOMY.map((tax, idx) => ({
+      id: tax.id,
+      name: tax.name,
+      icon: tax.icon,
+      color: tax.color,
+      channelIds: Array.from(aggregatedCategories.get(tax.id) || []),
+      isCollapsed: true,
+      sortOrder: idx,
+    }));
+
+    return finalDecks.filter(d => d.channelIds.length > 0);
   }
 
   private static async tryGeminiCloud(channels: SubscribedChannel[], apiKey: string): Promise<CategoryDeck[] | null> {

@@ -26,6 +26,13 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   if (message?.type === 'subdeck-auto-organize') {
     (async () => {
       try {
+        Logger.info('[SubShelf Background] AI Environment Diagnostics in Service Worker:', {
+          typeofGlobalLanguageModel: typeof (globalThis as any).LanguageModel,
+          typeofSelfLanguageModel: typeof (self as any).LanguageModel,
+          typeofSelfAi: typeof (self as any).ai,
+          typeofAiLanguageModel: typeof (self as any).ai?.languageModel,
+        });
+
         Logger.info('[SubShelf Background] Running AI auto-categorization...');
         const channelsMap = await SubDeckStorage.getChannels();
         const channels = Object.values(channelsMap);

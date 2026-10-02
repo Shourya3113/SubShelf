@@ -1,7 +1,6 @@
 import { getSubscriptionSection } from '@/config/selectors';
 import { SubDeckStorage } from '@/utils/storage';
 import { ChannelExtractor } from './channelExtractor';
-import { HeuristicCategorizer } from '@/ai/heuristic';
 import { AICategorizer } from '@/ai/categorizer';
 import { FeedFilter } from './feedFilter';
 import { CategoryDeck, SubscribedChannel } from '@/types';
@@ -310,14 +309,16 @@ export class SidebarManager {
             if (res?.success) {
               await this.render();
             } else {
-              await this.runQuickCategorization();
+              Logger.info('[SubShelf Sidebar] Background worker did not complete categorization; running direct window categorization...');
+              await this.runDirectCategorization();
             }
             keepScrollLevel();
             resolve();
           });
         });
-      } catch {
-        await this.runQuickCategorization();
+      } catch (err) {
+        Logger.warn('[SubShelf Sidebar] Auto-AI execution caught error, running direct window categorization:', err);
+        await this.runDirectCategorization();
         keepScrollLevel();
       } finally {
         aiBtn.disabled = false;
@@ -708,13 +709,14 @@ export class SidebarManager {
     });
   }
 
-  static async runQuickCategorization(): Promise<void> {
+  static async runDirectCategorization(): Promise<void> {
     const channelsMap = await SubDeckStorage.getChannels();
     const channels = Object.values(channelsMap);
     if (channels.length === 0) return;
 
+    Logger.info('[SubShelf Sidebar] Running AICategorizer in YouTube Window context...');
     const state = await SubDeckStorage.getAll();
-    const rawDecks = HeuristicCategorizer.categorize(channels);
+    const rawDecks = await AICategorizer.categorizeAll(channels);
     const finalDecks = AICategorizer.applyOverrides(
       rawDecks,
       state.categories,
@@ -724,6 +726,10 @@ export class SidebarManager {
     );
     await SubDeckStorage.setAll({ categories: finalDecks });
     await this.render();
+  }
+
+  static async runQuickCategorization(): Promise<void> {
+    return this.runDirectCategorization();
   }
 
   static async syncWithNativeSubscriptions(): Promise<void> {

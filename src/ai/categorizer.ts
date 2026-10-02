@@ -1,36 +1,55 @@
-import { SubscribedChannel, CategoryDeck } from '@/types';
+import { SubscribedChannel, CategoryDeck, DEFAULT_GEMINI_CLOUD_MODEL } from '@/types';
 import { HeuristicCategorizer, SUBDECK_TAXONOMY } from './heuristic';
 import { buildCategorizationPrompt } from './prompt';
 import { SubDeckStorage } from '@/utils/storage';
 import { Logger } from '@/utils/logger';
 
+export interface CategorizeAllResult {
+  decks: CategoryDeck[];
+  providerUsed: 'gemini-nano' | 'gemini-api' | 'heuristic';
+  fallbackNotice?: string;
+}
+
 export class AICategorizer {
-  static async categorizeAll(channels: SubscribedChannel[]): Promise<CategoryDeck[]> {
-    if (channels.length === 0) return [];
+  static async categorizeAll(channels: SubscribedChannel[]): Promise<CategorizeAllResult> {
+    if (channels.length === 0) {
+      return { decks: [], providerUsed: 'heuristic' };
+    }
 
     const settings = (await SubDeckStorage.getAll()).settings;
-    let result: CategoryDeck[];
+    let result: CategoryDeck[] | null = null;
+    let providerUsed: 'gemini-nano' | 'gemini-api' | 'heuristic' = 'heuristic';
+    let fallbackNotice: string | undefined;
 
     switch (settings.aiProvider) {
       case 'gemini-api':
         if (settings.apiKey) {
           try {
-            const cloudResult = await this.tryGeminiCloud(channels, settings.apiKey);
+            const cloudModel = settings.geminiModel || DEFAULT_GEMINI_CLOUD_MODEL;
+            const cloudResult = await this.tryGeminiCloud(channels, settings.apiKey, cloudModel);
             if (cloudResult) {
-              Logger.info('[SubShelf AI] Successfully organized using Gemini Cloud API');
+              Logger.info(`[SubShelf AI] Successfully organized using Gemini Cloud API (${cloudModel})`);
               result = cloudResult;
+              providerUsed = 'gemini-api';
               break;
             }
           } catch (err) {
-            Logger.warn('[SubShelf AI] Gemini Cloud failed, falling back to heuristic:', err);
+            const errMsg = err instanceof Error ? err.message : String(err);
+            Logger.warn('[SubShelf AI] Gemini Cloud failed, falling back to heuristic:', errMsg);
+            fallbackNotice = 'Cloud AI failed, used offline engine';
           }
+        } else {
+          fallbackNotice = 'No Gemini API key provided, used offline engine';
         }
+        Logger.info('[SubShelf AI] Organizing using Heuristic Categorizer fallback');
         result = HeuristicCategorizer.categorize(channels);
+        providerUsed = 'heuristic';
         break;
 
       case 'heuristic':
         Logger.info('[SubShelf AI] Organizing using Heuristic Categorizer');
         result = HeuristicCategorizer.categorize(channels);
+        providerUsed = 'heuristic';
         break;
 
       case 'gemini-nano':
@@ -41,6 +60,7 @@ export class AICategorizer {
           if (nanoResult) {
             Logger.info('[SubShelf AI] Successfully organized using Gemini Nano');
             result = nanoResult;
+            providerUsed = 'gemini-nano';
             break;
           }
         } catch (err) {
@@ -50,25 +70,35 @@ export class AICategorizer {
         // Tier 2: Gemini Cloud API (if user entered API key)
         if (settings.apiKey) {
           try {
-            const cloudResult = await this.tryGeminiCloud(channels, settings.apiKey);
+            const cloudModel = settings.geminiModel || DEFAULT_GEMINI_CLOUD_MODEL;
+            const cloudResult = await this.tryGeminiCloud(channels, settings.apiKey, cloudModel);
             if (cloudResult) {
-              Logger.info('[SubShelf AI] Successfully organized using Gemini Cloud API');
+              Logger.info(`[SubShelf AI] Successfully organized using Gemini Cloud API (${cloudModel})`);
               result = cloudResult;
+              providerUsed = 'gemini-api';
               break;
             }
           } catch (err) {
-            Logger.warn('[SubShelf AI] Gemini Cloud failed, falling back:', err);
+            const errMsg = err instanceof Error ? err.message : String(err);
+            Logger.warn('[SubShelf AI] Gemini Cloud failed, falling back:', errMsg);
+            fallbackNotice = 'Cloud AI failed, used offline engine';
           }
         }
 
         // Tier 3: Deterministic Keyword/Regex Heuristic
         Logger.info('[SubShelf AI] Organizing using Heuristic Categorizer');
         result = HeuristicCategorizer.categorize(channels);
+        providerUsed = 'heuristic';
         break;
     }
 
     // Second pass: Run channels stuck in "general-other" through heuristic to rescue them
-    return this.rescueGeneralOther(result!, channels);
+    const rescuedDecks = this.rescueGeneralOther(result!, channels);
+    return {
+      decks: rescuedDecks,
+      providerUsed,
+      fallbackNotice,
+    };
   }
 
   /**
@@ -301,32 +331,61 @@ export class AICategorizer {
     return finalDecks.filter(d => d.channelIds.length > 0);
   }
 
-  private static async tryGeminiCloud(channels: SubscribedChannel[], apiKey: string): Promise<CategoryDeck[] | null> {
+  private static async tryGeminiCloud(
+    channels: SubscribedChannel[],
+    apiKey: string,
+    modelId = DEFAULT_GEMINI_CLOUD_MODEL
+  ): Promise<CategoryDeck[] | null> {
     const prompt = buildCategorizationPrompt(channels);
+    const targetModel = (modelId || DEFAULT_GEMINI_CLOUD_MODEL).trim();
     // Security: Pass API key via header rather than exposing in URL query parameter
-    const url = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent';
+    const url = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(targetModel)}:generateContent`;
 
-    const res = await fetch(url, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'x-goog-api-key': apiKey,
-      },
-      body: JSON.stringify({
-        contents: [{ parts: [{ text: prompt }] }],
-        generationConfig: { responseMimeType: 'application/json' },
-      }),
-    });
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => {
+      controller.abort();
+    }, 15000); // 15-second timeout
 
-    if (!res.ok) {
-      throw new Error(`Gemini Cloud API error HTTP ${res.status}`);
+    try {
+      const res = await fetch(url, {
+        method: 'POST',
+        signal: controller.signal,
+        headers: {
+          'Content-Type': 'application/json',
+          'x-goog-api-key': apiKey,
+        },
+        body: JSON.stringify({
+          contents: [{ parts: [{ text: prompt }] }],
+          generationConfig: { responseMimeType: 'application/json' },
+        }),
+      });
+
+      if (!res.ok) {
+        if (res.status === 404) {
+          throw new Error(`Model '${targetModel}' was not found (HTTP 404). Google may have retired this model or the ID is invalid.`);
+        }
+        if (res.status === 400) {
+          throw new Error(`Gemini API error (HTTP 400): Bad Request. Please check your request parameters.`);
+        }
+        if (res.status === 403) {
+          throw new Error(`Gemini API error (HTTP 403): Invalid or unauthorized API key.`);
+        }
+        throw new Error(`Gemini Cloud API error HTTP ${res.status}`);
+      }
+
+      const data = await res.json();
+      const raw = data?.candidates?.[0]?.content?.parts?.[0]?.text;
+      if (!raw) return null;
+
+      return this.parseAIResponse(raw, channels);
+    } catch (err) {
+      if (err instanceof Error && err.name === 'AbortError') {
+        throw new Error(`Gemini Cloud API request timed out after 15s (${targetModel})`);
+      }
+      throw err;
+    } finally {
+      clearTimeout(timeoutId);
     }
-
-    const data = await res.json();
-    const raw = data?.candidates?.[0]?.content?.parts?.[0]?.text;
-    if (!raw) return null;
-
-    return this.parseAIResponse(raw, channels);
   }
 
   private static parseAIResponse(raw: string, channels: SubscribedChannel[]): CategoryDeck[] | null {

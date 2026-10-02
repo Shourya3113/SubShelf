@@ -10,7 +10,7 @@
 
 **SubShelf** is a lightweight, privacy-first Chrome Extension that transforms your cluttered YouTube subscriptions into organized, themed category folders directly inside YouTube's native left sidebar and subscription feed.
 
-Powered by a 3-tier categorization engine (on-device **Gemini Nano**, cloud **Gemini 1.5 Flash**, and deterministic **NLP keyword heuristics**), SubShelf automatically clusters your channels into smart decks in seconds with zero data collection.
+Powered by a 3-tier categorization engine (on-device **Gemini Nano**, cloud **Google Gemini API** with configurable model IDs, and deterministic **NLP keyword heuristics**), SubShelf automatically clusters your channels into smart decks in seconds with zero data collection.
 
 ---
 
@@ -49,8 +49,8 @@ SubShelf was built from the ground up to adhere strictly to Google Chrome Web St
          ├──► 1. Chrome Built-in AI (Gemini Nano)  [On-Device / 0 Latency]
          │           │ (if unavailable)
          │           ▼
-         ├──► 2. Google Gemini 1.5 Flash API       [Cloud / Highly Accurate]
-         │           │ (if no key provided)
+         ├──► 2. Google Gemini Cloud API           [Cloud / Highly Accurate]
+         │           │ (if no key provided or fails)
          │           ▼
          └──► 3. Deterministic NLP Scoring Engine  [100% Offline / Instant]
                      - Strict word-boundary matching (\b)

@@ -307,6 +307,9 @@ export class SidebarManager {
         await new Promise<void>((resolve) => {
           chrome.runtime.sendMessage({ type: 'subdeck-auto-organize' }, async (res) => {
             if (res?.success) {
+              if (res.fallbackNotice) {
+                SidebarManager.showToast(res.fallbackNotice);
+              }
               await this.render();
             } else {
               Logger.info('[SubShelf Sidebar] Background worker did not complete categorization; running direct window categorization...');
@@ -716,7 +719,10 @@ export class SidebarManager {
 
     Logger.info('[SubShelf Sidebar] Running AICategorizer in YouTube Window context...');
     const state = await SubDeckStorage.getAll();
-    const rawDecks = await AICategorizer.categorizeAll(channels);
+    const { decks: rawDecks, fallbackNotice } = await AICategorizer.categorizeAll(channels);
+    if (fallbackNotice) {
+      SidebarManager.showToast(fallbackNotice);
+    }
     const finalDecks = AICategorizer.applyOverrides(
       rawDecks,
       state.categories,
@@ -726,6 +732,26 @@ export class SidebarManager {
     );
     await SubDeckStorage.setAll({ categories: finalDecks });
     await this.render();
+  }
+
+  static showToast(message: string, duration = 4000): void {
+    const existing = document.getElementById('subdeck-toast');
+    if (existing) existing.remove();
+
+    const toast = document.createElement('div');
+    toast.id = 'subdeck-toast';
+    toast.className = 'subdeck-toast';
+    toast.textContent = message;
+
+    document.body.appendChild(toast);
+    requestAnimationFrame(() => {
+      toast.classList.add('subdeck-toast-visible');
+    });
+
+    setTimeout(() => {
+      toast.classList.remove('subdeck-toast-visible');
+      setTimeout(() => toast.remove(), 300);
+    }, duration);
   }
 
   static async runQuickCategorization(): Promise<void> {

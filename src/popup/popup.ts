@@ -362,6 +362,17 @@ class PopupManager {
       }
     });
 
+    const geminiModel = document.getElementById('setting-gemini-model') as HTMLInputElement;
+    if (geminiModel) {
+      geminiModel.value = this.state.settings.geminiModel || '';
+      geminiModel.addEventListener('change', async () => {
+        if (this.state) {
+          this.state.settings.geminiModel = geminiModel.value.trim();
+          await SubDeckStorage.setAll({ settings: this.state.settings });
+        }
+      });
+    }
+
     hideShorts.addEventListener('change', async () => {
       if (this.state) {
         this.state.settings.hideShortsFromFeed = hideShorts.checked;

@@ -565,3 +565,34 @@ ytd-app[mini-guide] #subdeck-sidebar-container,
 ytd-mini-guide-renderer #subdeck-sidebar-container {
   display: none !important;
 }
+
+/* --------------------------------------------------------------------------
+   TOAST NOTIFICATION
+   -------------------------------------------------------------------------- */
+
+.subdeck-toast {
+  position: fixed;
+  bottom: 28px;
+  left: 50%;
+  transform: translateX(-50%) translateY(20px);
+  background-color: var(--yt-spec-brand-background-solid, #1f1f1f);
+  color: var(--yt-spec-text-primary, #ffffff);
+  border: 1px solid var(--yt-spec-10-percent-layer, #3f3f3f);
+  padding: 10px 18px;
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 500;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.45);
+  z-index: 9999999;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.25s ease, transform 0.25s ease;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.subdeck-toast.subdeck-toast-visible {
+  opacity: 1;
+  transform: translateX(-50%) translateY(0);
+}

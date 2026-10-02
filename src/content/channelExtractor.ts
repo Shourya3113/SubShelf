@@ -204,7 +204,7 @@ export class ChannelExtractor {
       const title = rawTitle.trim();
       if (SYSTEM_NAMES.has(title.toLowerCase())) return;
 
-      // Extract real channel avatar
+      // Extract real channel avatar directly from sidebar DOM entry
       const imgEl = entry.querySelector('yt-img-shadow img, img') as HTMLImageElement | null;
       const ytImgShadow = entry.querySelector('yt-img-shadow') as HTMLElement | null;
       let avatarUrl = '';
@@ -227,20 +227,16 @@ export class ChannelExtractor {
           '';
       }
 
-      const channelKey = ucId || handle || '';
-
-      // Check extracted initial avatars cache as fallback (catches off-screen/unrendered items)
-      if (!avatarUrl || avatarUrl.startsWith('data:image')) {
-        const avatars = this.getInitialAvatars();
-        const cleanHandle = (handle || '').replace(/^[\/@]+/, '').toLowerCase();
-        avatarUrl =
-          avatars.get(channelKey) ||
-          avatars.get(handle || '') ||
-          avatars.get(cleanHandle) ||
-          avatars.get('@' + cleanHandle) ||
-          avatars.get(title.toLowerCase().trim()) ||
-          '';
+      if (avatarUrl) {
+        if (avatarUrl.startsWith('//')) avatarUrl = 'https:' + avatarUrl;
+        if (!avatarUrl.startsWith('data:image') && isValidYouTubeAvatarUrl(avatarUrl)) {
+          avatarUrl = avatarUrl.replace(/=s\d+(-c-k)?/, '=s88$1');
+        } else {
+          avatarUrl = '';
+        }
       }
+
+      const channelKey = ucId || handle || '';
 
       channels.push({
         ucId: channelKey,
@@ -253,156 +249,6 @@ export class ChannelExtractor {
     });
 
     return channels;
-  }
-
-  private static initialAvatarsCache = new Map<string, string>();
-
-  /**
-   * Merges avatars received from the MAIN-world injected script into the cache.
-   */
-  static mergeAvatars(recordOrMap: Record<string, string> | Map<string, string>): void {
-    if (!recordOrMap) return;
-    if (recordOrMap instanceof Map) {
-      for (const [k, v] of recordOrMap.entries()) {
-        if (isValidYouTubeAvatarUrl(v)) {
-          this.initialAvatarsCache.set(k, v);
-        }
-      }
-    } else {
-      for (const [k, v] of Object.entries(recordOrMap)) {
-        if (isValidYouTubeAvatarUrl(v)) {
-          this.initialAvatarsCache.set(k, v);
-        }
-      }
-    }
-  }
-
-  /**
-   * Returns channel avatars extracted from YouTube's server-rendered JSON payloads.
-   * This provides instant, high-resolution avatar URLs for ALL subscribed channels,
-   * even if they haven't been scrolled into view in YouTube's native sidebar.
-   */
-  static getInitialAvatars(): Map<string, string> {
-    if (this.initialAvatarsCache.size > 0) {
-      return this.initialAvatarsCache;
-    }
-
-    const map = this.initialAvatarsCache;
-
-    try {
-      const scripts = Array.from(document.querySelectorAll('script'));
-      for (const script of scripts) {
-        const text = script.textContent || '';
-        if (!text.includes('ytInitialData')) continue;
-
-        const marker = text.indexOf('ytInitialData');
-        if (marker === -1) continue;
-
-        const equalsIndex = text.indexOf('=', marker);
-        if (equalsIndex === -1) continue;
-
-        const braceStart = text.indexOf('{', equalsIndex);
-        if (braceStart === -1) continue;
-
-        // Balanced brace scan to extract complete JSON object
-        let depth = 0;
-        let inString = false;
-        let escape = false;
-        let jsonStr = '';
-
-        for (let j = braceStart; j < text.length; j++) {
-          const char = text[j];
-          if (escape) {
-            escape = false;
-            continue;
-          }
-          if (char === '\\') {
-            escape = true;
-            continue;
-          }
-          if (char === '"') {
-            inString = !inString;
-            continue;
-          }
-          if (!inString) {
-            if (char === '{') depth++;
-            else if (char === '}') {
-              depth--;
-              if (depth === 0) {
-                jsonStr = text.substring(braceStart, j + 1);
-                break;
-              }
-            }
-          }
-        }
-
-        if (jsonStr) {
-          try {
-            const data = JSON.parse(jsonStr);
-            this.collectAvatarsFromData(data, map);
-            if (map.size > 0) {
-              this.initialAvatarsCache = map;
-              return map;
-            }
-          } catch {}
-        }
-      }
-    } catch {}
-
-    if (map.size > 0) {
-      this.initialAvatarsCache = map;
-    }
-    return map;
-  }
-
-  private static collectAvatarsFromData(obj: any, map: Map<string, string>): void {
-    if (!obj || typeof obj !== 'object') return;
-
-    if (obj.guideEntryRenderer) {
-      const ger = obj.guideEntryRenderer;
-      const ucId = ger.navigationEndpoint?.browseEndpoint?.browseId;
-      const handle = ger.navigationEndpoint?.browseEndpoint?.canonicalBaseUrl;
-      const thumbs = ger.thumbnail?.thumbnails;
-      let url = thumbs && thumbs.length ? thumbs[thumbs.length - 1].url : null;
-      if (url && url.startsWith('//')) {
-        url = 'https:' + url;
-      }
-      if (url && !url.startsWith('data:image')) {
-        // Upgrade low-res =s32 or =s48 to =s88 for sharp Retina rendering
-        const crispUrl = url.replace(/=s\d+(-c-k)/, '=s88$1');
-        if (ucId) map.set(ucId, crispUrl);
-        if (handle) {
-          const clean = handle.replace(/^[\/@]+/, '').toLowerCase();
-          map.set(clean, crispUrl);
-          map.set('@' + clean, crispUrl);
-        }
-        const titleText =
-          typeof ger.title === 'string'
-            ? ger.title
-            : (ger.title?.runs?.[0]?.text || ger.title?.simpleText || '');
-        if (titleText) {
-          map.set(titleText.toLowerCase().trim(), crispUrl);
-        }
-      }
-    }
-
-    if (obj.channelRenderer || obj.compactChannelRenderer) {
-      const cr = obj.channelRenderer || obj.compactChannelRenderer;
-      const ucId = cr.channelId;
-      const thumbs = cr.thumbnail?.thumbnails;
-      let url = thumbs && thumbs.length ? thumbs[thumbs.length - 1].url : null;
-      if (url && url.startsWith('//')) {
-        url = 'https:' + url;
-      }
-      if (url && ucId && !url.startsWith('data:image')) {
-        const crispUrl = url.replace(/=s\d+(-c-k)/, '=s88$1');
-        map.set(ucId, crispUrl);
-      }
-    }
-
-    for (const key of Object.keys(obj)) {
-      this.collectAvatarsFromData(obj[key], map);
-    }
   }
 
   static scrapeFromFeedCard(card: HTMLElement): { ucId: string | null; handle: string | null } | null {

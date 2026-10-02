@@ -389,6 +389,9 @@ export class SidebarManager {
       document.querySelectorAll('.subdeck-folder-header').forEach(el => el.classList.remove('active-filter'));
       await SubDeckStorage.setActiveCategoryId(null);
       FeedFilter.setCategory(null);
+      if (!window.location.pathname.startsWith('/feed/subscriptions')) {
+        SidebarManager.navigateToSubscriptionsFeed();
+      }
     });
     fragment.appendChild(showAllBtn);
 
@@ -423,8 +426,9 @@ export class SidebarManager {
         header.className = `subdeck-folder-header ${isFolderActive ? 'active-filter' : ''}`;
 
         // Safe DOM construction for folder header (Zero innerHTML)
-        const folderMain = document.createElement('div');
-        folderMain.className = 'subdeck-folder-main';
+        const folderMain = document.createElement('a');
+        folderMain.className = 'subdeck-folder-main yt-simple-endpoint';
+        folderMain.href = '/feed/subscriptions';
         folderMain.title = `Open feed for ${cat.name}`;
 
         const iconSpan = document.createElement('span');
@@ -668,15 +672,20 @@ export class SidebarManager {
           await SubDeckStorage.saveCategories(categories);
         });
 
-        // 2. FOLDER TITLE CLICK: Opens and filters the feed directly!
-        folderMain.addEventListener('click', async () => {
+        // 2. FOLDER TITLE CLICK: Opens and filters the feed directly via YouTube's SPA router!
+        folderMain.addEventListener('click', async (e: MouseEvent) => {
+          if (e.button !== 0 || e.ctrlKey || e.metaKey || e.shiftKey || e.altKey) {
+            return;
+          }
+          e.preventDefault();
+
           if (window.location.pathname.startsWith('/feed/subscriptions')) {
             document.querySelectorAll('.subdeck-folder-header').forEach(el => el.classList.remove('active-filter'));
             header.classList.add('active-filter');
             FeedFilter.setCategory(cat);
           } else {
             await SubDeckStorage.setActiveCategoryId(cat.id);
-            window.location.href = '/feed/subscriptions';
+            SidebarManager.navigateToSubscriptionsFeed();
           }
         });
 
@@ -753,5 +762,30 @@ export class SidebarManager {
 
   static clearActiveFilterHighlight(): void {
     document.querySelectorAll('.subdeck-folder-header').forEach(el => el.classList.remove('active-filter'));
+  }
+
+  /**
+   * Navigates to YouTube's Subscriptions feed by clicking a real anchor,
+   * allowing YouTube's internal SPA router to handle the transition without a page reload.
+   */
+  static navigateToSubscriptionsFeed(): void {
+    // 1. Try finding and clicking YouTube's native Subscriptions link in the sidebar/guide
+    const nativeLink = document.querySelector<HTMLAnchorElement>(
+      'ytd-guide-entry-renderer a[href="/feed/subscriptions"], ytd-mini-guide-entry-renderer a[href="/feed/subscriptions"], #guide a[href="/feed/subscriptions"], a#endpoint[href="/feed/subscriptions"], a[href="/feed/subscriptions"]'
+    );
+    if (nativeLink) {
+      nativeLink.click();
+      return;
+    }
+
+    // 2. Fallback: attach a real anchor to DOM and click it so YouTube's SPA router intercepts the click
+    const anchor = document.createElement('a');
+    anchor.href = '/feed/subscriptions';
+    anchor.id = 'endpoint';
+    anchor.className = 'yt-simple-endpoint';
+    anchor.style.display = 'none';
+    document.body.appendChild(anchor);
+    anchor.click();
+    anchor.remove();
   }
 }

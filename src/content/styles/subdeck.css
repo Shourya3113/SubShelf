@@ -134,6 +134,8 @@ html[dark],
   min-width: 0;
   cursor: pointer;
   padding: 2px 0;
+  text-decoration: none;
+  color: inherit;
 }
 
 .subdeck-folder-icon {

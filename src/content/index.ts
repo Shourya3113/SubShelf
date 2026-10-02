@@ -172,7 +172,7 @@ class SubDeckCoordinator {
           }
         } else {
           // Outside subscriptions page, cleanly tear down feed filter, observer, and banner
-          await SubDeckStorage.setAll({ activeCategoryId: null });
+          await SubDeckStorage.setActiveCategoryId(null);
           FeedFilter.clearFilter();
           FeedFilter.removeBanner();
           FeedFilter.stopObserving();

@@ -16,7 +16,7 @@ export class FeedFilter {
     if (!SubDeckStorage.isContextValid()) return;
     this.activeCategory = category;
     this.scrollAttempts = 0;
-    await SubDeckStorage.setAll({ activeCategoryId: category ? category.id : null });
+    await SubDeckStorage.setActiveCategoryId(category ? category.id : null);
 
     if (!category) {
       this.clearFilter();

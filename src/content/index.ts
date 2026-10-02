@@ -17,6 +17,7 @@ class SubDeckCoordinator {
       if (!SubDeckStorage.isContextValid()) return;
       const map = sanitizeAvatarMap(payload);
       if (map.size === 0) return;
+      ChannelExtractor.mergeAvatars(map);
       SubscriptionSync.mergeAvatars(map);
     };
 
@@ -26,6 +27,17 @@ class SubDeckCoordinator {
       if (e.data?.type !== 'SUBSHELF_AVATARS_BROADCAST') return;
       handleAvatars(e.data.avatars);
     });
+
+    const requestAvatars = () => {
+      try {
+        document.dispatchEvent(new CustomEvent('subshelf-request-avatars'));
+        window.postMessage({ type: 'SUBSHELF_REQUEST_AVATARS' }, location.origin);
+      } catch {}
+    };
+
+    requestAvatars();
+    setTimeout(requestAvatars, 800);
+    setTimeout(requestAvatars, 2000);
 
     window.addEventListener('yt-navigate-start', (e: any) => {
       const url = e?.detail?.url || window.location.pathname;

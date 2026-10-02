@@ -1,5 +1,7 @@
 import { SubDeckStorageSchema, DEFAULT_STORAGE, SubscribedChannel, CategoryDeck } from '@/types';
 
+export const SUBSHELF_SECURE_API_KEY = 'subshelf_gemini_api_key';
+
 export class SubDeckStorage {
   static isContextValid(): boolean {
     try {
@@ -7,6 +9,10 @@ export class SubDeckStorage {
     } catch {
       return false;
     }
+  }
+
+  static isContentScript(): boolean {
+    return typeof window !== 'undefined' && window.location?.protocol !== 'chrome-extension:';
   }
 
   static async getAll(): Promise<SubDeckStorageSchema> {
@@ -21,6 +27,27 @@ export class SubDeckStorage {
         await chrome.storage.local.set(defaults);
         return defaults;
       }
+
+      // Security: Migrate legacy apiKey out of settings into isolated dedicated storage
+      if (data.settings && 'apiKey' in data.settings) {
+        if (typeof data.settings.apiKey === 'string' && data.settings.apiKey.length > 0 && !this.isContentScript()) {
+          const legacyKey = data.settings.apiKey;
+          delete data.settings.apiKey;
+          chrome.storage.local.set({
+            [SUBSHELF_SECURE_API_KEY]: legacyKey,
+            settings: data.settings,
+          }).catch(() => {});
+        } else {
+          delete data.settings.apiKey;
+        }
+      }
+
+      // Security: Strip internal dedicated keys and any apiKey from the returned state
+      delete (data as any)[SUBSHELF_SECURE_API_KEY];
+      if (data.settings) {
+        delete data.settings.apiKey;
+      }
+
       // Backward compatibility: ensure exclusion and manual assignment maps exist
       if (!data.channelExclusions) data.channelExclusions = {};
       if (!data.manualAssignments) data.manualAssignments = {};
@@ -227,7 +254,45 @@ export class SubDeckStorage {
 
   static async updateSettings(partial: Partial<SubDeckStorageSchema['settings']>): Promise<void> {
     const data = await this.getAll();
-    data.settings = { ...data.settings, ...partial };
+    const sanitizedPartial = { ...partial };
+    delete sanitizedPartial.apiKey;
+    data.settings = { ...data.settings, ...sanitizedPartial };
     await this.setAll({ settings: data.settings });
+  }
+
+  /**
+   * Securely retrieves the Gemini API key from isolated storage.
+   * Direct access is strictly blocked from YouTube content scripts.
+   */
+  static async getApiKey(): Promise<string | undefined> {
+    if (!this.isContextValid() || this.isContentScript()) {
+      return undefined;
+    }
+    try {
+      const res = await chrome.storage.local.get(SUBSHELF_SECURE_API_KEY);
+      return res[SUBSHELF_SECURE_API_KEY] || undefined;
+    } catch {
+      return undefined;
+    }
+  }
+
+  /**
+   * Securely saves or removes the Gemini API key in isolated storage.
+   * Modification is strictly blocked from YouTube content scripts.
+   */
+  static async setApiKey(apiKey: string): Promise<void> {
+    if (!this.isContextValid() || this.isContentScript()) {
+      return;
+    }
+    try {
+      const trimmed = apiKey ? apiKey.trim() : '';
+      if (!trimmed) {
+        await chrome.storage.local.remove(SUBSHELF_SECURE_API_KEY);
+      } else {
+        await chrome.storage.local.set({ [SUBSHELF_SECURE_API_KEY]: trimmed });
+      }
+    } catch {
+      // Ignore if context is invalidated
+    }
   }
 }

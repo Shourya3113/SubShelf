@@ -337,8 +337,14 @@ class PopupManager {
     if (!this.state) return;
 
     aiProvider.value = this.state.settings.aiProvider;
-    apiKey.value = this.state.settings.apiKey || '';
     hideShorts.checked = this.state.settings.hideShortsFromFeed;
+
+    // Securely retrieve API key from background service worker
+    chrome.runtime.sendMessage({ type: 'subshelf-get-api-key' }, (res) => {
+      if (res?.success && typeof res.apiKey === 'string') {
+        apiKey.value = res.apiKey;
+      }
+    });
 
     resetOverridesBtn?.addEventListener('click', async () => {
       if (confirm('Reset all manual channel assignments and exclusions? Auto-AI will re-categorize all channels from scratch next time it runs.')) {
@@ -355,11 +361,9 @@ class PopupManager {
       }
     });
 
-    apiKey.addEventListener('change', async () => {
-      if (this.state) {
-        this.state.settings.apiKey = apiKey.value.trim();
-        await SubDeckStorage.setAll({ settings: this.state.settings });
-      }
+    apiKey.addEventListener('change', () => {
+      const val = apiKey.value.trim();
+      chrome.runtime.sendMessage({ type: 'subshelf-set-api-key', apiKey: val });
     });
 
     const geminiModel = document.getElementById('setting-gemini-model') as HTMLInputElement;

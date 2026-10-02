@@ -362,6 +362,54 @@ body {
   margin-top: 4px;
 }
 
+/* Privacy Disclosure Callout */
+.privacy-notice-box {
+  margin-top: 8px;
+  padding: 10px 12px;
+  background-color: rgba(234, 179, 8, 0.08);
+  border: 1px solid rgba(234, 179, 8, 0.35);
+  border-radius: 6px;
+  font-size: 11px;
+  line-height: 1.45;
+  color: var(--text-primary);
+}
+
+.privacy-notice-header {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 4px;
+  font-weight: 600;
+  color: #b45309;
+}
+
+.privacy-notice-icon {
+  font-size: 12px;
+}
+
+.privacy-notice-text {
+  margin-top: 4px;
+  color: var(--text-secondary);
+}
+
+.privacy-notice-text:first-of-type {
+  margin-top: 0;
+}
+
+.privacy-notice-text strong {
+  color: var(--text-primary);
+}
+
+@media (prefers-color-scheme: dark) {
+  .privacy-notice-box {
+    background-color: rgba(234, 179, 8, 0.06);
+    border-color: rgba(234, 179, 8, 0.28);
+  }
+  .privacy-notice-header {
+    color: #fbbf24;
+  }
+}
+
 .toggle-group {
   display: flex;
   align-items: center;

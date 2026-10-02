@@ -11,22 +11,24 @@ export interface CategorizeAllResult {
 }
 
 export class AICategorizer {
-  static async categorizeAll(channels: SubscribedChannel[]): Promise<CategorizeAllResult> {
+  static async categorizeAll(channels: SubscribedChannel[], apiKeyOverride?: string): Promise<CategorizeAllResult> {
     if (channels.length === 0) {
       return { decks: [], providerUsed: 'heuristic' };
     }
 
     const settings = (await SubDeckStorage.getAll()).settings;
+    // Security: Only service worker or explicit parameter provides API key; isolated from content scripts
+    const apiKey = apiKeyOverride || (typeof window === 'undefined' ? await SubDeckStorage.getApiKey() : undefined);
     let result: CategoryDeck[] | null = null;
     let providerUsed: 'gemini-nano' | 'gemini-api' | 'heuristic' = 'heuristic';
     let fallbackNotice: string | undefined;
 
     switch (settings.aiProvider) {
       case 'gemini-api':
-        if (settings.apiKey) {
+        if (apiKey) {
           try {
             const cloudModel = settings.geminiModel || DEFAULT_GEMINI_CLOUD_MODEL;
-            const cloudResult = await this.tryGeminiCloud(channels, settings.apiKey, cloudModel);
+            const cloudResult = await this.tryGeminiCloud(channels, apiKey, cloudModel);
             if (cloudResult) {
               Logger.info(`[SubShelf AI] Successfully organized using Gemini Cloud API (${cloudModel})`);
               result = cloudResult;
@@ -67,11 +69,11 @@ export class AICategorizer {
           Logger.warn('[SubShelf AI] Gemini Nano unavailable, falling back:', err);
         }
 
-        // Tier 2: Gemini Cloud API (if user entered API key)
-        if (settings.apiKey) {
+        // Tier 2: Gemini Cloud API (if user entered API key and running in service worker)
+        if (apiKey) {
           try {
             const cloudModel = settings.geminiModel || DEFAULT_GEMINI_CLOUD_MODEL;
-            const cloudResult = await this.tryGeminiCloud(channels, settings.apiKey, cloudModel);
+            const cloudResult = await this.tryGeminiCloud(channels, apiKey, cloudModel);
             if (cloudResult) {
               Logger.info(`[SubShelf AI] Successfully organized using Gemini Cloud API (${cloudModel})`);
               result = cloudResult;

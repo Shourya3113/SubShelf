@@ -390,6 +390,20 @@ class PopupManager {
         }
       }
     });
+
+    const coffeeBtn = document.getElementById('coffee-btn');
+    const footerCoffeeLink = document.getElementById('footer-coffee-link');
+    const openDonation = (e: Event) => {
+      e.preventDefault();
+      const url = (e.currentTarget as HTMLAnchorElement)?.href || 'https://buymeacoffee.com/subshelf';
+      if (chrome.tabs?.create) {
+        chrome.tabs.create({ url });
+      } else {
+        window.open(url, '_blank');
+      }
+    };
+    coffeeBtn?.addEventListener('click', openDonation);
+    footerCoffeeLink?.addEventListener('click', openDonation);
   }
 }
 

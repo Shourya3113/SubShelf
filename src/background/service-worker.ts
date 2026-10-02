@@ -2,16 +2,24 @@ import { SubDeckStorage } from '@/utils/storage';
 import { AICategorizer } from '@/ai/categorizer';
 import { Logger } from '@/utils/logger';
 import { runMigrations } from './migrations';
+import { CURRENT_SCHEMA_VERSION } from '@/types';
 
 chrome.runtime.onInstalled.addListener(async (details) => {
   const current = await SubDeckStorage.getAll();
-  if (details.reason === 'update') {
-    const fromVersion = current.version || 1;
-    const migrated = runMigrations(fromVersion, 1, current);
-    await SubDeckStorage.setAll(migrated);
-    Logger.info(`[SubShelf] Migrated storage schema from v${fromVersion} to v1`);
-  } else {
-    Logger.info('[SubShelf] Service worker initialized with default storage');
+  const fromVersion = typeof current?.version === 'number' ? current.version : 0;
+
+  if (details.reason === 'update' || details.reason === 'install') {
+    if (fromVersion < CURRENT_SCHEMA_VERSION) {
+      try {
+        const migrated = runMigrations(fromVersion, CURRENT_SCHEMA_VERSION, current);
+        await SubDeckStorage.setAll(migrated);
+        Logger.info(`[SubShelf] Successfully migrated storage schema from v${fromVersion} to v${CURRENT_SCHEMA_VERSION}`);
+      } catch (err) {
+        Logger.error(`[SubShelf] Storage schema migration failed from v${fromVersion} to v${CURRENT_SCHEMA_VERSION}:`, err);
+      }
+    } else {
+      Logger.info(`[SubShelf] Storage schema up to date at v${fromVersion}`);
+    }
   }
 });
 

@@ -8,14 +8,10 @@ export class FeedFilter {
   private static activeCategory: CategoryDeck | null = null;
   private static observer: MutationObserver | null = null;
   private static bannerId = 'subdeck-feed-banner';
-  private static isScrolling = false;
-  private static scrollAttempts = 0;
-  private static readonly MAX_SCROLL_ATTEMPTS = 3;
 
   static async setCategory(category: CategoryDeck | null): Promise<void> {
     if (!SubDeckStorage.isContextValid()) return;
     this.activeCategory = category;
-    this.scrollAttempts = 0;
     await SubDeckStorage.setActiveCategoryId(category ? category.id : null);
 
     if (!category) {
@@ -77,11 +73,7 @@ export class FeedFilter {
       }
     });
 
-    // If fewer than 6 videos are visible and within attempt limits, pull more content
-    if (visibleCount < 6 && !this.isScrolling && this.scrollAttempts < this.MAX_SCROLL_ATTEMPTS) {
-      this.scrollAttempts++;
-      this.triggerInfiniteScroll();
-    }
+    this.updateBannerStatus(visibleCount);
   }
 
   static clearFilter(): void {
@@ -93,17 +85,15 @@ export class FeedFilter {
     });
   }
 
-  private static triggerInfiniteScroll = debounce(() => {
-    if (!window.location.pathname.startsWith('/feed/subscriptions')) return;
-    this.isScrolling = true;
-
-    window.scrollBy({ top: 1200, behavior: 'smooth' });
-
-    setTimeout(() => {
-      this.isScrolling = false;
-      this.applyFilter();
-    }, 800);
-  }, 300);
+  private static updateBannerStatus(count: number): void {
+    const statusEl = document.getElementById('subdeck-feed-banner-status');
+    if (!statusEl) return;
+    if (count === 0) {
+      statusEl.textContent = ' — No matching videos loaded yet (scroll down to load more)';
+    } else {
+      statusEl.textContent = ` — ${count} video${count === 1 ? '' : 's'} shown`;
+    }
+  }
 
   private static renderBanner(category: CategoryDeck): void {
     this.removeBanner();
@@ -117,6 +107,7 @@ export class FeedFilter {
     infoDiv.style.display = 'flex';
     infoDiv.style.alignItems = 'center';
     infoDiv.style.gap = '8px';
+    infoDiv.style.flexWrap = 'wrap';
 
     const iconSpan = document.createElement('span');
     iconSpan.style.fontSize = '16px';
@@ -134,8 +125,14 @@ export class FeedFilter {
     labelSpan.appendChild(strongEl);
     labelSpan.appendChild(countText);
 
+    const statusSpan = document.createElement('span');
+    statusSpan.id = 'subdeck-feed-banner-status';
+    statusSpan.style.color = 'var(--sd-text-secondary, #aaa)';
+    statusSpan.style.fontSize = '12px';
+
     infoDiv.appendChild(iconSpan);
     infoDiv.appendChild(labelSpan);
+    infoDiv.appendChild(statusSpan);
 
     const dismissBtn = document.createElement('button');
     dismissBtn.className = 'subdeck-banner-dismiss';
@@ -180,7 +177,11 @@ export class FeedFilter {
       if (hasAddedNodes) debouncedFilter();
     });
 
-    const target = document.querySelector('ytd-rich-grid-renderer');
+    const target =
+      document.querySelector('ytd-rich-grid-renderer') ||
+      document.querySelector('ytd-browse[page-subtype="subscriptions"]') ||
+      document.querySelector('#contents');
+
     if (target) {
       this.observer.observe(target, { childList: true, subtree: true });
     }

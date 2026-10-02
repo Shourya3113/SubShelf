@@ -21,7 +21,7 @@ Powered by a 3-tier categorization engine (on-device **Gemini Nano**, cloud **Go
 | 📁 **Native Sidebar Folders** | Seamless accordion folders (*Tech & Coding, Gaming, Music & Audio, Education, etc.*) embedded directly above your native YouTube subscriptions. |
 | ✨ **1-Click AI Auto-Categorization** | Automatically clusters 100+ subscriptions into smart category decks using on-device AI or high-precision NLP heuristics. |
 | 🎯 **Custom Feed Filtering** | Clicking any category folder instantly filters `/feed/subscriptions` to display only videos from channels in that folder. |
-| ♾️ **Infinite Scroll Sync** | Continuation auto-scroll seamlessly pulls more videos from your chosen category without breaking YouTube's native virtual grid. |
+| ⚡ **Live Feed Filtering** | Real-time DOM filtering as you scroll naturally, matching channel categories without jarring jumps or redundant downloads. |
 | 📺 **In-Sidebar Channel Controls** | Add channels via the inline picker (`+`), remove channels (`✕`), or create new custom folders (`+ Folder`) without leaving YouTube. |
 | 🎛️ **Full Popup Manager** | 3-tab dashboard to search channels, reassign folders via inline dropdowns, rename/delete decks, and configure AI providers. |
 | 🚫 **Hide Shorts Shelves** | Optional one-click toggle in Settings to remove distracting Shorts carousels from your subscription feed. |
@@ -139,7 +139,7 @@ SubShelf/
 │   │   └── selectors.ts    # Resilient & multi-lingual YouTube DOM selectors
 │   ├── content/
 │   │   ├── channelExtractor.ts # Sidebar channel parser
-│   │   ├── feedFilter.ts       # Subscription feed curator & infinite scroll
+│   │   ├── feedFilter.ts       # Subscription feed curator & live filter
 │   │   ├── healthMonitor.ts    # YouTube DOM layout degradation monitor
 │   │   ├── index.ts            # Content script entry point & coordinator
 │   │   ├── sidebarManager.ts   # Sidebar accordion folders & in-DOM controls

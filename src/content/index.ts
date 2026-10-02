@@ -8,7 +8,7 @@ import { debounce } from '@/utils/debounce';
 import { Logger } from '@/utils/logger';
 import { sanitizeAvatarMap } from '@/utils/avatarUrl';
 
-class SubDeckCoordinator {
+class SubShelfCoordinator {
   static init(): void {
     Logger.info('Initializing SubShelf Coordinator');
 
@@ -198,4 +198,4 @@ class SubDeckCoordinator {
   }, 350);
 }
 
-SubDeckCoordinator.init();
+SubShelfCoordinator.init();

@@ -56,28 +56,21 @@
       <div class="settings-group">
         <label class="settings-label">AI Categorization Model</label>
         <select id="setting-ai-provider" class="select-input">
-          <option value="gemini-nano">Gemini Nano (Chrome Built-in AI)</option>
-          <option value="gemini-api">Google Gemini (Cloud API)</option>
-          <option value="heuristic">Offline Regex & Keywords</option>
+          <option value="gemini-nano">Gemini Nano (on-device, private)</option>
+          <option value="gemini-api">Google Gemini (Cloud API, your key)</option>
+          <option value="heuristic">Offline keywords (private)</option>
         </select>
       </div>
 
       <div class="settings-group" id="api-key-group">
-        <label class="settings-label">Gemini API Key (Optional)</label>
-        <input type="password" id="setting-api-key" class="text-input" placeholder="AIzaSy..." />
-        <span class="settings-help">Required only for Gemini Cloud API tier.</span>
-        <div class="privacy-notice-box">
-          <div class="privacy-notice-header">
-            <span class="privacy-notice-icon">⚠️</span>
-            <strong>Privacy Notice (Cloud AI Tier)</strong>
-          </div>
-          <p class="privacy-notice-text">
-            Using Cloud AI sends your subscribed channel titles and handles to Google. Under Google's free-of-charge API terms, prompt data may be reviewed by human reviewers and used to improve Google products.
-          </p>
-          <p class="privacy-notice-text">
-            For <strong>100% on-device privacy</strong> where no data ever leaves your browser, use <strong>Gemini Nano</strong> or <strong>Offline Regex</strong>.
-          </p>
-        </div>
+        <label class="settings-label" for="setting-api-key">Gemini API Key (optional)</label>
+        <input type="password" id="setting-api-key" class="text-input" placeholder="AIzaSy..."
+               autocomplete="off" spellcheck="false" />
+        <span class="settings-help">
+          <strong>Privacy:</strong> if you use the Cloud option, your channel names and handles are sent to Google's
+          Gemini API using your key. Nothing is sent to SubShelf servers. Leave this empty to stay fully on-device.
+          Your key is stored only in this browser and is never included in backups.
+        </span>
       </div>
 
       <div class="settings-group" id="model-group">

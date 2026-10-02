@@ -6,10 +6,26 @@ import { ChannelExtractor } from './channelExtractor';
 import { SubDeckStorage } from '@/utils/storage';
 import { debounce } from '@/utils/debounce';
 import { Logger } from '@/utils/logger';
+import { sanitizeAvatarMap } from '@/utils/avatarUrl';
 
 class SubDeckCoordinator {
   static init(): void {
     Logger.info('Initializing SubShelf Coordinator');
+
+    // Secure avatar broadcasts handling
+    const handleAvatars = (payload: unknown) => {
+      if (!SubDeckStorage.isContextValid()) return;
+      const map = sanitizeAvatarMap(payload);
+      if (map.size === 0) return;
+      SubscriptionSync.mergeAvatars(map);
+    };
+
+    document.addEventListener('subshelf-avatars-broadcast', (e) => handleAvatars((e as CustomEvent).detail));
+    window.addEventListener('message', (e) => {
+      if (e.source !== window || e.origin !== location.origin) return;
+      if (e.data?.type !== 'SUBSHELF_AVATARS_BROADCAST') return;
+      handleAvatars(e.data.avatars);
+    });
 
     window.addEventListener('yt-navigate-start', (e: any) => {
       const url = e?.detail?.url || window.location.pathname;

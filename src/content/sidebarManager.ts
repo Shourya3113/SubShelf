@@ -7,7 +7,7 @@ import { CategoryDeck, SubscribedChannel } from '@/types';
 import { debounce } from '@/utils/debounce';
 import { SubscriptionSync } from './subscriptionSync';
 import { Logger } from '@/utils/logger';
-import { isValidYouTubeAvatarUrl } from '@/utils/validators';
+import { safeAvatarUrl } from '@/utils/avatarUrl';
 
 export class SidebarManager {
   private static containerId = 'subdeck-sidebar-container';
@@ -622,10 +622,12 @@ export class SidebarManager {
           titleSpan.textContent = ch.title;
 
           // Channel avatar (24px circular profile picture)
-          if (isValidYouTubeAvatarUrl(ch.avatarUrl)) {
+          const safe = safeAvatarUrl(ch.avatarUrl);
+          if (safe) {
             const avatar = document.createElement('img');
             avatar.className = 'subdeck-channel-avatar';
-            avatar.src = ch.avatarUrl;
+            avatar.referrerPolicy = 'no-referrer';
+            avatar.src = safe;
             avatar.alt = '';
             avatar.loading = 'lazy';
             avatar.onerror = () => {
@@ -769,23 +771,13 @@ export class SidebarManager {
    * allowing YouTube's internal SPA router to handle the transition without a page reload.
    */
   static navigateToSubscriptionsFeed(): void {
-    // 1. Try finding and clicking YouTube's native Subscriptions link in the sidebar/guide
-    const nativeLink = document.querySelector<HTMLAnchorElement>(
-      'ytd-guide-entry-renderer a[href="/feed/subscriptions"], ytd-mini-guide-entry-renderer a[href="/feed/subscriptions"], #guide a[href="/feed/subscriptions"], a#endpoint[href="/feed/subscriptions"], a[href="/feed/subscriptions"]'
+    const link = document.querySelector<HTMLAnchorElement>(
+      'ytd-guide-renderer a[href="/feed/subscriptions"], ytd-mini-guide-renderer a[href="/feed/subscriptions"], ytd-guide-entry-renderer a[href="/feed/subscriptions"], #guide a[href="/feed/subscriptions"]'
     );
-    if (nativeLink) {
-      nativeLink.click();
-      return;
+    if (link) {
+      link.click();
+    } else {
+      window.location.href = '/feed/subscriptions';
     }
-
-    // 2. Fallback: attach a real anchor to DOM and click it so YouTube's SPA router intercepts the click
-    const anchor = document.createElement('a');
-    anchor.href = '/feed/subscriptions';
-    anchor.id = 'endpoint';
-    anchor.className = 'yt-simple-endpoint';
-    anchor.style.display = 'none';
-    document.body.appendChild(anchor);
-    anchor.click();
-    anchor.remove();
   }
 }

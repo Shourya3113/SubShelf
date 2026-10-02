@@ -95,16 +95,9 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     return true;
   }
 
-  if (message?.type === 'subdeck-auto-organize') {
+  if (message?.type === 'subshelf-auto-organize' || message?.type === 'subdeck-auto-organize') {
     (async () => {
       try {
-        Logger.info('[SubShelf Background] AI Environment Diagnostics in Service Worker:', {
-          typeofGlobalLanguageModel: typeof (globalThis as any).LanguageModel,
-          typeofSelfLanguageModel: typeof (self as any).LanguageModel,
-          typeofSelfAi: typeof (self as any).ai,
-          typeofAiLanguageModel: typeof (self as any).ai?.languageModel,
-        });
-
         Logger.info('[SubShelf Background] Running AI auto-categorization...');
         const channelsMap = await SubDeckStorage.getChannels();
         const channels = Object.values(channelsMap);
@@ -114,8 +107,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
           return;
         }
 
-        const apiKey = await SubDeckStorage.getApiKey();
-        const { decks: categorizedDecks, fallbackNotice } = await AICategorizer.categorizeAll(channels, apiKey);
+        const result = await AICategorizer.categorizeAll(channels);
 
         // Serialize overrides application and storage commit through the write queue
         const finalDecks = await storageQueue.enqueue(async () => {
@@ -125,7 +117,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
           const channelExclusions = raw.channelExclusions || {};
 
           const applied = AICategorizer.applyOverrides(
-            categorizedDecks,
+            result.decks,
             currentCategories,
             manualAssignments,
             channelExclusions,
@@ -141,7 +133,9 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
           success: true,
           count: channels.length,
           decks: finalDecks.length,
-          fallbackNotice,
+          provider: result.providerUsed,
+          notice: result.fallbackNotice,
+          fallbackNotice: result.fallbackNotice,
         });
       } catch (err) {
         Logger.error('[SubShelf Background] Auto-organization failed:', err);

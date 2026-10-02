@@ -4,156 +4,277 @@ import { buildCategorizationPrompt } from './prompt';
 import { SubDeckStorage } from '@/utils/storage';
 import { Logger } from '@/utils/logger';
 
+export type AIProvider = 'gemini-nano' | 'gemini-api' | 'heuristic';
+
 export interface CategorizeAllResult {
   decks: CategoryDeck[];
-  providerUsed: 'gemini-nano' | 'gemini-api' | 'heuristic';
+  providerUsed: AIProvider;
   fallbackNotice?: string;
 }
 
-export class AICategorizer {
-  static async categorizeAll(channels: SubscribedChannel[], apiKeyOverride?: string): Promise<CategorizeAllResult> {
-    if (channels.length === 0) {
-      return { decks: [], providerUsed: 'heuristic' };
+export const DEFAULT_GEMINI_MODEL = DEFAULT_GEMINI_CLOUD_MODEL;
+const NANO_CHUNK = 40;          // Nano context window budget
+const CLOUD_CHUNK = 150;
+const CLOUD_TIMEOUT_MS = 25_000;
+
+const chunk = <T,>(a: T[], n: number): T[][] =>
+  Array.from({ length: Math.ceil(a.length / n) }, (_, i) => a.slice(i * n, i * n + n));
+
+function mergeDecks(a: CategoryDeck[], b: CategoryDeck[]): CategoryDeck[] {
+  const map = new Map<string, CategoryDeck>(a.map(d => [d.id, { ...d, channelIds: [...d.channelIds] }]));
+  for (const d of b) {
+    const t = map.get(d.id);
+    if (t) {
+      t.channelIds = [...new Set([...t.channelIds, ...d.channelIds])];
+    } else {
+      map.set(d.id, { ...d, channelIds: [...d.channelIds] });
     }
+  }
+  return [...map.values()]
+    .filter(d => d.channelIds.length > 0 || !d.isSystem)
+    .sort((x, y) => x.sortOrder - y.sortOrder);
+}
 
-    const settings = (await SubDeckStorage.getAll()).settings;
-    // Security: Only service worker or explicit parameter provides API key; isolated from content scripts
-    const apiKey = apiKeyOverride || (typeof window === 'undefined' ? await SubDeckStorage.getApiKey() : undefined);
-    let result: CategoryDeck[] | null = null;
-    let providerUsed: 'gemini-nano' | 'gemini-api' | 'heuristic' = 'heuristic';
-    let fallbackNotice: string | undefined;
-
-    switch (settings.aiProvider) {
-      case 'gemini-api':
-        if (apiKey) {
-          try {
-            const cloudModel = settings.geminiModel || DEFAULT_GEMINI_CLOUD_MODEL;
-            const cloudResult = await this.tryGeminiCloud(channels, apiKey, cloudModel);
-            if (cloudResult) {
-              Logger.info(`[SubShelf AI] Successfully organized using Gemini Cloud API (${cloudModel})`);
-              result = cloudResult;
-              providerUsed = 'gemini-api';
-              break;
-            }
-          } catch (err) {
-            const errMsg = err instanceof Error ? err.message : String(err);
-            Logger.warn('[SubShelf AI] Gemini Cloud failed, falling back to heuristic:', errMsg);
-            fallbackNotice = 'Cloud AI failed, used offline engine';
-          }
-        } else {
-          fallbackNotice = 'No Gemini API key provided, used offline engine';
-        }
-        Logger.info('[SubShelf AI] Organizing using Heuristic Categorizer fallback');
-        result = HeuristicCategorizer.categorize(channels);
-        providerUsed = 'heuristic';
-        break;
-
-      case 'heuristic':
-        Logger.info('[SubShelf AI] Organizing using Heuristic Categorizer');
-        result = HeuristicCategorizer.categorize(channels);
-        providerUsed = 'heuristic';
-        break;
-
-      case 'gemini-nano':
-      default:
-        // Tier 1: Chrome Built-in AI (Gemini Nano)
-        try {
-          const nanoResult = await this.tryGeminiNano(channels);
-          if (nanoResult) {
-            Logger.info('[SubShelf AI] Successfully organized using Gemini Nano');
-            result = nanoResult;
-            providerUsed = 'gemini-nano';
-            break;
-          }
-        } catch (err) {
-          Logger.warn('[SubShelf AI] Gemini Nano unavailable, falling back:', err);
-        }
-
-        // Tier 2: Gemini Cloud API (if user entered API key and running in service worker)
-        if (apiKey) {
-          try {
-            const cloudModel = settings.geminiModel || DEFAULT_GEMINI_CLOUD_MODEL;
-            const cloudResult = await this.tryGeminiCloud(channels, apiKey, cloudModel);
-            if (cloudResult) {
-              Logger.info(`[SubShelf AI] Successfully organized using Gemini Cloud API (${cloudModel})`);
-              result = cloudResult;
-              providerUsed = 'gemini-api';
-              break;
-            }
-          } catch (err) {
-            const errMsg = err instanceof Error ? err.message : String(err);
-            Logger.warn('[SubShelf AI] Gemini Cloud failed, falling back:', errMsg);
-            fallbackNotice = 'Cloud AI failed, used offline engine';
-          }
-        }
-
-        // Tier 3: Deterministic Keyword/Regex Heuristic
-        Logger.info('[SubShelf AI] Organizing using Heuristic Categorizer');
-        result = HeuristicCategorizer.categorize(channels);
-        providerUsed = 'heuristic';
-        break;
+/** Parse model output. Each valid channel is assigned at most once across all decks. */
+function parseAIResponse(raw: string, channels: SubscribedChannel[]): CategoryDeck[] | null {
+  const valid = new Set(channels.map(c => c.ucId));
+  const text = raw.replace(/`{3}(?:json)?/gi, '').trim();
+  let obj: unknown;
+  try {
+    obj = JSON.parse(text);
+  } catch {
+    const m = text.match(/\{[\s\S]*\}/);
+    if (!m) return null;
+    try {
+      obj = JSON.parse(m[0]);
+    } catch {
+      return null;
     }
+  }
+  if (!obj || typeof obj !== 'object' || Array.isArray(obj)) return null;
 
-    // Second pass: Deduplicate across all decks and guarantee 100% assignment
-    const globalAssigned = new Set<string>();
-    result!.forEach(d => {
-      d.channelIds = d.channelIds.filter(id => {
-        if (globalAssigned.has(id)) return false;
-        globalAssigned.add(id);
-        return true;
-      });
-    });
-
-    const unassignedChannels = channels.filter(c => !globalAssigned.has(c.ucId));
-    if (unassignedChannels.length > 0) {
-      Logger.info(`[SubShelf AI] Pushing ${unassignedChannels.length} unassigned channels to general-other for rescue`);
-      let generalDeck = result!.find(d => d.id === 'general-other');
-      if (!generalDeck) {
-        const genTax = SUBDECK_TAXONOMY.find(t => t.id === 'general-other') || {
-          id: 'general-other',
-          name: 'General & Others',
-          icon: '🌐',
-          color: '#6B7280',
-        };
-        generalDeck = {
-          id: genTax.id,
-          name: genTax.name,
-          icon: genTax.icon,
-          color: genTax.color,
-          channelIds: [],
-          isCollapsed: true,
-          sortOrder: 99,
-          isSystem: true,
-        };
-        result!.push(generalDeck);
-      }
-      for (const ch of unassignedChannels) {
-        if (!globalAssigned.has(ch.ucId)) {
-          globalAssigned.add(ch.ucId);
-          generalDeck.channelIds.push(ch.ucId);
+  const seen = new Set<string>();
+  const decks = SUBDECK_TAXONOMY.map((t, i): CategoryDeck => {
+    const list = (obj as Record<string, unknown>)[t.id];
+    const ids: string[] = [];
+    if (Array.isArray(list)) {
+      for (const x of list) {
+        if (typeof x === 'string' && valid.has(x) && !seen.has(x)) {
+          seen.add(x);
+          ids.push(x);
         }
       }
     }
-
-    // Third pass: Run channels in "general-other" through heuristic to rescue them
-    const rescuedDecks = this.rescueGeneralOther(result!, channels);
     return {
-      decks: rescuedDecks,
-      providerUsed,
-      fallbackNotice,
+      id: t.id,
+      name: t.name,
+      icon: t.icon,
+      color: t.color,
+      channelIds: ids,
+      isCollapsed: true,
+      sortOrder: i,
+      isSystem: true,
+    };
+  });
+
+  return seen.size === 0 ? null : decks.filter(d => d.channelIds.length > 0);
+}
+
+/** Guarantee 100% assignment: anything skipped by the model is categorized via deterministic heuristics. */
+function completeAssignments(decks: CategoryDeck[], channels: SubscribedChannel[]): CategoryDeck[] {
+  const assigned = new Set(decks.flatMap(d => d.channelIds));
+  const missing = channels.filter(c => !assigned.has(c.ucId));
+  if (missing.length === 0) return decks;
+  Logger.info(`[SubShelf AI] ${missing.length} channels unassigned by model, applying heuristic completion`);
+  return mergeDecks(decks, HeuristicCategorizer.categorize(missing));
+}
+
+/** Run batches across channel chunks. Partial success merges results; total failure throws. */
+async function runChunks(
+  channels: SubscribedChannel[],
+  size: number,
+  call: (prompt: string) => Promise<string>
+): Promise<CategoryDeck[]> {
+  let merged: CategoryDeck[] = [];
+  let ok = 0;
+  let lastErr: unknown;
+
+  for (const part of chunk(channels, size)) {
+    try {
+      const out = await call(buildCategorizationPrompt(part));
+      const decks = parseAIResponse(out, part);
+      if (decks) {
+        merged = mergeDecks(merged, decks);
+        ok++;
+      }
+    } catch (e) {
+      lastErr = e;
+    }
+  }
+
+  if (!ok) throw lastErr ?? new Error('Model returned no usable output across chunks');
+  return merged;
+}
+
+// ---------- Gemini Nano (Chrome Built-in Prompt API) ----------
+const NANO_OPTS = {
+  expectedInputs: [{ type: 'text', languages: ['en'] }],
+  expectedOutputs: [{ type: 'text', languages: ['en'] }],
+};
+
+function resolveLanguageModelAPI(): any {
+  const g = globalThis as any;
+  const s = typeof self !== 'undefined' ? (self as any) : null;
+  const w = typeof window !== 'undefined' ? (window as any) : null;
+
+  if (typeof g?.LanguageModel?.create === 'function') return g.LanguageModel;
+  if (typeof s?.LanguageModel?.create === 'function') return s.LanguageModel;
+  if (typeof w?.LanguageModel?.create === 'function') return w.LanguageModel;
+
+  if (typeof g?.ai?.languageModel?.create === 'function') return g.ai.languageModel;
+  if (typeof s?.ai?.languageModel?.create === 'function') return s.ai.languageModel;
+  if (typeof w?.ai?.languageModel?.create === 'function') return w.ai.languageModel;
+
+  return null;
+}
+
+async function tryGeminiNano(channels: SubscribedChannel[]): Promise<CategoryDeck[]> {
+  const LM = resolveLanguageModelAPI();
+  if (!LM) throw new Error('LanguageModel API is not exposed in this context');
+
+  let availability = 'available';
+  if (typeof LM.availability === 'function') {
+    availability = await LM.availability(NANO_OPTS);
+  } else if (typeof LM.capabilities === 'function') {
+    const caps = await LM.capabilities();
+    availability = caps?.available || 'unavailable';
+  }
+
+  if (availability !== 'available' && availability !== 'readily') {
+    throw new Error(`Gemini Nano status: ${availability}`);
+  }
+
+  return runChunks(channels, NANO_CHUNK, async (prompt) => {
+    // Fresh session per chunk to avoid context-window saturation
+    const session = await LM.create(NANO_OPTS);
+    try {
+      return await session.prompt(prompt);
+    } finally {
+      session?.destroy?.();
+    }
+  });
+}
+
+// ---------- Gemini Cloud API ----------
+async function callGemini(prompt: string, apiKey: string, model: string): Promise<string> {
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), CLOUD_TIMEOUT_MS);
+
+  try {
+    const res = await fetch(
+      `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent`,
+      {
+        method: 'POST',
+        signal: ctrl.signal,
+        headers: {
+          'Content-Type': 'application/json',
+          'x-goog-api-key': apiKey,
+        },
+        body: JSON.stringify({
+          contents: [{ parts: [{ text: prompt }] }],
+          generationConfig: { responseMimeType: 'application/json', temperature: 0 },
+        }),
+      }
+    );
+
+    if (!res.ok) {
+      const body = (await res.text()).slice(0, 200);
+      throw new Error(`Gemini API ${res.status}${res.status === 404 ? ' (model not found, update model name)' : ''}: ${body}`);
+    }
+
+    const data = await res.json();
+    const text = data?.candidates?.[0]?.content?.parts?.map((p: any) => p.text ?? '').join('');
+    if (!text) {
+      throw new Error(data?.promptFeedback?.blockReason ? `Blocked: ${data.promptFeedback.blockReason}` : 'Empty response');
+    }
+    return text;
+  } catch (err) {
+    if (err instanceof Error && err.name === 'AbortError') {
+      throw new Error(`Gemini Cloud API timed out after ${CLOUD_TIMEOUT_MS / 1000}s`);
+    }
+    throw err;
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+// ---------- Orchestrator ----------
+export class AICategorizer {
+  static async categorizeAll(
+    channels: SubscribedChannel[],
+    apiKeyOverride?: string
+  ): Promise<CategorizeAllResult> {
+    if (channels.length === 0) return { decks: [], providerUsed: 'heuristic' };
+
+    const { settings } = await SubDeckStorage.getAll();
+    const apiKey = apiKeyOverride || (typeof window === 'undefined' ? await SubDeckStorage.getApiKey() : undefined);
+    const requested: AIProvider = (settings.aiProvider as AIProvider) ?? 'gemini-nano';
+    const order: AIProvider[] =
+      requested === 'heuristic'
+        ? ['heuristic']
+        : requested === 'gemini-api'
+        ? ['gemini-api', 'heuristic']
+        : ['gemini-nano', 'gemini-api', 'heuristic'];
+
+    const failures: string[] = [];
+    for (const p of order) {
+      try {
+        let decks: CategoryDeck[];
+        if (p === 'gemini-nano') {
+          decks = await tryGeminiNano(channels);
+        } else if (p === 'gemini-api') {
+          if (!apiKey) {
+            failures.push('Cloud: no API key configured');
+            continue;
+          }
+          const model = settings.geminiModel || DEFAULT_GEMINI_MODEL;
+          decks = await runChunks(channels, CLOUD_CHUNK, pr => callGemini(pr, apiKey, model));
+        } else {
+          decks = HeuristicCategorizer.categorize(channels);
+        }
+
+        decks = completeAssignments(decks, channels).map(d => ({ ...d, isSystem: true }));
+        decks = this.rescueGeneralOther(decks, channels);
+
+        const notice = p !== requested && failures.length
+          ? `Used ${p === 'heuristic' ? 'offline engine' : p}. ${failures.join(' | ')}`
+          : undefined;
+
+        return { decks, providerUsed: p, fallbackNotice: notice };
+      } catch (e) {
+        const msg = e instanceof Error ? e.message : String(e);
+        Logger.warn(`[SubShelf AI] ${p} failed:`, msg);
+        failures.push(`${p}: ${msg}`);
+      }
+    }
+
+    // Heuristic fallback guarantee
+    const fallbackDecks = HeuristicCategorizer.categorize(channels).map(d => ({ ...d, isSystem: true }));
+    return {
+      decks: fallbackDecks,
+      providerUsed: 'heuristic',
+      fallbackNotice: failures.length ? `Cloud AI failed, used offline engine (${failures.join(' | ')})` : undefined,
     };
   }
 
   /**
-   * Takes channels assigned to "general-other" by AI and tries to place them
-   * via heuristic signatures/keywords. Only moves them if the heuristic finds
-   * a match (i.e. they don't stay in general-other in the heuristic result too).
+   * Rescues channels placed in general-other by checking if deterministic heuristics have a match.
    */
-  private static rescueGeneralOther(decks: CategoryDeck[], allChannels: SubscribedChannel[]): CategoryDeck[] {
+  static rescueGeneralOther(decks: CategoryDeck[], channels: SubscribedChannel[]): CategoryDeck[] {
     const generalDeck = decks.find(d => d.id === 'general-other');
     if (!generalDeck || generalDeck.channelIds.length === 0) return decks;
 
-    const channelMap = new Map(allChannels.map(ch => [ch.ucId, ch]));
+    const channelMap = new Map(channels.map(ch => [ch.ucId, ch]));
     const stuckChannels = generalDeck.channelIds
       .map(id => channelMap.get(id))
       .filter((ch): ch is SubscribedChannel => Boolean(ch));
@@ -164,19 +285,16 @@ export class AICategorizer {
     let rescued = 0;
 
     for (const hDeck of heuristicResult) {
-      if (hDeck.id === 'general-other') continue;
-      if (hDeck.channelIds.length === 0) continue;
+      if (hDeck.id === 'general-other' || hDeck.channelIds.length === 0) continue;
 
       const targetDeck = decks.find(d => d.id === hDeck.id);
       for (const ucId of hDeck.channelIds) {
-        // Move from general-other to the heuristic-matched deck
         generalDeck.channelIds = generalDeck.channelIds.filter(id => id !== ucId);
         if (targetDeck) {
           if (!targetDeck.channelIds.includes(ucId)) {
             targetDeck.channelIds.push(ucId);
           }
         } else {
-          // Create the deck if AI didn't produce it
           decks.push({ ...hDeck, channelIds: [ucId], isSystem: true });
         }
         rescued++;
@@ -187,454 +305,83 @@ export class AICategorizer {
       Logger.info(`[SubShelf AI] Rescued ${rescued} channels from General & Others via heuristic fallback`);
     }
 
-    return decks.filter(d => d.channelIds.length > 0);
-  }
-
-  private static readonly NANO_BATCH_SIZE = 30;
-
-  /**
-   * Resolves the on-device Prompt API interface across globalThis, self, and window scopes.
-   * Handles modern W3C Prompt API (LanguageModel) and Chrome namespaces (ai.languageModel).
-   */
-  private static getLanguageModelAPI(): {
-    source: string;
-    api: {
-      availability?: (options?: unknown) => Promise<string | { available: string }>;
-      capabilities?: (options?: unknown) => Promise<{ available: string }>;
-      create: (options?: unknown) => Promise<{
-        prompt: (input: string) => Promise<string>;
-        destroy?: () => void;
-      }>;
-    };
-  } | null {
-    const g = globalThis as any;
-    const s = typeof self !== 'undefined' ? (self as any) : null;
-    const w = typeof window !== 'undefined' ? (window as any) : null;
-
-    // 1. Modern W3C Standard: global LanguageModel class
-    if (typeof g?.LanguageModel?.create === 'function') {
-      return { source: 'globalThis.LanguageModel', api: g.LanguageModel };
-    }
-    if (s && typeof s.LanguageModel?.create === 'function') {
-      return { source: 'self.LanguageModel', api: s.LanguageModel };
-    }
-    if (w && typeof w.LanguageModel?.create === 'function') {
-      return { source: 'window.LanguageModel', api: w.LanguageModel };
-    }
-
-    // 2. Chrome ai.languageModel namespace
-    if (typeof g?.ai?.languageModel?.create === 'function') {
-      return { source: 'globalThis.ai.languageModel', api: g.ai.languageModel };
-    }
-    if (s && typeof s.ai?.languageModel?.create === 'function') {
-      return { source: 'self.ai.languageModel', api: s.ai.languageModel };
-    }
-    if (w && typeof w.ai?.languageModel?.create === 'function') {
-      return { source: 'window.ai.languageModel', api: w.ai.languageModel };
-    }
-
-    return null;
+    return decks.filter(d => d.channelIds.length > 0 || !d.isSystem);
   }
 
   /**
-   * Checks whether on-device Gemini Nano is downloaded and ready to process prompts.
-   */
-  private static async isNanoAvailable(factory: {
-    availability?: (options?: unknown) => Promise<string | { available: string }>;
-    capabilities?: (options?: unknown) => Promise<{ available: string }>;
-  }): Promise<boolean> {
-    try {
-      // Modern W3C / Chrome 131+: availability()
-      if (typeof factory.availability === 'function') {
-        const status = await factory.availability();
-        Logger.info('[SubShelf AI] LanguageModel.availability() returned:', status);
-        if (typeof status === 'string') {
-          return status === 'readily' || status === 'downloadable' || status === 'after-download';
-        }
-        if (status && typeof status === 'object') {
-          return (status as any).available !== 'no' && (status as any).available !== 'unavailable';
-        }
-      }
-
-      // Legacy Canary / Chrome 127-128: capabilities()
-      if (typeof factory.capabilities === 'function') {
-        const caps = await factory.capabilities();
-        Logger.info('[SubShelf AI] LanguageModel.capabilities() returned:', caps);
-        return caps?.available !== 'no';
-      }
-
-      // If availability/capabilities checks are omitted by the browser but create exists
-      return true;
-    } catch (err) {
-      Logger.warn('[SubShelf AI] LanguageModel availability check failed:', err);
-      return false;
-    }
-  }
-
-  private static async tryGeminiNano(channels: SubscribedChannel[]): Promise<CategoryDeck[] | null> {
-    const contextType = typeof window !== 'undefined' ? 'window' : typeof self !== 'undefined' ? 'service-worker' : 'unknown';
-    const modelMeta = this.getLanguageModelAPI();
-
-    Logger.info(`[SubShelf AI] Gemini Nano diagnostic in ${contextType} context:`, {
-      hasAPI: Boolean(modelMeta),
-      source: modelMeta?.source || 'none',
-      typeofGlobalLanguageModel: typeof (globalThis as any).LanguageModel,
-      typeofSelfAi: typeof (self as any)?.ai,
-      typeofAiLanguageModel: typeof (self as any)?.ai?.languageModel,
-    });
-
-    if (!modelMeta) {
-      return null;
-    }
-
-    const available = await this.isNanoAvailable(modelMeta.api);
-    if (!available) {
-      Logger.warn(`[SubShelf AI] Gemini Nano (${modelMeta.source}) reported unavailable or not yet downloaded`);
-      return null;
-    }
-
-    Logger.info(`[SubShelf AI] Gemini Nano active via ${modelMeta.source}. Processing ${channels.length} channels in batches of ${this.NANO_BATCH_SIZE}...`);
-
-    // Partition channels into batches to prevent overflowing Gemini Nano's context window (~4K tokens)
-    const batches: SubscribedChannel[][] = [];
-    for (let i = 0; i < channels.length; i += this.NANO_BATCH_SIZE) {
-      batches.push(channels.slice(i, i + this.NANO_BATCH_SIZE));
-    }
-
-    // Accumulate channels per category ID across all batches
-    const aggregatedCategories = new Map<string, Set<string>>();
-    SUBDECK_TAXONOMY.forEach(t => aggregatedCategories.set(t.id, new Set<string>()));
-
-    let successfulBatches = 0;
-
-    for (let b = 0; b < batches.length; b++) {
-      const batch = batches[b];
-      Logger.info(`[SubShelf AI] Nano processing batch ${b + 1}/${batches.length} (${batch.length} channels)...`);
-
-      let session: { prompt: (p: string) => Promise<string>; destroy?: () => void } | null = null;
-      try {
-        session = await modelMeta.api.create();
-        const prompt = buildCategorizationPrompt(batch);
-        const raw = await session.prompt(prompt);
-        const parsedDecks = this.parseAIResponse(raw, batch);
-
-        if (parsedDecks && parsedDecks.length > 0) {
-          for (const deck of parsedDecks) {
-            const set = aggregatedCategories.get(deck.id);
-            if (set) {
-              deck.channelIds.forEach(id => set.add(id));
-            }
-          }
-          successfulBatches++;
-        } else {
-          Logger.warn(`[SubShelf AI] Batch ${b + 1} produced unparseable output; falling back to heuristics for this batch`);
-          const heuristicDecks = HeuristicCategorizer.categorize(batch);
-          for (const deck of heuristicDecks) {
-            const set = aggregatedCategories.get(deck.id);
-            if (set) {
-              deck.channelIds.forEach(id => set.add(id));
-            }
-          }
-        }
-      } catch (batchErr) {
-        Logger.warn(`[SubShelf AI] Batch ${b + 1} threw an error; falling back to heuristics for this batch:`, batchErr);
-        const heuristicDecks = HeuristicCategorizer.categorize(batch);
-        for (const deck of heuristicDecks) {
-          const set = aggregatedCategories.get(deck.id);
-          if (set) {
-            deck.channelIds.forEach(id => set.add(id));
-          }
-        }
-      } finally {
-        try {
-          session?.destroy?.();
-        } catch {
-          // Ignore session destroy errors
-        }
-      }
-    }
-
-    // If all batches failed to execute on Nano, return null so outer caller can fall back
-    if (successfulBatches === 0 && batches.length > 0) {
-      Logger.warn('[SubShelf AI] All Gemini Nano batches failed. Falling back to alternative tier.');
-      return null;
-    }
-
-    // Construct CategoryDeck[] from aggregated category sets
-    const finalDecks: CategoryDeck[] = SUBDECK_TAXONOMY.map((tax, idx) => ({
-      id: tax.id,
-      name: tax.name,
-      icon: tax.icon,
-      color: tax.color,
-      channelIds: Array.from(aggregatedCategories.get(tax.id) || []),
-      isCollapsed: true,
-      sortOrder: idx,
-      isSystem: true,
-    }));
-
-    return finalDecks.filter(d => d.channelIds.length > 0);
-  }
-
-  private static async tryGeminiCloud(
-    channels: SubscribedChannel[],
-    apiKey: string,
-    modelId = DEFAULT_GEMINI_CLOUD_MODEL
-  ): Promise<CategoryDeck[] | null> {
-    const prompt = buildCategorizationPrompt(channels);
-    const targetModel = (modelId || DEFAULT_GEMINI_CLOUD_MODEL).trim();
-    // Security: Pass API key via header rather than exposing in URL query parameter
-    const url = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(targetModel)}:generateContent`;
-
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => {
-      controller.abort();
-    }, 15000); // 15-second timeout
-
-    try {
-      const res = await fetch(url, {
-        method: 'POST',
-        signal: controller.signal,
-        headers: {
-          'Content-Type': 'application/json',
-          'x-goog-api-key': apiKey,
-        },
-        body: JSON.stringify({
-          contents: [{ parts: [{ text: prompt }] }],
-          generationConfig: { responseMimeType: 'application/json' },
-        }),
-      });
-
-      if (!res.ok) {
-        if (res.status === 404) {
-          throw new Error(`Model '${targetModel}' was not found (HTTP 404). Google may have retired this model or the ID is invalid.`);
-        }
-        if (res.status === 400) {
-          throw new Error(`Gemini API error (HTTP 400): Bad Request. Please check your request parameters.`);
-        }
-        if (res.status === 403) {
-          throw new Error(`Gemini API error (HTTP 403): Invalid or unauthorized API key.`);
-        }
-        throw new Error(`Gemini Cloud API error HTTP ${res.status}`);
-      }
-
-      const data = await res.json();
-      const raw = data?.candidates?.[0]?.content?.parts?.[0]?.text;
-      if (!raw) return null;
-
-      return this.parseAIResponse(raw, channels);
-    } catch (err) {
-      if (err instanceof Error && err.name === 'AbortError') {
-        throw new Error(`Gemini Cloud API request timed out after 15s (${targetModel})`);
-      }
-      throw err;
-    } finally {
-      clearTimeout(timeoutId);
-    }
-  }
-
-  private static parseAIResponse(raw: string, channels: SubscribedChannel[]): CategoryDeck[] | null {
-    try {
-      const knownIds = new Set(channels.map(c => c.ucId));
-      const cleaned = raw.replace(/```json/g, '').replace(/```/g, '').trim();
-      const parsed = JSON.parse(cleaned);
-      if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
-        return null;
-      }
-
-      const safeParsed = parsed as Record<string, unknown>;
-      const seenAssigned = new Set<string>();
-
-      const decks: CategoryDeck[] = SUBDECK_TAXONOMY.map((tax, idx) => {
-        const rawIds = safeParsed[tax.id];
-        const validIds: string[] = [];
-
-        if (Array.isArray(rawIds)) {
-          for (const id of rawIds) {
-            // Deduplicate: Each channel may only belong to one category deck
-            if (typeof id === 'string' && knownIds.has(id) && !seenAssigned.has(id)) {
-              seenAssigned.add(id);
-              validIds.push(id);
-            }
-          }
-        }
-
-        return {
-          id: tax.id,
-          name: tax.name,
-          icon: tax.icon,
-          color: tax.color,
-          channelIds: validIds,
-          isCollapsed: true,
-          sortOrder: idx,
-          isSystem: true,
-        };
-      });
-
-      // Guarantee 100% assignment: push any channels omitted by the model to general-other
-      const omittedChannels = channels.filter(c => !seenAssigned.has(c.ucId));
-      if (omittedChannels.length > 0) {
-        let generalDeck = decks.find(d => d.id === 'general-other');
-        if (!generalDeck) {
-          const genTax = SUBDECK_TAXONOMY.find(t => t.id === 'general-other') || {
-            id: 'general-other',
-            name: 'General & Others',
-            icon: '🌐',
-            color: '#6B7280',
-          };
-          generalDeck = {
-            id: genTax.id,
-            name: genTax.name,
-            icon: genTax.icon,
-            color: genTax.color,
-            channelIds: [],
-            isCollapsed: true,
-            sortOrder: 99,
-            isSystem: true,
-          };
-          decks.push(generalDeck);
-        }
-
-        for (const ch of omittedChannels) {
-          if (!seenAssigned.has(ch.ucId)) {
-            seenAssigned.add(ch.ucId);
-            generalDeck.channelIds.push(ch.ucId);
-          }
-        }
-      }
-
-      return decks.filter(d => d.channelIds.length > 0);
-    } catch (err) {
-      Logger.warn('[SubShelf AI] Failed to parse AI JSON response:', err);
-      return null;
-    }
-  }
-
-  /**
-   * Applies user manual assignments and exclusions on top of AI/heuristic categorization.
-   * Guarantees that:
-   * 1. Channels explicitly removed from a category are NEVER re-added to that category.
-   * 2. Channels manually assigned to folders are preserved.
-   * 3. Custom folders created by the user are retained.
-   * 4. Any unassigned channels land in Uncategorized.
+   * Fix 6: Guaranteed clean override application.
+   * - System IDs come from taxonomy.
+   * - Generated decks are isSystem: true.
+   * - Only user-created decks carried over from existing.
+   * - Dead channels, exclusions, and manual removals respected.
+   * - Exactly one owner per channel unless user explicitly assigned multiple.
+   * - Drop empty system decks, keep empty user decks.
    */
   static applyOverrides(
-    categorizedDecks: CategoryDeck[],
-    currentCategories: CategoryDeck[],
-    manualAssignments: Record<string, string[]>,
-    channelExclusions: Record<string, string[]>,
-    allChannels: SubscribedChannel[]
+    generated: CategoryDeck[],
+    existing: CategoryDeck[],
+    manual: Record<string, string[]>,
+    exclusions: Record<string, string[]>,
+    channels: SubscribedChannel[]
   ): CategoryDeck[] {
-    // Dynamically derive known system deck IDs from taxonomy, plus uncategorized and legacy IDs
-    const systemDeckIds = new Set<string>([
-      ...SUBDECK_TAXONOMY.map(t => t.id),
-      '__uncategorized__',
-      'education',
-      'tech',
-      'music',
-      'gaming',
-      'entertainment',
-      'news-politics',
-      'general-other',
-      'finance',
-      'fitness',
-      'lifestyle',
-    ]);
-    const systemDeckNames = new Set<string>([
-      ...SUBDECK_TAXONOMY.map(t => t.name.toLowerCase().trim()),
-      ...categorizedDecks.map(d => d.name.toLowerCase().trim()),
-    ]);
+    const live = new Set(channels.map(c => c.ucId));
+    const systemIds = new Set<string>([...SUBDECK_TAXONOMY.map(t => t.id), '__uncategorized__']);
+    const decks = new Map<string, CategoryDeck>();
 
-    // 1. Preserve custom user-created decks (exclude any system or taxonomy decks)
-    const customDecks = currentCategories.filter(c =>
-      !c.isSystem &&
-      !systemDeckIds.has(c.id) &&
-      !systemDeckNames.has(c.name.toLowerCase().trim()) &&
-      !categorizedDecks.some(d => d.id === c.id)
-    );
+    // 1) Fresh generated (system) decks
+    for (const d of generated) {
+      decks.set(d.id, { ...d, isSystem: true, channelIds: [...d.channelIds] });
+    }
 
-    // Deep clone combined decks
-    const combinedDecks: CategoryDeck[] = [...categorizedDecks, ...customDecks].map(d => ({
-      ...d,
-      channelIds: [...d.channelIds],
-    }));
+    // 2) Carry over USER-created decks only (never old system decks)
+    for (const d of existing) {
+      if (d.isSystem || systemIds.has(d.id) || decks.has(d.id)) continue;
+      decks.set(d.id, { ...d, isSystem: false, channelIds: [...d.channelIds] });
+    }
 
-    // 2. Filter out any AI assignments that violate user exclusions or manual assignments
-    for (const deck of combinedDecks) {
-      if (deck.id === '__uncategorized__') continue;
+    const ordered = [...decks.values()].sort((a, b) => a.sortOrder - b.sortOrder);
 
-      deck.channelIds = deck.channelIds.filter(ucId => {
-        // If user explicitly removed this channel from this deck -> EXCLUDE!
-        const exclusions = channelExclusions[ucId] || [];
-        if (exclusions.includes(deck.id)) {
-          return false;
+    // 3) Drop dead channels, exclusions, and decks the user manually moved a channel out of
+    for (const d of ordered) {
+      d.channelIds = d.channelIds.filter(id => {
+        if (!live.has(id)) return false;
+        if ((exclusions[id] ?? []).includes(d.id)) return false;
+        const m = manual[id] ?? [];
+        return !(m.length > 0 && !m.includes(d.id));
+      });
+    }
+
+    // 4) Apply manual assignments (restore user-owned deck if needed)
+    for (const [id, deckIds] of Object.entries(manual)) {
+      if (!live.has(id)) continue;
+      for (const deckId of deckIds) {
+        if (deckId === '__uncategorized__') continue;
+        let d = decks.get(deckId);
+        if (!d) {
+          const src = existing.find(x => x.id === deckId);
+          if (!src) continue;
+          d = { ...src, channelIds: [] };
+          decks.set(deckId, d);
+          ordered.push(d);
         }
+        if (!d.channelIds.includes(id)) d.channelIds.push(id);
+      }
+    }
 
-        // If user manually assigned this channel to specific deck(s) -> ONLY allow in those decks!
-        const manual = manualAssignments[ucId] || [];
-        if (manual.length > 0 && !manual.includes(deck.id)) {
-          return false;
-        }
-
+    // 5) One owner per channel unless the user explicitly assigned several
+    const owner = new Set<string>();
+    for (const d of ordered) {
+      d.channelIds = d.channelIds.filter(id => {
+        if ((manual[id] ?? []).length > 1) return true;
+        if (owner.has(id)) return false;
+        owner.add(id);
         return true;
       });
     }
 
-    // 3. Ensure all manual assignments are respected and present in their target decks
-    const allChannelIds = new Set(allChannels.map(c => c.ucId));
-    for (const [ucId, targetDeckIds] of Object.entries(manualAssignments)) {
-      if (!allChannelIds.has(ucId)) continue; // Skip unsubscribed channels
-      for (const targetId of targetDeckIds) {
-        if (targetId === '__uncategorized__') continue;
-        let targetDeck = combinedDecks.find(d => d.id === targetId);
-        if (!targetDeck) {
-          // Check if deck existed in currentCategories (e.g. custom deck)
-          const existing = currentCategories.find(c => c.id === targetId);
-          if (existing) {
-            targetDeck = { ...existing, channelIds: [] };
-            combinedDecks.push(targetDeck);
-          } else {
-            const tax = SUBDECK_TAXONOMY.find(t => t.id === targetId);
-            if (tax) {
-              targetDeck = {
-                id: tax.id,
-                name: tax.name,
-                icon: tax.icon,
-                color: tax.color,
-                channelIds: [],
-                isCollapsed: true,
-                sortOrder: 90,
-                isSystem: true,
-              };
-              combinedDecks.push(targetDeck);
-            }
-          }
-        }
-        if (targetDeck && !targetDeck.channelIds.includes(ucId)) {
-          targetDeck.channelIds.push(ucId);
-        }
-      }
-    }
-
-    // 4. Deduplicate final decks by normalized name
-    const finalDecks: CategoryDeck[] = [];
-    const seenNames = new Set<string>();
-
-    for (const deck of combinedDecks) {
-      if (deck.id === '__uncategorized__') continue;
-      const normName = deck.name.toLowerCase().trim();
-      if (!seenNames.has(normName)) {
-        seenNames.add(normName);
-        finalDecks.push(deck);
-      } else {
-        const canonical = finalDecks.find(d => d.name.toLowerCase().trim() === normName);
-        if (canonical) {
-          const merged = new Set([...canonical.channelIds, ...deck.channelIds]);
-          canonical.channelIds = Array.from(merged);
-        }
-      }
-    }
-
-    // Return decks with channels or user-created custom decks
-    return finalDecks.filter(d => d.channelIds.length > 0 || !d.isSystem);
+    // 6) Drop empty system decks, keep empty user decks
+    return ordered.filter(d => d.channelIds.length > 0 || !d.isSystem);
   }
 }
+
+export const AIEngine = AICategorizer;

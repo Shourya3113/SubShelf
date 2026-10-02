@@ -33,11 +33,11 @@ Powered by a 3-tier categorization engine (on-device **Gemini Nano**, cloud **Go
 
 SubShelf was built from the ground up to adhere strictly to Google Chrome Web Store Developer Program Policies and YouTube Brand Guidelines:
 
-* **Zero-XSS Protection:** 100% of DOM manipulation uses safe node construction (`document.createElement`, `textContent`). Zero `innerHTML` interpolation across the entire extension.
-* **Minimal Permissions:** Only requests `"storage"`. Zero intrusive permissions like `webRequest`, `cookies`, `tabs`, or `<all_urls>`.
+* **Zero-XSS Protection:** UI is built with `textContent` / `createElement`. No untrusted HTML is ever interpolated.
+* **Minimal Permissions:** `storage`, plus host access to `youtube.com` (to organize your sidebar) and, only if you add your own key, `generativelanguage.googleapis.com` (Gemini Cloud option).
 * **Zero Remote Code Execution:** 100% locally compiled and bundled via Vite/CRXJS. Zero `eval()`, zero `new Function()`, and zero external CDN script tags.
-* **Local Privacy:** All channel IDs, folder structures, and settings are saved locally in `chrome.storage.local`. No external tracking servers, analytics, or third-party telemetries.
-* **Credential Isolation:** Personal Google Gemini API keys are passed strictly via the `x-goog-api-key` HTTP header (never exposed in URL query strings) and automatically stripped from JSON export backups.
+* **Local Privacy:** SubShelf has no servers, no analytics, and no tracking. Everything stays in your browser. If you choose the optional Gemini Cloud mode, your channel names and handles are sent to Google using your own API key.
+* **Credential Isolation:** Personal Google Gemini API keys are passed strictly via the `x-goog-api-key` HTTP header (never exposed in URL query strings) and stored in isolated extension storage, excluded from JSON backups.
 
 ---
 
@@ -186,4 +186,4 @@ Open for community contributions, issue reporting, and review. Commercial redist
 
 ---
 
-*Disclaimer: SubShelf is an independent open-source project and is not affiliated with, sponsored by, or endorsed by Google LLC or YouTube. YouTube™ is a trademark of Google LLC.*
+*Disclaimer: SubShelf is an independent source-available project and is not affiliated with, sponsored by, or endorsed by Google LLC or YouTube. YouTube™ is a trademark of Google LLC.*

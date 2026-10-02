@@ -8,10 +8,14 @@ export class FeedFilter {
   private static activeCategory: CategoryDeck | null = null;
   private static observer: MutationObserver | null = null;
   private static bannerId = 'subdeck-feed-banner';
+  private static isScrolling = false;
+  private static scrollAttempts = 0;
+  private static readonly MAX_SCROLL_ATTEMPTS = 3;
 
   static async setCategory(category: CategoryDeck | null): Promise<void> {
     if (!SubDeckStorage.isContextValid()) return;
     this.activeCategory = category;
+    this.scrollAttempts = 0;
     await SubDeckStorage.setActiveCategoryId(category ? category.id : null);
 
     if (!category) {
@@ -74,6 +78,12 @@ export class FeedFilter {
     });
 
     this.updateBannerStatus(visibleCount);
+
+    // Medium #7: pull more content if few matches in view, without disrupting viewport
+    if (visibleCount < 6 && !this.isScrolling && this.scrollAttempts < this.MAX_SCROLL_ATTEMPTS) {
+      this.scrollAttempts++;
+      this.triggerInfiniteScroll();
+    }
   }
 
   static clearFilter(): void {
@@ -84,6 +94,27 @@ export class FeedFilter {
       card.style.display = '';
     });
   }
+
+  private static triggerInfiniteScroll = debounce(() => {
+    if (document.hidden || !window.location.pathname.startsWith('/feed/subscriptions')) return;
+    this.isScrolling = true;
+    const startY = window.scrollY;
+    const before = document.querySelectorAll(YT_SELECTORS.richItemRenderer).length;
+
+    // Trigger YouTube's infinite-loader by momentarily jumping to bottom
+    window.scrollTo({ top: document.documentElement.scrollHeight, behavior: 'auto' });
+
+    setTimeout(() => {
+      const after = document.querySelectorAll(YT_SELECTORS.richItemRenderer).length;
+      this.isScrolling = false;
+      if (after <= before) {
+        this.scrollAttempts = this.MAX_SCROLL_ATTEMPTS; // Nothing new loaded: stop attempts
+      }
+      // Instantly restore user's original viewport position
+      window.scrollTo({ top: startY, behavior: 'auto' });
+      this.applyFilter();
+    }, 900);
+  }, 300);
 
   private static updateBannerStatus(count: number): void {
     const statusEl = document.getElementById('subdeck-feed-banner-status');

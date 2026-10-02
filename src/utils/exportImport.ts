@@ -284,13 +284,16 @@ export class ExportImport {
         }
       }
 
-      await SubDeckStorage.setAll({
-        categories: mergedCategories,
-        channels: Object.assign(Object.create(null), mergedChannels),
-        handleToUcId: Object.assign(Object.create(null), mergedHandles),
-        channelExclusions: Object.assign(Object.create(null), mergedExclusions),
-        manualAssignments: Object.assign(Object.create(null), mergedManualAssignments),
-      });
+      await SubDeckStorage.update(
+        ['categories', 'channels', 'handleToUcId', 'channelExclusions', 'manualAssignments'],
+        () => ({
+          categories: mergedCategories,
+          channels: Object.assign(Object.create(null), mergedChannels),
+          handleToUcId: Object.assign(Object.create(null), mergedHandles),
+          channelExclusions: Object.assign(Object.create(null), mergedExclusions),
+          manualAssignments: Object.assign(Object.create(null), mergedManualAssignments),
+        })
+      );
     }
   }
 }

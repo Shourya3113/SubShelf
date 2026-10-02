@@ -2,11 +2,16 @@ import { SubDeckStorage } from '@/utils/storage';
 import { ExportImport } from '@/utils/exportImport';
 import { debounce } from '@/utils/debounce';
 import { CategoryDeck, SubDeckStorageSchema } from '@/types';
+import { toast } from '@/utils/toast';
 
 class PopupManager {
   private static state: SubDeckStorageSchema | null = null;
 
   static async init(): Promise<void> {
+    const versionEl = document.getElementById('version');
+    if (versionEl) {
+      versionEl.textContent = `v${chrome.runtime.getManifest().version}`;
+    }
     this.state = await SubDeckStorage.getAll();
     this.setupTabs();
     this.setupDeckForm();
@@ -104,7 +109,7 @@ class PopupManager {
   private static async renderDecks(): Promise<void> {
     const list = document.getElementById('decks-list');
     if (!list) return;
-    list.innerHTML = '';
+    list.replaceChildren();
 
     const categories = await SubDeckStorage.getCategories();
 
@@ -169,7 +174,7 @@ class PopupManager {
 
         // Delete Deck
         deleteBtn.addEventListener('click', async () => {
-          if (confirm(`Delete category "${cat.name}"? Channels will move to Uncategorized.`)) {
+          if (confirm(`Delete "${cat.name}"? Its channels will become unassigned ("No Folder").`)) {
             await this.deleteDeck(cat);
           }
         });
@@ -200,7 +205,7 @@ class PopupManager {
   private static async renderChannels(filter = ''): Promise<void> {
     const container = document.getElementById('channels-list');
     if (!container) return;
-    container.innerHTML = '';
+    container.replaceChildren();
 
     const channelsMap = await SubDeckStorage.getChannels();
     const categories = await SubDeckStorage.getCategories();
@@ -335,7 +340,7 @@ class PopupManager {
       if (confirm('Reset all manual channel assignments and exclusions? Auto-AI will re-categorize all channels from scratch next time it runs.')) {
         await SubDeckStorage.clearOverrides();
         this.state = await SubDeckStorage.getAll();
-        alert('AI exclusions and manual assignments have been reset.');
+        toast('AI exclusions and manual assignments have been reset.');
       }
     });
 
@@ -347,10 +352,16 @@ class PopupManager {
       await SubDeckStorage.updateSettings({ aiProvider: val });
     });
 
-    apiKey.addEventListener('change', () => {
+    let keyTimer: number | undefined;
+    const saveKey = () => {
       const val = apiKey.value.trim();
       chrome.runtime.sendMessage({ type: 'subshelf-set-api-key', apiKey: val });
+    };
+    apiKey.addEventListener('input', () => {
+      clearTimeout(keyTimer);
+      keyTimer = window.setTimeout(saveKey, 400);
     });
+    apiKey.addEventListener('blur', saveKey);
 
     const geminiModel = document.getElementById('setting-gemini-model') as HTMLInputElement;
     if (geminiModel) {
@@ -382,11 +393,11 @@ class PopupManager {
         try {
           await ExportImport.importFromFile(file, 'merge');
           this.state = await SubDeckStorage.getAll();
-          alert('SubShelf backup imported successfully!');
+          toast('SubShelf backup imported successfully!');
           await this.renderDecks();
           await this.renderChannels();
         } catch (err) {
-          alert(`Failed to import backup: ${err instanceof Error ? err.message : 'Invalid file'}`);
+          toast(`Failed to import backup: ${err instanceof Error ? err.message : 'Invalid file'}`);
         } finally {
           // Reset file input so user can re-import the same file if needed
           importFile.value = '';

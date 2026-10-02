@@ -510,3 +510,24 @@ body {
 .footer-link:hover {
   text-decoration: underline;
 }
+
+.ss-toast {
+  position: fixed;
+  left: 12px;
+  right: 12px;
+  bottom: 12px;
+  z-index: 2147483647;
+  padding: 10px 14px;
+  border-radius: 8px;
+  font: 12px/1.4 system-ui, -apple-system, sans-serif;
+  background: #1f2937;
+  color: #ffffff;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.3);
+  pointer-events: none;
+  transition: opacity 0.3s ease, transform 0.3s ease;
+}
+
+.ss-toast.ss-toast-fade {
+  opacity: 0;
+  transform: translateY(6px);
+}

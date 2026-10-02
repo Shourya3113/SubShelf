@@ -77,6 +77,24 @@ export class SubDeckStorage {
     }
   }
 
+  private static writeChain: Promise<unknown> = Promise.resolve();
+
+  static update(
+    keys: string[],
+    fn: (cur: Record<string, any>) => Record<string, any> | void | Promise<Record<string, any> | void>
+  ): Promise<void> {
+    const run = this.writeChain.then(async () => {
+      if (!this.isContextValid()) return;
+      const cur = await chrome.storage.local.get(keys.length > 0 ? keys : null);
+      const patch = await fn(cur);
+      if (patch && typeof patch === 'object' && Object.keys(patch).length > 0) {
+        await chrome.storage.local.set(patch);
+      }
+    });
+    this.writeChain = run.catch(() => {});
+    return run;
+  }
+
   static isServiceWorker(): boolean {
     return typeof window === 'undefined' && typeof self !== 'undefined';
   }
@@ -440,3 +458,5 @@ export class SubDeckStorage {
     }
   }
 }
+
+export const Storage = SubDeckStorage;

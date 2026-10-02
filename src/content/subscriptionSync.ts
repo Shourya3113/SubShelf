@@ -125,4 +125,31 @@ export class SubscriptionSync {
     await SidebarManager.render();
     Logger.info(`[SubShelf] Removed unsubscribed channel by URL: ${handle} (${ucId})`);
   }
+
+  /**
+   * Safely merges sanitized avatar maps received via broadcast events into storage.
+   */
+  static async mergeAvatars(avatarMap: Map<string, string>): Promise<void> {
+    if (!SubDeckStorage.isContextValid() || avatarMap.size === 0) return;
+    try {
+      const state = await SubDeckStorage.getAll();
+      const currentChannels = { ...state.channels };
+      let hasChanges = false;
+
+      for (const [key, url] of avatarMap.entries()) {
+        const ucId = key.startsWith('UC') ? key : state.handleToUcId[key] || state.handleToUcId['@' + key];
+        if (ucId && currentChannels[ucId]) {
+          if (!currentChannels[ucId].avatarUrl || currentChannels[ucId].avatarUrl !== url) {
+            currentChannels[ucId].avatarUrl = url;
+            hasChanges = true;
+          }
+        }
+      }
+
+      if (hasChanges) {
+        await SubDeckStorage.update(['channels'], () => ({ channels: currentChannels }));
+        SidebarManager.render();
+      }
+    } catch {}
+  }
 }

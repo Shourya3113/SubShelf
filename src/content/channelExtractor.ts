@@ -129,21 +129,9 @@ export class ChannelExtractor {
     };
 
     const activeEl = document.activeElement as HTMLElement | null;
-    const origFocus = HTMLElement.prototype.focus;
-    const origScrollIntoView = Element.prototype.scrollIntoView;
-    const origScrollIntoViewIfNeeded = (Element.prototype as any).scrollIntoViewIfNeeded;
 
     this.hasAttemptedExpand = true;
     try {
-      // Temporarily override focus and scrollIntoView to prevent browser or Polymer from scrolling to toggleBtn
-      HTMLElement.prototype.focus = function (this: HTMLElement, options?: FocusOptions) {
-        origFocus.call(this, { ...options, preventScroll: true });
-      };
-      Element.prototype.scrollIntoView = function () {};
-      if (origScrollIntoViewIfNeeded) {
-        (Element.prototype as any).scrollIntoViewIfNeeded = function () {};
-      }
-
       toggleBtn.click();
 
       // Ensure toggle button does not retain focus causing browser to scroll
@@ -158,11 +146,6 @@ export class ChannelExtractor {
     } catch {
       return false;
     } finally {
-      HTMLElement.prototype.focus = origFocus;
-      Element.prototype.scrollIntoView = origScrollIntoView;
-      if (origScrollIntoViewIfNeeded) {
-        (Element.prototype as any).scrollIntoViewIfNeeded = origScrollIntoViewIfNeeded;
-      }
       restoreScroll();
 
       // Guard against asynchronous scroll jumps during YouTube DOM expansion

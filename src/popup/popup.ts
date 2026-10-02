@@ -75,6 +75,7 @@ class PopupManager {
         if (target) {
           target.name = name;
           target.icon = icon;
+          await SubDeckStorage.saveCategories(categories);
         }
       } else {
         // Create new deck
@@ -82,7 +83,7 @@ class PopupManager {
         if (!cleanId) cleanId = 'deck-' + Date.now().toString(36);
         const newId = `${cleanId}-${Date.now().toString().slice(-4)}`;
 
-        categories.push({
+        await SubDeckStorage.createCategory({
           id: newId,
           name,
           icon,
@@ -94,7 +95,6 @@ class PopupManager {
         });
       }
 
-      await SubDeckStorage.setAll({ categories });
       this.state = await SubDeckStorage.getAll();
       form.style.display = 'none';
       await this.renderDecks();
@@ -179,23 +179,7 @@ class PopupManager {
   }
 
   private static async deleteDeck(deck: CategoryDeck): Promise<void> {
-    const state = await SubDeckStorage.getAll();
-    const categories = state.categories.filter(c => c.id !== deck.id && c.id !== '__uncategorized__');
-
-    // Clean up manual assignments for channels that were in this deck
-    const manualAssignments = { ...state.manualAssignments };
-    deck.channelIds.forEach(id => {
-      if (manualAssignments[id]) {
-        manualAssignments[id] = manualAssignments[id].filter(catId => catId !== deck.id);
-        if (manualAssignments[id].length === 0) {
-          delete manualAssignments[id];
-        }
-      }
-    });
-
-    const activeCategoryId = state.activeCategoryId === deck.id ? null : state.activeCategoryId;
-
-    await SubDeckStorage.setAll({ categories, manualAssignments, activeCategoryId });
+    await SubDeckStorage.deleteCategory(deck.id);
     this.state = await SubDeckStorage.getAll();
     await this.renderDecks();
   }
@@ -356,10 +340,11 @@ class PopupManager {
     });
 
     aiProvider.addEventListener('change', async () => {
+      const val = aiProvider.value as 'gemini-nano' | 'gemini-api' | 'openai' | 'heuristic';
       if (this.state) {
-        this.state.settings.aiProvider = aiProvider.value as 'gemini-nano' | 'gemini-api' | 'openai' | 'heuristic';
-        await SubDeckStorage.setAll({ settings: this.state.settings });
+        this.state.settings.aiProvider = val;
       }
+      await SubDeckStorage.updateSettings({ aiProvider: val });
     });
 
     apiKey.addEventListener('change', () => {
@@ -371,18 +356,20 @@ class PopupManager {
     if (geminiModel) {
       geminiModel.value = this.state.settings.geminiModel || '';
       geminiModel.addEventListener('change', async () => {
+        const val = geminiModel.value.trim();
         if (this.state) {
-          this.state.settings.geminiModel = geminiModel.value.trim();
-          await SubDeckStorage.setAll({ settings: this.state.settings });
+          this.state.settings.geminiModel = val;
         }
+        await SubDeckStorage.updateSettings({ geminiModel: val });
       });
     }
 
     hideShorts.addEventListener('change', async () => {
+      const val = hideShorts.checked;
       if (this.state) {
-        this.state.settings.hideShortsFromFeed = hideShorts.checked;
-        await SubDeckStorage.setAll({ settings: this.state.settings });
+        this.state.settings.hideShortsFromFeed = val;
       }
+      await SubDeckStorage.updateSettings({ hideShortsFromFeed: val });
     });
 
     exportBtn?.addEventListener('click', async () => {

@@ -352,7 +352,7 @@ export class SidebarManager {
       const newId = `${cleanId}-${Date.now().toString().slice(-4)}`;
 
       if (!currentCategories.find(c => c.id === newId)) {
-        currentCategories.push({
+        await SubDeckStorage.createCategory({
           id: newId,
           name,
           icon,
@@ -362,7 +362,6 @@ export class SidebarManager {
           sortOrder: currentCategories.length,
           isSystem: false,
         });
-        await SubDeckStorage.setAll({ categories: currentCategories });
         folderInput.value = '';
         iconInput.value = '📁';
         manualBox.style.display = 'none';
@@ -388,7 +387,7 @@ export class SidebarManager {
     showAllBtn.className = 'subdeck-clear-filter';
     showAllBtn.addEventListener('click', async () => {
       document.querySelectorAll('.subdeck-folder-header').forEach(el => el.classList.remove('active-filter'));
-      await SubDeckStorage.setAll({ activeCategoryId: null });
+      await SubDeckStorage.setActiveCategoryId(null);
       FeedFilter.setCategory(null);
     });
     fragment.appendChild(showAllBtn);
@@ -525,7 +524,7 @@ export class SidebarManager {
 
           cat.name = newName;
           cat.icon = newIcon;
-          await SubDeckStorage.setAll({ categories });
+          await SubDeckStorage.saveCategories(categories);
           await this.render();
         };
 
@@ -589,19 +588,7 @@ export class SidebarManager {
         deleteBtn.addEventListener('click', async (e) => {
           e.stopPropagation();
           if (confirm(`Delete folder "${cat.name}"?`)) {
-            const state = await SubDeckStorage.getAll();
-            const updated = state.categories.filter(c => c.id !== cat.id && c.id !== '__uncategorized__');
-            const manualAssignments = { ...state.manualAssignments };
-            cat.channelIds.forEach(id => {
-              if (manualAssignments[id]) {
-                manualAssignments[id] = manualAssignments[id].filter(catId => catId !== cat.id);
-                if (manualAssignments[id].length === 0) {
-                  delete manualAssignments[id];
-                }
-              }
-            });
-            const activeCategoryId = state.activeCategoryId === cat.id ? null : state.activeCategoryId;
-            await SubDeckStorage.setAll({ categories: updated, manualAssignments, activeCategoryId });
+            await SubDeckStorage.deleteCategory(cat.id);
             await this.render();
           }
         });
@@ -678,7 +665,7 @@ export class SidebarManager {
           chevronBtn.classList.toggle('open', !isNowCollapsed);
 
           cat.isCollapsed = isNowCollapsed;
-          await SubDeckStorage.setAll({ categories });
+          await SubDeckStorage.saveCategories(categories);
         });
 
         // 2. FOLDER TITLE CLICK: Opens and filters the feed directly!
@@ -688,7 +675,7 @@ export class SidebarManager {
             header.classList.add('active-filter');
             FeedFilter.setCategory(cat);
           } else {
-            await SubDeckStorage.setAll({ activeCategoryId: cat.id });
+            await SubDeckStorage.setActiveCategoryId(cat.id);
             window.location.href = '/feed/subscriptions';
           }
         });
@@ -732,7 +719,7 @@ export class SidebarManager {
       state.channelExclusions || {},
       channels
     );
-    await SubDeckStorage.setAll({ categories: finalDecks });
+    await SubDeckStorage.saveCategories(finalDecks);
     await this.render();
   }
 

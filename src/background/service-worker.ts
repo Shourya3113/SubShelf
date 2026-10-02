@@ -15,12 +15,44 @@ chrome.runtime.onInstalled.addListener(async (details) => {
   }
 });
 
+// FIFO write queue to serialize all storage mutations and eliminate write races
+class StorageWriteQueue {
+  private queue: Promise<unknown> = Promise.resolve();
+
+  enqueue<T>(task: () => Promise<T>): Promise<T> {
+    const next = this.queue.then(
+      () => task(),
+      () => task()
+    );
+    this.queue = next.catch(() => {});
+    return next;
+  }
+}
+
+const storageQueue = new StorageWriteQueue();
+
 // Handle auto-categorization and background tasks
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   // Security: Validate message origin (must match our extension ID)
   if (sender.id !== chrome.runtime.id) {
     Logger.warn('[SubShelf Background] Rejected message from unauthorized sender:', sender.id);
     return false;
+  }
+
+  if (message?.type === 'subshelf-storage-mutate') {
+    (async () => {
+      try {
+        const result = await storageQueue.enqueue(async () => {
+          return await SubDeckStorage.executeMutation(message.action, message.payload);
+        });
+        sendResponse({ success: true, result });
+      } catch (err) {
+        Logger.error('[SubShelf Background] Storage mutation failed:', err);
+        const safeError = err instanceof Error ? err.message : 'Storage mutation failed';
+        sendResponse({ success: false, error: safeError });
+      }
+    })();
+    return true;
   }
 
   if (message?.type === 'subshelf-get-api-key') {
@@ -76,17 +108,25 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 
         const apiKey = await SubDeckStorage.getApiKey();
         const { decks: categorizedDecks, fallbackNotice } = await AICategorizer.categorizeAll(channels, apiKey);
-        const state = await SubDeckStorage.getAll();
 
-        const finalDecks = AICategorizer.applyOverrides(
-          categorizedDecks,
-          state.categories,
-          state.manualAssignments || {},
-          state.channelExclusions || {},
-          channels
-        );
+        // Serialize overrides application and storage commit through the write queue
+        const finalDecks = await storageQueue.enqueue(async () => {
+          const raw = await chrome.storage.local.get(['categories', 'manualAssignments', 'channelExclusions']);
+          const currentCategories = Array.isArray(raw.categories) ? raw.categories : [];
+          const manualAssignments = raw.manualAssignments || {};
+          const channelExclusions = raw.channelExclusions || {};
 
-        await SubDeckStorage.setAll({ categories: finalDecks });
+          const applied = AICategorizer.applyOverrides(
+            categorizedDecks,
+            currentCategories,
+            manualAssignments,
+            channelExclusions,
+            channels
+          );
+
+          await chrome.storage.local.set({ categories: applied });
+          return applied;
+        });
 
         Logger.info(`[SubShelf Background] Categorized into ${finalDecks.length} unique decks`);
         sendResponse({

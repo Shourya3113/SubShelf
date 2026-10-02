@@ -57,7 +57,7 @@ SubShelf requests only the minimal permissions required to provide its features:
 | Permission | Purpose & Justification |
 |---|---|
 | `storage` | Storing subscription folders, channel-to-deck mappings, manual overrides, and preferences locally on your machine. |
-| `https://*.youtube.com/*` | Interacting with YouTube web pages to render the native folder accordion in the left sidebar and filter the subscriptions feed according to the active folder. |
+| `https://www.youtube.com/*` | Interacting with YouTube web pages to render the native folder accordion in the left sidebar and filter the subscriptions feed according to the active folder. |
 | `https://generativelanguage.googleapis.com/*` | (Optional) Communicating directly with Google's Gemini API endpoints only if you explicitly choose to configure a personal Gemini API key for cloud categorization. |
 
 ---

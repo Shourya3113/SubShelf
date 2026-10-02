@@ -111,8 +111,8 @@ export class SubscriptionSync {
       }
 
       if (hasChanges) {
-        // Atomic storage update in a single write operation
-        await SubDeckStorage.setAll({
+        // Atomic storage update serialized through write queue
+        await SubDeckStorage.syncSubscriptions({
           channels: currentChannels,
           handleToUcId,
           categories: cleanCategories,
@@ -138,24 +138,13 @@ export class SubscriptionSync {
     if (!handleMatch) return;
     const handle = `@${handleMatch[1]}`;
 
-    const state = await SubDeckStorage.getAll();
-    const ucId = state.handleToUcId[handle];
-    if (!ucId || !state.channels[ucId]) return;
+    const handleToUcId = await SubDeckStorage.getHandleToUcIdMap();
+    const ucId = handleToUcId[handle];
+    if (!ucId) return;
 
-    const channels = { ...state.channels };
-    const handleToUcId = { ...state.handleToUcId };
-    const categories = state.categories.map(c => ({
-      ...c,
-      channelIds: c.channelIds.filter(id => id !== ucId),
-    }));
-
-    const ch = channels[ucId];
-    delete channels[ucId];
-    if (ch.handle) delete handleToUcId[ch.handle];
-
-    await SubDeckStorage.setAll({ channels, handleToUcId, categories });
+    await SubDeckStorage.removeChannel(ucId);
     await SidebarManager.render();
-    Logger.info(`[SubShelf] Removed unsubscribed channel by URL: ${ch.title} (${ucId})`);
+    Logger.info(`[SubShelf] Removed unsubscribed channel by URL: ${handle} (${ucId})`);
   }
 
   /**
@@ -186,7 +175,7 @@ export class SubscriptionSync {
       }
 
       if (hasChanges) {
-        await SubDeckStorage.setAll({ channels: currentChannels });
+        await chrome.storage.local.set({ channels: currentChannels });
         await SidebarManager.render();
         Logger.info('[SubShelf] Backfilled channel avatars from broadcast');
         return true;

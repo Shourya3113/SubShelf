@@ -74,190 +74,331 @@ export class SubDeckStorage {
     }
   }
 
+  static isServiceWorker(): boolean {
+    return typeof window === 'undefined' && typeof self !== 'undefined';
+  }
+
+  /**
+   * Routes storage mutations through the background service worker queue when
+   * invoked from content scripts or popup, eliminating cross-context race conditions.
+   */
+  static async requestMutation(action: string, payload?: unknown): Promise<any> {
+    if (this.isServiceWorker()) {
+      return this.executeMutation(action, payload);
+    }
+
+    if (this.isContextValid()) {
+      try {
+        const response = await new Promise<any>((resolve) => {
+          chrome.runtime.sendMessage(
+            { type: 'subshelf-storage-mutate', action, payload },
+            (res) => {
+              if (chrome.runtime?.lastError) {
+                resolve(null);
+              } else {
+                resolve(res);
+              }
+            }
+          );
+        });
+        if (response && response.success) {
+          return response.result;
+        }
+      } catch {
+        // Fall back to direct execution below
+      }
+    }
+
+    return this.executeMutation(action, payload);
+  }
+
+  /**
+   * Executes atomic per-key mutations directly against chrome.storage.local.
+   */
+  static async executeMutation(action: string, payload?: any): Promise<any> {
+    if (!this.isContextValid()) return null;
+
+    switch (action) {
+      case 'setChannelCategory': {
+        const { ucId, newCatId } = payload;
+        const raw = await chrome.storage.local.get(['categories', 'manualAssignments', 'channelExclusions']);
+        const categories: CategoryDeck[] = Array.isArray(raw.categories) ? raw.categories : [];
+        const manualAssignments: Record<string, string[]> = raw.manualAssignments || {};
+        const channelExclusions: Record<string, string[]> = raw.channelExclusions || {};
+
+        const prevCategoryIds: string[] = [];
+        categories.forEach(cat => {
+          if (cat.channelIds.includes(ucId)) {
+            prevCategoryIds.push(cat.id);
+            cat.channelIds = cat.channelIds.filter(id => id !== ucId);
+          }
+        });
+
+        if (!channelExclusions[ucId]) {
+          channelExclusions[ucId] = [];
+        }
+
+        prevCategoryIds.forEach(prevId => {
+          if (prevId !== newCatId && prevId !== '__uncategorized__' && !channelExclusions[ucId].includes(prevId)) {
+            channelExclusions[ucId].push(prevId);
+          }
+        });
+
+        if (newCatId) {
+          channelExclusions[ucId] = channelExclusions[ucId].filter(id => id !== newCatId);
+          if (channelExclusions[ucId].length === 0) {
+            delete channelExclusions[ucId];
+          }
+        }
+
+        if (!newCatId || newCatId === '__uncategorized__' || newCatId === 'none') {
+          delete manualAssignments[ucId];
+        } else {
+          const target = categories.find(c => c.id === newCatId);
+          if (target) {
+            if (!target.channelIds.includes(ucId)) {
+              target.channelIds.push(ucId);
+            }
+            manualAssignments[ucId] = [newCatId];
+          } else {
+            delete manualAssignments[ucId];
+          }
+        }
+
+        await chrome.storage.local.set({ categories, manualAssignments, channelExclusions });
+        return { categories, manualAssignments, channelExclusions };
+      }
+
+      case 'addChannelToCategory': {
+        const { ucId, categoryId } = payload;
+        const raw = await chrome.storage.local.get(['categories', 'manualAssignments', 'channelExclusions']);
+        const categories: CategoryDeck[] = Array.isArray(raw.categories) ? raw.categories : [];
+        const manualAssignments: Record<string, string[]> = raw.manualAssignments || {};
+        const channelExclusions: Record<string, string[]> = raw.channelExclusions || {};
+
+        const category = categories.find(c => c.id === categoryId);
+        if (category) {
+          if (!category.channelIds.includes(ucId)) {
+            category.channelIds.push(ucId);
+          }
+          if (channelExclusions[ucId]) {
+            channelExclusions[ucId] = channelExclusions[ucId].filter(id => id !== categoryId);
+            if (channelExclusions[ucId].length === 0) delete channelExclusions[ucId];
+          }
+          if (!manualAssignments[ucId]) manualAssignments[ucId] = [];
+          if (!manualAssignments[ucId].includes(categoryId)) manualAssignments[ucId].push(categoryId);
+
+          await chrome.storage.local.set({ categories, manualAssignments, channelExclusions });
+        }
+        return { categories, manualAssignments, channelExclusions };
+      }
+
+      case 'removeChannelFromCategory': {
+        const { ucId, categoryId } = payload;
+        const raw = await chrome.storage.local.get(['categories', 'manualAssignments', 'channelExclusions']);
+        const categories: CategoryDeck[] = Array.isArray(raw.categories) ? raw.categories : [];
+        const manualAssignments: Record<string, string[]> = raw.manualAssignments || {};
+        const channelExclusions: Record<string, string[]> = raw.channelExclusions || {};
+
+        const category = categories.find(c => c.id === categoryId);
+        if (category) {
+          category.channelIds = category.channelIds.filter(id => id !== ucId);
+          if (!channelExclusions[ucId]) channelExclusions[ucId] = [];
+          if (!channelExclusions[ucId].includes(categoryId)) channelExclusions[ucId].push(categoryId);
+          if (manualAssignments[ucId]) {
+            manualAssignments[ucId] = manualAssignments[ucId].filter(id => id !== categoryId);
+            if (manualAssignments[ucId].length === 0) delete manualAssignments[ucId];
+          }
+          await chrome.storage.local.set({ categories, manualAssignments, channelExclusions });
+        }
+        return { categories, manualAssignments, channelExclusions };
+      }
+
+      case 'deleteCategory': {
+        const { categoryId } = payload;
+        const raw = await chrome.storage.local.get(['categories', 'manualAssignments', 'activeCategoryId']);
+        const categories: CategoryDeck[] = Array.isArray(raw.categories)
+          ? raw.categories.filter((c: CategoryDeck) => c.id !== categoryId && c.id !== '__uncategorized__')
+          : [];
+        const manualAssignments: Record<string, string[]> = raw.manualAssignments || {};
+        for (const [id, cats] of Object.entries(manualAssignments)) {
+          manualAssignments[id] = cats.filter(c => c !== categoryId);
+          if (manualAssignments[id].length === 0) delete manualAssignments[id];
+        }
+        const activeCategoryId = raw.activeCategoryId === categoryId ? null : raw.activeCategoryId;
+        await chrome.storage.local.set({ categories, manualAssignments, activeCategoryId });
+        return { categories, manualAssignments, activeCategoryId };
+      }
+
+      case 'createCategory': {
+        const { category } = payload;
+        const raw = await chrome.storage.local.get('categories');
+        const categories: CategoryDeck[] = Array.isArray(raw.categories) ? raw.categories : [];
+        if (!categories.find(c => c.id === category.id)) {
+          categories.push(category);
+          await chrome.storage.local.set({ categories });
+        }
+        return { categories };
+      }
+
+      case 'saveCategories': {
+        const { categories } = payload;
+        const cleanCategories = (categories || []).filter((c: CategoryDeck) => c.id !== '__uncategorized__');
+        await chrome.storage.local.set({ categories: cleanCategories });
+        return { categories: cleanCategories };
+      }
+
+      case 'clearOverrides': {
+        await chrome.storage.local.set({ channelExclusions: {}, manualAssignments: {} });
+        return {};
+      }
+
+      case 'addChannel': {
+        const { channel } = payload;
+        const raw = await chrome.storage.local.get(['channels', 'handleToUcId']);
+        const channels = raw.channels || {};
+        const handleToUcId = raw.handleToUcId || {};
+        channels[channel.ucId] = channel;
+        if (channel.handle) {
+          handleToUcId[channel.handle] = channel.ucId;
+        }
+        await chrome.storage.local.set({ channels, handleToUcId });
+        return { channels, handleToUcId };
+      }
+
+      case 'removeChannel': {
+        const { ucId } = payload;
+        const raw = await chrome.storage.local.get(['channels', 'handleToUcId', 'channelExclusions', 'manualAssignments', 'categories']);
+        const channels = raw.channels || {};
+        const handleToUcId = raw.handleToUcId || {};
+        const channelExclusions = raw.channelExclusions || {};
+        const manualAssignments = raw.manualAssignments || {};
+        const categories: CategoryDeck[] = Array.isArray(raw.categories) ? raw.categories : [];
+
+        const channel = channels[ucId];
+        if (channel) {
+          delete handleToUcId[channel.handle];
+          delete channels[ucId];
+          if (channelExclusions[ucId]) delete channelExclusions[ucId];
+          if (manualAssignments[ucId]) delete manualAssignments[ucId];
+
+          categories.forEach(cat => {
+            cat.channelIds = cat.channelIds.filter(id => id !== ucId);
+          });
+
+          await chrome.storage.local.set({
+            channels,
+            handleToUcId,
+            channelExclusions,
+            manualAssignments,
+            categories,
+          });
+        }
+        return { channels, handleToUcId, channelExclusions, manualAssignments, categories };
+      }
+
+      case 'syncSubscriptions': {
+        const { channels, handleToUcId, categories, lastScrapedAt } = payload;
+        const updates: any = {
+          channels,
+          handleToUcId,
+          lastScrapedAt,
+        };
+        if (categories) {
+          updates.categories = (categories as CategoryDeck[]).filter((c: CategoryDeck) => c.id !== '__uncategorized__');
+        }
+        await chrome.storage.local.set(updates);
+        return updates;
+      }
+
+      default:
+        return null;
+    }
+  }
+
   static async getChannels(): Promise<Record<string, SubscribedChannel>> {
-    const data = await this.getAll();
-    return data.channels;
+    if (!this.isContextValid()) return structuredClone(DEFAULT_STORAGE.channels);
+    const data = await chrome.storage.local.get('channels');
+    return data.channels || {};
   }
 
   static async addChannel(channel: SubscribedChannel): Promise<void> {
-    const data = await this.getAll();
-    data.channels[channel.ucId] = channel;
-    data.handleToUcId[channel.handle] = channel.ucId;
-    await this.setAll({ channels: data.channels, handleToUcId: data.handleToUcId });
+    await this.requestMutation('addChannel', { channel });
   }
 
   static async removeChannel(ucId: string): Promise<void> {
-    const data = await this.getAll();
-    const channel = data.channels[ucId];
-    if (channel) {
-      delete data.handleToUcId[channel.handle];
-      delete data.channels[ucId];
-      if (data.channelExclusions[ucId]) delete data.channelExclusions[ucId];
-      if (data.manualAssignments[ucId]) delete data.manualAssignments[ucId];
+    await this.requestMutation('removeChannel', { ucId });
+  }
 
-      // Clean up channel from all category decks
-      data.categories.forEach(cat => {
-        cat.channelIds = cat.channelIds.filter(id => id !== ucId);
-      });
-
-      await this.setAll({
-        channels: data.channels,
-        handleToUcId: data.handleToUcId,
-        channelExclusions: data.channelExclusions,
-        manualAssignments: data.manualAssignments,
-        categories: data.categories,
-      });
-    }
+  static async syncSubscriptions(payload: {
+    channels: Record<string, SubscribedChannel>;
+    handleToUcId: Record<string, string>;
+    categories?: CategoryDeck[];
+    lastScrapedAt: number;
+  }): Promise<void> {
+    await this.requestMutation('syncSubscriptions', payload);
   }
 
   static async getCategories(): Promise<CategoryDeck[]> {
-    const data = await this.getAll();
-    return data.categories;
+    if (!this.isContextValid()) return [];
+    const data = await chrome.storage.local.get('categories');
+    const cats = Array.isArray(data.categories) ? data.categories : [];
+    return cats.filter((c: CategoryDeck) => c.id !== '__uncategorized__');
   }
 
   static async addChannelToCategory(ucId: string, categoryId: string): Promise<void> {
-    const data = await this.getAll();
-    const category = data.categories.find(c => c.id === categoryId);
-    if (!category) return;
-
-    if (!category.channelIds.includes(ucId)) {
-      category.channelIds.push(ucId);
-    }
-
-    // 1. If category was in exclusions, remove it because user explicitly added it back
-    if (data.channelExclusions[ucId]) {
-      data.channelExclusions[ucId] = data.channelExclusions[ucId].filter(id => id !== categoryId);
-      if (data.channelExclusions[ucId].length === 0) {
-        delete data.channelExclusions[ucId];
-      }
-    }
-
-    // 2. Record manual assignment so Auto-AI will never move it away
-    if (!data.manualAssignments[ucId]) {
-      data.manualAssignments[ucId] = [];
-    }
-    if (!data.manualAssignments[ucId].includes(categoryId)) {
-      data.manualAssignments[ucId].push(categoryId);
-    }
-
-    await this.setAll({
-      categories: data.categories,
-      channelExclusions: data.channelExclusions,
-      manualAssignments: data.manualAssignments,
-    });
+    await this.requestMutation('addChannelToCategory', { ucId, categoryId });
   }
 
   static async removeChannelFromCategory(ucId: string, categoryId: string): Promise<void> {
-    const data = await this.getAll();
-    const category = data.categories.find(c => c.id === categoryId);
-    if (category) {
-      category.channelIds = category.channelIds.filter(id => id !== ucId);
-    }
-
-    // 1. Record exclusion so Auto-AI will NEVER re-add this channel to this category
-    if (!data.channelExclusions[ucId]) {
-      data.channelExclusions[ucId] = [];
-    }
-    if (!data.channelExclusions[ucId].includes(categoryId)) {
-      data.channelExclusions[ucId].push(categoryId);
-    }
-
-    // 2. Remove from manual assignments if it was there
-    if (data.manualAssignments[ucId]) {
-      data.manualAssignments[ucId] = data.manualAssignments[ucId].filter(id => id !== categoryId);
-      if (data.manualAssignments[ucId].length === 0) {
-        delete data.manualAssignments[ucId];
-      }
-    }
-
-    await this.setAll({
-      categories: data.categories,
-      channelExclusions: data.channelExclusions,
-      manualAssignments: data.manualAssignments,
-    });
+    await this.requestMutation('removeChannelFromCategory', { ucId, categoryId });
   }
 
   static async setChannelCategory(ucId: string, newCatId: string): Promise<void> {
-    const data = await this.getAll();
+    await this.requestMutation('setChannelCategory', { ucId, newCatId });
+  }
 
-    // Track previous categories this channel was in
-    const prevCategoryIds: string[] = [];
-    data.categories.forEach(cat => {
-      if (cat.channelIds.includes(ucId)) {
-        prevCategoryIds.push(cat.id);
-        cat.channelIds = cat.channelIds.filter(id => id !== ucId);
-      }
-    });
+  static async deleteCategory(categoryId: string): Promise<void> {
+    await this.requestMutation('deleteCategory', { categoryId });
+  }
 
-    if (!data.channelExclusions[ucId]) {
-      data.channelExclusions[ucId] = [];
-    }
+  static async createCategory(category: CategoryDeck): Promise<void> {
+    await this.requestMutation('createCategory', { category });
+  }
 
-    // Exclude the previous categories that the user moved it away from
-    prevCategoryIds.forEach(prevId => {
-      if (prevId !== newCatId && prevId !== '__uncategorized__' && !data.channelExclusions[ucId].includes(prevId)) {
-        data.channelExclusions[ucId].push(prevId);
-      }
-    });
-
-    // Remove newCatId from exclusions since user explicitly chose it
-    if (newCatId) {
-      data.channelExclusions[ucId] = data.channelExclusions[ucId].filter(id => id !== newCatId);
-      if (data.channelExclusions[ucId].length === 0) {
-        delete data.channelExclusions[ucId];
-      }
-    }
-
-    if (!newCatId || newCatId === '__uncategorized__' || newCatId === 'none') {
-      // User unassigned this channel
-      delete data.manualAssignments[ucId];
-    } else {
-      const target = data.categories.find(c => c.id === newCatId);
-      if (target) {
-        if (!target.channelIds.includes(ucId)) {
-          target.channelIds.push(ucId);
-        }
-        data.manualAssignments[ucId] = [newCatId];
-      } else {
-        // Target doesn't exist — keep unassigned
-        delete data.manualAssignments[ucId];
-      }
-    }
-
-    await this.setAll({
-      categories: data.categories,
-      channelExclusions: data.channelExclusions,
-      manualAssignments: data.manualAssignments,
-    });
+  static async saveCategories(categories: CategoryDeck[]): Promise<void> {
+    await this.requestMutation('saveCategories', { categories });
   }
 
   static async clearOverrides(): Promise<void> {
-    await this.setAll({
-      channelExclusions: {},
-      manualAssignments: {},
-    });
+    await this.requestMutation('clearOverrides');
   }
 
   static async getHandleToUcIdMap(): Promise<Record<string, string>> {
-    const data = await this.getAll();
-    return data.handleToUcId;
+    if (!this.isContextValid()) return {};
+    const data = await chrome.storage.local.get('handleToUcId');
+    return data.handleToUcId || {};
   }
 
   static async setActiveCategoryId(id: string | null): Promise<void> {
-    await this.setAll({ activeCategoryId: id });
+    if (!this.isContextValid()) return;
+    await chrome.storage.local.set({ activeCategoryId: id });
   }
 
   static async getSettings(): Promise<SubDeckStorageSchema['settings']> {
-    const data = await this.getAll();
-    return data.settings;
+    if (!this.isContextValid()) return structuredClone(DEFAULT_STORAGE.settings);
+    const data = await chrome.storage.local.get('settings');
+    return data.settings ? { ...DEFAULT_STORAGE.settings, ...data.settings } : structuredClone(DEFAULT_STORAGE.settings);
   }
 
   static async updateSettings(partial: Partial<SubDeckStorageSchema['settings']>): Promise<void> {
-    const data = await this.getAll();
+    if (!this.isContextValid()) return;
+    const data = await chrome.storage.local.get('settings');
+    const current = data.settings || structuredClone(DEFAULT_STORAGE.settings);
     const sanitizedPartial = { ...partial };
     delete sanitizedPartial.apiKey;
-    data.settings = { ...data.settings, ...sanitizedPartial };
-    await this.setAll({ settings: data.settings });
+    const settings = { ...current, ...sanitizedPartial };
+    await chrome.storage.local.set({ settings });
   }
 
   /**

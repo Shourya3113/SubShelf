@@ -1,4 +1,5 @@
 import { SubscribedChannel, CategoryDeck } from '@/types';
+import { isSystemChannelOrCurator } from '@/utils/systemChannels';
 
 export interface TaxonomyEntry {
   id: string;
@@ -463,6 +464,7 @@ export class HeuristicCategorizer {
     const assigned = new Set<string>();
 
     for (const ch of channels) {
+      if (isSystemChannelOrCurator(ch)) continue;
       const titleLower = ch.title.toLowerCase().trim();
       const handleLower = (ch.handle || '').toLowerCase().replace(/^@/, '').trim();
       const cleanTitle = titleLower.replace(/[^a-z0-9]/g, '');
@@ -549,6 +551,7 @@ export class HeuristicCategorizer {
     // Assign remaining channels to "General & Others"
     const generalDeck = decks.find(d => d.id === 'general-other');
     for (const ch of channels) {
+      if (isSystemChannelOrCurator(ch)) continue;
       if (!assigned.has(ch.ucId)) {
         generalDeck?.channelIds.push(ch.ucId);
         assigned.add(ch.ucId);

@@ -3,6 +3,7 @@ import { ExportImport } from '@/utils/exportImport';
 import { debounce } from '@/utils/debounce';
 import { CategoryDeck, SubDeckStorageSchema, SubscribedChannel } from '@/types';
 import { toast } from '@/utils/toast';
+import { isSystemChannelOrCurator } from '@/utils/systemChannels';
 
 class PopupManager {
   private static state: SubDeckStorageSchema | null = null;
@@ -132,11 +133,17 @@ class PopupManager {
         titleDiv.className = 'deck-title';
         titleDiv.textContent = cat.name;
 
-        // Accurate unique channels count
-        const uniqueCatCount = new Set((cat.channelIds || []).map(id => {
-          const ch = channelsMap[id];
-          return (ch && ch.ucId) ? ch.ucId : id;
-        })).size;
+        // Accurate unique channels count (excluding system topics/curators)
+        const uniqueCatCount = new Set(
+          (cat.channelIds || [])
+            .filter(id => !isSystemChannelOrCurator({ ucId: id }))
+            .map(id => {
+              const ch = channelsMap[id];
+              if (ch && isSystemChannelOrCurator(ch)) return '';
+              return (ch && ch.ucId) ? ch.ucId : id;
+            })
+            .filter(Boolean)
+        ).size;
 
         const subsCountDiv = document.createElement('div');
         subsCountDiv.className = 'deck-subs-count';
@@ -221,7 +228,7 @@ class PopupManager {
     const seenChan = new Set<string>();
     const channels: SubscribedChannel[] = [];
     for (const ch of Object.values(channelsMap)) {
-      if (!ch) continue;
+      if (!ch || isSystemChannelOrCurator(ch)) continue;
       const key = (ch.ucId && ch.ucId.startsWith('UC'))
         ? ch.ucId
         : (ch.handle ? ch.handle.toLowerCase() : ch.title.toLowerCase().trim());

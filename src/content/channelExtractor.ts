@@ -3,6 +3,7 @@ import { IdNormalizer } from '@/utils/idNormalizer';
 import { SubscribedChannel } from '@/types';
 import { isValidYouTubeAvatarUrl } from '@/utils/validators';
 import { Logger } from '@/utils/logger';
+import { isSystemChannelOrCurator, SYSTEM_TITLES } from '@/utils/systemChannels';
 
 // YouTube navigation items and system topics to exclude
 const SYSTEM_NAMES = new Set([
@@ -220,7 +221,9 @@ export class ChannelExtractor {
         'Channel';
 
       const title = rawTitle.trim();
-      if (SYSTEM_NAMES.has(title.toLowerCase())) return;
+      if (SYSTEM_NAMES.has(title.toLowerCase()) || SYSTEM_TITLES.has(title.toLowerCase()) || isSystemChannelOrCurator({ ucId: channelKey, title, handle, url: anchor.href })) {
+        return;
+      }
 
       // Extract real channel avatar directly from sidebar DOM entry
       const imgEl = entry.querySelector('yt-img-shadow img, yt-avatar-shape img, yt-avatar-view-model img, #avatar img, img') as HTMLImageElement | null;

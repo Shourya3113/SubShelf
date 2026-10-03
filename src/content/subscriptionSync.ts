@@ -4,6 +4,7 @@ import { SidebarManager } from './sidebarManager';
 import { Logger } from '@/utils/logger';
 import { CategoryDeck, SubscribedChannel } from '@/types';
 import { HeuristicCategorizer } from '@/ai/heuristic';
+import { isSystemChannelOrCurator } from '@/utils/systemChannels';
 
 export class SubscriptionSync {
   private static isSyncing = false;
@@ -39,6 +40,9 @@ export class SubscriptionSync {
       const seenCanonicalKeys = new Set<string>();
 
       for (const ch of [...additionalChannels, ...scraped]) {
+        // STRICT FILTER: Never process YouTube system topics or feed curators
+        if (isSystemChannelOrCurator(ch)) continue;
+
         const cleanHandle = ch.handle ? (ch.handle.startsWith('@') ? ch.handle.toLowerCase() : '@' + ch.handle.toLowerCase()) : '';
         const canonicalId = (ch.ucId?.startsWith('UC') ? ch.ucId : (handleToUcId[cleanHandle] || ch.ucId))?.trim();
         const dedupeKey = canonicalId?.startsWith('UC') ? canonicalId : (cleanHandle || ch.title.toLowerCase().trim());
@@ -53,9 +57,30 @@ export class SubscriptionSync {
         });
       }
 
-      if (allDiscovered.length === 0) return;
-
       let hasChanges = false;
+
+      // Purge any previously stored system curator channels from currentChannels
+      const purgedSystemIds = new Set<string>();
+      for (const [key, ch] of Object.entries(currentChannels)) {
+        if (isSystemChannelOrCurator(ch) || isSystemChannelOrCurator({ ucId: key, title: ch.title, handle: ch.handle, url: ch.url })) {
+          delete currentChannels[key];
+          purgedSystemIds.add(key);
+          if (ch.ucId) purgedSystemIds.add(ch.ucId);
+          hasChanges = true;
+        }
+      }
+      if (purgedSystemIds.size > 0) {
+        categories.forEach(cat => {
+          if (Array.isArray(cat.channelIds)) {
+            const before = cat.channelIds.length;
+            cat.channelIds = cat.channelIds.filter(id => !purgedSystemIds.has(id));
+            if (cat.channelIds.length !== before) hasChanges = true;
+          }
+        });
+      }
+
+      if (allDiscovered.length === 0 && !hasChanges) return;
+
       const newChannels: SubscribedChannel[] = [];
 
       // 1. Reconcile new subscriptions & migrate any legacy handle-keyed entries
@@ -194,6 +219,7 @@ export class SubscriptionSync {
           typeof (item as any).ucId === 'string' &&
           typeof (item as any).title === 'string'
         ) {
+          if (isSystemChannelOrCurator(item as any)) continue;
           validChannels.push({
             ucId: (item as any).ucId,
             title: (item as any).title,

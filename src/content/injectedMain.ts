@@ -1,6 +1,4 @@
-// src/content/injectedMain.ts
-// Runs in YouTube's MAIN execution world with direct access to window.ytInitialGuideData,
-// window.ytInitialData, window.ytcfg, and YouTube's internal InnerTube JSON payloads.
+import { isSystemChannelOrCurator } from '@/utils/systemChannels';
 
 (() => {
   const avatars: Record<string, string> = {};
@@ -53,6 +51,11 @@
       ? (canon.startsWith('@') ? canon.toLowerCase() : `@${canon.replace(/^[\/@]+/, '').toLowerCase()}`)
       : (browseId ? `@${browseId}` : `@${id}`);
     const key = browseId || handle;
+
+    // Exclude YouTube built-in feed curators and system topics (Gaming, Music, Sports, etc.)
+    if (isSystemChannelOrCurator({ ucId: key, title: cleanTitle, handle, url: canonical })) {
+      return;
+    }
 
     if (browseId && channels[handle]) {
       delete channels[handle];

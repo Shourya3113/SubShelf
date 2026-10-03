@@ -10,6 +10,9 @@ import sys
 import zipfile
 import json
 
+if hasattr(sys.stdout, 'reconfigure'):
+    sys.stdout.reconfigure(encoding='utf-8')
+
 def package_extension():
     project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
     dist_dir = os.path.join(project_root, 'dist')

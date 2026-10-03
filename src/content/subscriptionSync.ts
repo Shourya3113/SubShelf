@@ -14,18 +14,6 @@ export class SubscriptionSync {
     this.isSyncing = true;
 
     try {
-      const scraped = ChannelExtractor.scrapeFromSidebar();
-      const allDiscovered = [...scraped];
-      const seenIds = new Set(allDiscovered.map(c => c.ucId));
-      for (const ch of additionalChannels) {
-        if (!seenIds.has(ch.ucId)) {
-          seenIds.add(ch.ucId);
-          allDiscovered.push(ch);
-        }
-      }
-
-      if (allDiscovered.length === 0) return;
-
       const state = await SubDeckStorage.getAll();
       const currentChannels = { ...(state.channels || {}) };
       const categories: CategoryDeck[] = (state.categories || []).map(c => ({
@@ -34,27 +22,82 @@ export class SubscriptionSync {
       }));
       const handleToUcId = { ...(state.handleToUcId || {}) };
 
+      // Scrape from sidebar passing known handleToUcId map so handles resolve to UC IDs immediately
+      const scraped = ChannelExtractor.scrapeFromSidebar(handleToUcId);
+
+      // Build unified handleToUcId map from both sources and storage
+      for (const ch of [...additionalChannels, ...scraped]) {
+        if (ch.ucId?.startsWith('UC') && ch.handle) {
+          const h = ch.handle.toLowerCase();
+          handleToUcId[h] = ch.ucId;
+          handleToUcId['@' + h.replace(/^@/, '')] = ch.ucId;
+        }
+      }
+
+      // Canonicalize and deduplicate incoming channels
+      const allDiscovered: SubscribedChannel[] = [];
+      const seenCanonicalKeys = new Set<string>();
+
+      for (const ch of [...additionalChannels, ...scraped]) {
+        const cleanHandle = ch.handle ? (ch.handle.startsWith('@') ? ch.handle.toLowerCase() : '@' + ch.handle.toLowerCase()) : '';
+        const canonicalId = (ch.ucId?.startsWith('UC') ? ch.ucId : (handleToUcId[cleanHandle] || ch.ucId))?.trim();
+        const dedupeKey = canonicalId?.startsWith('UC') ? canonicalId : (cleanHandle || ch.title.toLowerCase().trim());
+
+        if (seenCanonicalKeys.has(dedupeKey)) continue;
+        seenCanonicalKeys.add(dedupeKey);
+
+        allDiscovered.push({
+          ...ch,
+          ucId: canonicalId || ch.ucId,
+          handle: cleanHandle || ch.handle,
+        });
+      }
+
+      if (allDiscovered.length === 0) return;
+
       let hasChanges = false;
       const newChannels: SubscribedChannel[] = [];
 
-      // 1. Reconcile new subscriptions
+      // 1. Reconcile new subscriptions & migrate any legacy handle-keyed entries
       for (const ch of allDiscovered) {
-        if (!currentChannels[ch.ucId]) {
-          currentChannels[ch.ucId] = ch;
-          if (ch.handle) {
-            handleToUcId[ch.handle] = ch.ucId;
+        const cleanHandle = ch.handle ? ch.handle.toLowerCase() : '';
+        const canonUcId = ch.ucId;
+
+        // Check if a legacy record exists under the handle key (e.g. key is "@apple")
+        if (cleanHandle && currentChannels[cleanHandle] && canonUcId.startsWith('UC') && cleanHandle !== canonUcId) {
+          currentChannels[canonUcId] = {
+            ...currentChannels[cleanHandle],
+            ...ch,
+            ucId: canonUcId,
+          };
+          delete currentChannels[cleanHandle];
+          hasChanges = true;
+          // Remap category references from handle to UC ID
+          categories.forEach(cat => {
+            if (Array.isArray(cat.channelIds)) {
+              cat.channelIds = cat.channelIds.map(id => id.toLowerCase() === cleanHandle ? canonUcId : id);
+            }
+          });
+        }
+
+        if (!currentChannels[canonUcId]) {
+          currentChannels[canonUcId] = ch;
+          if (cleanHandle) {
+            handleToUcId[cleanHandle] = canonUcId;
+            handleToUcId['@' + cleanHandle.replace(/^@/, '')] = canonUcId;
           }
           newChannels.push(ch);
           hasChanges = true;
-          Logger.info(`[SubShelf] Discovered new subscription: ${ch.title} (${ch.ucId})`);
+          Logger.info(`[SubShelf] Discovered new subscription: ${ch.title} (${canonUcId})`);
         } else {
-          // Update avatar URL if it changed or was previously missing
-          if (ch.avatarUrl && ch.avatarUrl !== currentChannels[ch.ucId].avatarUrl) {
-            currentChannels[ch.ucId].avatarUrl = ch.avatarUrl;
+          // Update avatar URL or handle if improved
+          if (ch.avatarUrl && ch.avatarUrl !== currentChannels[canonUcId].avatarUrl) {
+            currentChannels[canonUcId].avatarUrl = ch.avatarUrl;
             hasChanges = true;
           }
-          if (ch.handle && !handleToUcId[ch.handle]) {
-            handleToUcId[ch.handle] = ch.ucId;
+          if (cleanHandle && !handleToUcId[cleanHandle]) {
+            handleToUcId[cleanHandle] = canonUcId;
+            handleToUcId['@' + cleanHandle.replace(/^@/, '')] = canonUcId;
             hasChanges = true;
           }
         }
@@ -64,7 +107,6 @@ export class SubscriptionSync {
       if (newChannels.length > 0 && categories.length > 0) {
         const heuristicResults = HeuristicCategorizer.categorize(newChannels);
         for (const deck of heuristicResults) {
-          // Find matching existing category by id
           const existingCat = categories.find(c => c.id === deck.id);
           if (existingCat) {
             if (!Array.isArray(existingCat.channelIds)) {
@@ -78,6 +120,17 @@ export class SubscriptionSync {
           }
         }
       }
+
+      // Deduplicate category channel IDs
+      categories.forEach(cat => {
+        if (Array.isArray(cat.channelIds)) {
+          const deduped = Array.from(new Set(cat.channelIds));
+          if (deduped.length !== cat.channelIds.length) {
+            cat.channelIds = deduped;
+            hasChanges = true;
+          }
+        }
+      });
 
       // 3. Reconcile deleted/unsubscribed channels if sidebar is fully expanded
       if (ChannelExtractor.isSidebarFullyExpanded()) {

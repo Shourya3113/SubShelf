@@ -70,19 +70,91 @@ export class SubDeckStorage {
         data.activeCategoryId = null;
       }
 
-      // Sanitize categories: guarantee valid CategoryDeck items and purge any legacy __uncategorized__
+      // Deduplicate and canonicalize channels in storage (merge handle aliases with real UC IDs)
+      let storageDirty = false;
+      const cleanHandleMap: Record<string, string> = { ...(data.handleToUcId || {}) };
+
+      // Index all channels with canonical UC IDs
+      for (const ch of Object.values(data.channels as Record<string, SubscribedChannel>)) {
+        if (ch && typeof ch === 'object' && ch.ucId?.startsWith('UC') && ch.handle) {
+          const hClean = ch.handle.startsWith('@') ? ch.handle.toLowerCase() : '@' + ch.handle.toLowerCase();
+          cleanHandleMap[hClean] = ch.ucId;
+          cleanHandleMap[hClean.replace(/^@/, '')] = ch.ucId;
+        }
+      }
+
+      // Reconcile and purge duplicate channel records (e.g. key is @apple when UCE... exists)
+      const aliasRemap: Record<string, string> = {};
+      const canonicalChannels: Record<string, SubscribedChannel> = {};
+
+      for (const [key, ch] of Object.entries(data.channels as Record<string, SubscribedChannel>)) {
+        if (!ch || typeof ch !== 'object') continue;
+        const hClean = ch.handle ? (ch.handle.startsWith('@') ? ch.handle.toLowerCase() : '@' + ch.handle.toLowerCase()) : '';
+        const canonId = (ch.ucId?.startsWith('UC') ? ch.ucId : (cleanHandleMap[hClean] || cleanHandleMap[key.toLowerCase()] || ch.ucId))?.trim();
+
+        if (canonId && canonId !== key && (canonId.startsWith('UC') || !key.startsWith('UC'))) {
+          aliasRemap[key] = canonId;
+          storageDirty = true;
+          // Merge metadata
+          if (canonicalChannels[canonId]) {
+            canonicalChannels[canonId] = {
+              ...ch,
+              ...canonicalChannels[canonId],
+              avatarUrl: canonicalChannels[canonId].avatarUrl || ch.avatarUrl,
+            };
+          } else {
+            canonicalChannels[canonId] = {
+              ...ch,
+              ucId: canonId,
+            };
+          }
+        } else {
+          canonicalChannels[key] = ch;
+        }
+      }
+      data.channels = canonicalChannels;
+      data.handleToUcId = cleanHandleMap;
+
+      // Sanitize categories: guarantee valid CategoryDeck items, remap alias channel IDs, and deduplicate
       data.categories = data.categories
         .filter((c: any) => c && typeof c === 'object' && c.id && c.id !== '__uncategorized__')
-        .map((c: any) => ({
-          id: String(c.id),
-          name: String(c.name || 'Untitled'),
-          icon: String(c.icon || '📁'),
-          color: typeof c.color === 'string' ? c.color : '#3B82F6',
-          channelIds: Array.isArray(c.channelIds) ? c.channelIds.filter((id: any) => typeof id === 'string') : [],
-          isCollapsed: Boolean(c.isCollapsed),
-          sortOrder: typeof c.sortOrder === 'number' ? c.sortOrder : 0,
-          isSystem: Boolean(c.isSystem),
-        }));
+        .map((c: any) => {
+          const rawIds = Array.isArray(c.channelIds) ? c.channelIds.filter((id: any) => typeof id === 'string') : [];
+          const seenIdsInCat = new Set<string>();
+          const dedupedIds: string[] = [];
+
+          for (const rawId of rawIds) {
+            const canonId = aliasRemap[rawId] || cleanHandleMap[rawId.toLowerCase()] || rawId;
+            if (!seenIdsInCat.has(canonId)) {
+              seenIdsInCat.add(canonId);
+              dedupedIds.push(canonId);
+            }
+          }
+
+          if (dedupedIds.length !== rawIds.length) {
+            storageDirty = true;
+          }
+
+          return {
+            id: String(c.id),
+            name: String(c.name || 'Untitled'),
+            icon: String(c.icon || '📁'),
+            color: typeof c.color === 'string' ? c.color : '#3B82F6',
+            channelIds: dedupedIds,
+            isCollapsed: Boolean(c.isCollapsed),
+            sortOrder: typeof c.sortOrder === 'number' ? c.sortOrder : 0,
+            isSystem: Boolean(c.isSystem),
+          };
+        });
+
+      // Automatically persist cleaned storage if duplicates were removed
+      if (storageDirty && this.isContextValid()) {
+        chrome.storage.local.set({
+          channels: data.channels,
+          categories: data.categories,
+          handleToUcId: data.handleToUcId,
+        }).catch(() => {});
+      }
 
       return data as SubDeckStorageSchema;
     } catch (err: any) {
@@ -171,39 +243,55 @@ export class SubDeckStorage {
     switch (action) {
       case 'setChannelCategory': {
         const { ucId, newCatId } = payload;
-        const raw = await chrome.storage.local.get(['categories', 'manualAssignments', 'channelExclusions']);
+        const raw = await chrome.storage.local.get(['categories', 'manualAssignments', 'channelExclusions', 'handleToUcId', 'channels']);
         const categories: CategoryDeck[] = Array.isArray(raw.categories) ? raw.categories : [];
         const manualAssignments: Record<string, string[]> = raw.manualAssignments || {};
         const channelExclusions: Record<string, string[]> = raw.channelExclusions || {};
+        const handleToUcId: Record<string, string> = raw.handleToUcId || {};
+        const channels: Record<string, any> = raw.channels || {};
+
+        const targetIds = new Set<string>([ucId]);
+        if (channels[ucId]?.handle) {
+          targetIds.add(channels[ucId].handle);
+          targetIds.add(channels[ucId].handle.replace(/^@/, ''));
+          targetIds.add('@' + channels[ucId].handle.replace(/^@/, ''));
+        }
+        for (const [handle, targetUc] of Object.entries(handleToUcId)) {
+          if (targetUc === ucId || handle === ucId) {
+            targetIds.add(handle);
+            targetIds.add(targetUc);
+          }
+        }
 
         const prevCategoryIds: string[] = [];
         categories.forEach(cat => {
-          if (cat.channelIds.includes(ucId)) {
+          if (cat.channelIds.some(id => targetIds.has(id))) {
             prevCategoryIds.push(cat.id);
-            cat.channelIds = cat.channelIds.filter(id => id !== ucId);
+            cat.channelIds = cat.channelIds.filter(id => !targetIds.has(id));
           }
         });
 
-        if (!channelExclusions[ucId]) {
-          channelExclusions[ucId] = [];
-        }
-
-        prevCategoryIds.forEach(prevId => {
-          if (prevId !== newCatId && prevId !== '__uncategorized__' && !channelExclusions[ucId].includes(prevId)) {
-            channelExclusions[ucId].push(prevId);
+        targetIds.forEach(id => {
+          if (!channelExclusions[id]) {
+            channelExclusions[id] = [];
+          }
+          prevCategoryIds.forEach(prevId => {
+            if (prevId !== newCatId && prevId !== '__uncategorized__' && !channelExclusions[id].includes(prevId)) {
+              channelExclusions[id].push(prevId);
+            }
+          });
+          if (newCatId) {
+            channelExclusions[id] = channelExclusions[id].filter(cId => cId !== newCatId);
+            if (channelExclusions[id].length === 0) {
+              delete channelExclusions[id];
+            }
+          }
+          if (!newCatId || newCatId === '__uncategorized__' || newCatId === 'none') {
+            delete manualAssignments[id];
           }
         });
 
-        if (newCatId) {
-          channelExclusions[ucId] = channelExclusions[ucId].filter(id => id !== newCatId);
-          if (channelExclusions[ucId].length === 0) {
-            delete channelExclusions[ucId];
-          }
-        }
-
-        if (!newCatId || newCatId === '__uncategorized__' || newCatId === 'none') {
-          delete manualAssignments[ucId];
-        } else {
+        if (newCatId && newCatId !== '__uncategorized__' && newCatId !== 'none') {
           const target = categories.find(c => c.id === newCatId);
           if (target) {
             if (!target.channelIds.includes(ucId)) {
@@ -221,22 +309,40 @@ export class SubDeckStorage {
 
       case 'addChannelToCategory': {
         const { ucId, categoryId } = payload;
-        const raw = await chrome.storage.local.get(['categories', 'manualAssignments', 'channelExclusions']);
+        const raw = await chrome.storage.local.get(['categories', 'manualAssignments', 'channelExclusions', 'handleToUcId', 'channels']);
         const categories: CategoryDeck[] = Array.isArray(raw.categories) ? raw.categories : [];
         const manualAssignments: Record<string, string[]> = raw.manualAssignments || {};
         const channelExclusions: Record<string, string[]> = raw.channelExclusions || {};
+        const handleToUcId: Record<string, string> = raw.handleToUcId || {};
+        const channels: Record<string, any> = raw.channels || {};
+
+        const targetIds = new Set<string>([ucId]);
+        if (channels[ucId]?.handle) {
+          targetIds.add(channels[ucId].handle);
+          targetIds.add(channels[ucId].handle.replace(/^@/, ''));
+          targetIds.add('@' + channels[ucId].handle.replace(/^@/, ''));
+        }
+        for (const [handle, targetUc] of Object.entries(handleToUcId)) {
+          if (targetUc === ucId || handle === ucId) {
+            targetIds.add(handle);
+            targetIds.add(targetUc);
+          }
+        }
 
         const category = categories.find(c => c.id === categoryId);
         if (category) {
-          if (!category.channelIds.includes(ucId)) {
-            category.channelIds.push(ucId);
-          }
-          if (channelExclusions[ucId]) {
-            channelExclusions[ucId] = channelExclusions[ucId].filter(id => id !== categoryId);
-            if (channelExclusions[ucId].length === 0) delete channelExclusions[ucId];
-          }
-          if (!manualAssignments[ucId]) manualAssignments[ucId] = [];
-          if (!manualAssignments[ucId].includes(categoryId)) manualAssignments[ucId].push(categoryId);
+          // Remove any legacy aliases first to avoid duplicate entries
+          category.channelIds = category.channelIds.filter(id => !targetIds.has(id));
+          category.channelIds.push(ucId);
+
+          targetIds.forEach(id => {
+            if (channelExclusions[id]) {
+              channelExclusions[id] = channelExclusions[id].filter(cId => cId !== categoryId);
+              if (channelExclusions[id].length === 0) delete channelExclusions[id];
+            }
+            if (!manualAssignments[id]) manualAssignments[id] = [];
+            if (!manualAssignments[id].includes(categoryId)) manualAssignments[id].push(categoryId);
+          });
 
           await chrome.storage.local.set({ categories, manualAssignments, channelExclusions });
         }
@@ -245,20 +351,37 @@ export class SubDeckStorage {
 
       case 'removeChannelFromCategory': {
         const { ucId, categoryId } = payload;
-        const raw = await chrome.storage.local.get(['categories', 'manualAssignments', 'channelExclusions']);
+        const raw = await chrome.storage.local.get(['categories', 'manualAssignments', 'channelExclusions', 'handleToUcId', 'channels']);
         const categories: CategoryDeck[] = Array.isArray(raw.categories) ? raw.categories : [];
         const manualAssignments: Record<string, string[]> = raw.manualAssignments || {};
         const channelExclusions: Record<string, string[]> = raw.channelExclusions || {};
+        const handleToUcId: Record<string, string> = raw.handleToUcId || {};
+        const channels: Record<string, any> = raw.channels || {};
+
+        const targetIds = new Set<string>([ucId]);
+        if (channels[ucId]?.handle) {
+          targetIds.add(channels[ucId].handle);
+          targetIds.add(channels[ucId].handle.replace(/^@/, ''));
+          targetIds.add('@' + channels[ucId].handle.replace(/^@/, ''));
+        }
+        for (const [handle, targetUc] of Object.entries(handleToUcId)) {
+          if (targetUc === ucId || handle === ucId) {
+            targetIds.add(handle);
+            targetIds.add(targetUc);
+          }
+        }
 
         const category = categories.find(c => c.id === categoryId);
         if (category) {
-          category.channelIds = category.channelIds.filter(id => id !== ucId);
-          if (!channelExclusions[ucId]) channelExclusions[ucId] = [];
-          if (!channelExclusions[ucId].includes(categoryId)) channelExclusions[ucId].push(categoryId);
-          if (manualAssignments[ucId]) {
-            manualAssignments[ucId] = manualAssignments[ucId].filter(id => id !== categoryId);
-            if (manualAssignments[ucId].length === 0) delete manualAssignments[ucId];
-          }
+          category.channelIds = category.channelIds.filter(id => !targetIds.has(id));
+          targetIds.forEach(id => {
+            if (!channelExclusions[id]) channelExclusions[id] = [];
+            if (!channelExclusions[id].includes(categoryId)) channelExclusions[id].push(categoryId);
+            if (manualAssignments[id]) {
+              manualAssignments[id] = manualAssignments[id].filter(cat => cat !== categoryId);
+              if (manualAssignments[id].length === 0) delete manualAssignments[id];
+            }
+          });
           await chrome.storage.local.set({ categories, manualAssignments, channelExclusions });
         }
         return { categories, manualAssignments, channelExclusions };

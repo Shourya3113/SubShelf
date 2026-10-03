@@ -49,10 +49,18 @@
     const isChannel = Boolean(browseId || canon);
     if (!isChannel) return;
 
-    const key = browseId || (canon ? canon.replace(/^[\/@]+/, '') : id!);
+    const handle = canon
+      ? (canon.startsWith('@') ? canon.toLowerCase() : `@${canon.replace(/^[\/@]+/, '').toLowerCase()}`)
+      : (browseId ? `@${browseId}` : `@${id}`);
+    const key = browseId || handle;
+
+    if (browseId && channels[handle]) {
+      delete channels[handle];
+      dirty = true;
+    }
+
     if (!channels[key]) {
       const url = rawUrl ? norm(rawUrl) : '';
-      const handle = canon ? (canon.startsWith('@') ? canon : `@${canon.replace(/^[\/@]+/, '')}`) : `@${key}`;
       channels[key] = {
         ucId: key,
         title: cleanTitle,

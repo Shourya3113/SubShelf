@@ -1,7 +1,7 @@
 import { SubDeckStorage } from '@/utils/storage';
 import { ExportImport } from '@/utils/exportImport';
 import { debounce } from '@/utils/debounce';
-import { CategoryDeck, SubDeckStorageSchema } from '@/types';
+import { CategoryDeck, SubDeckStorageSchema, SubscribedChannel } from '@/types';
 import { toast } from '@/utils/toast';
 
 class PopupManager {
@@ -112,6 +112,7 @@ class PopupManager {
     list.replaceChildren();
 
     const categories = await SubDeckStorage.getCategories();
+    const channelsMap = await SubDeckStorage.getChannels();
 
     categories
       .filter(cat => cat.id !== '__uncategorized__')
@@ -131,9 +132,15 @@ class PopupManager {
         titleDiv.className = 'deck-title';
         titleDiv.textContent = cat.name;
 
+        // Accurate unique channels count
+        const uniqueCatCount = new Set((cat.channelIds || []).map(id => {
+          const ch = channelsMap[id];
+          return (ch && ch.ucId) ? ch.ucId : id;
+        })).size;
+
         const subsCountDiv = document.createElement('div');
         subsCountDiv.className = 'deck-subs-count';
-        subsCountDiv.textContent = `${(cat.channelIds || []).length} channels`;
+        subsCountDiv.textContent = `${uniqueCatCount} channels`;
 
         infoDiv.appendChild(titleDiv);
         infoDiv.appendChild(subsCountDiv);
@@ -209,7 +216,20 @@ class PopupManager {
 
     const channelsMap = await SubDeckStorage.getChannels();
     const categories = await SubDeckStorage.getCategories();
-    const channels = Object.values(channelsMap);
+
+    // Deduplicate channels by canonical UC ID / handle / title
+    const seenChan = new Set<string>();
+    const channels: SubscribedChannel[] = [];
+    for (const ch of Object.values(channelsMap)) {
+      if (!ch) continue;
+      const key = (ch.ucId && ch.ucId.startsWith('UC'))
+        ? ch.ucId
+        : (ch.handle ? ch.handle.toLowerCase() : ch.title.toLowerCase().trim());
+      if (!seenChan.has(key)) {
+        seenChan.add(key);
+        channels.push(ch);
+      }
+    }
 
     const sorted = (filter
       ? channels.filter(c => c.title.toLowerCase().includes(filter) || c.handle.toLowerCase().includes(filter))
@@ -232,7 +252,10 @@ class PopupManager {
       const card = document.createElement('div');
       card.className = 'channel-card';
 
-      const currentDeck = categories.find(c => c.id !== '__uncategorized__' && c.channelIds.includes(ch.ucId));
+      const currentDeck = categories.find(c =>
+        c.id !== '__uncategorized__' &&
+        c.channelIds.some(id => id === ch.ucId || (channelsMap[id] && channelsMap[id].ucId === ch.ucId))
+      );
 
       const metaDiv = document.createElement('div');
       metaDiv.className = 'channel-meta';

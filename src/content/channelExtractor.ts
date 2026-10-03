@@ -163,7 +163,7 @@ export class ChannelExtractor {
     }
   }
 
-  static scrapeFromSidebar(): SubscribedChannel[] {
+  static scrapeFromSidebar(handleToUcId?: Record<string, string>): SubscribedChannel[] {
     const channels: SubscribedChannel[] = [];
     const subSection = getSubscriptionSection();
     if (!subSection) return channels;
@@ -185,12 +185,31 @@ export class ChannelExtractor {
       if (!href.includes('/@') && !href.includes('/channel/')) return;
       if (href.includes('/feed/') || href.includes('/playlist')) return;
 
-      const { ucId, handle } = IdNormalizer.extractFromAnchor(anchor);
+      let { ucId, handle } = IdNormalizer.extractFromAnchor(anchor);
       if (!ucId && !handle) return;
 
+      if (!ucId) {
+        const browseAttr = anchor.getAttribute('data-browse-id') || entry.getAttribute('data-browse-id');
+        if (browseAttr?.startsWith('UC')) {
+          ucId = browseAttr;
+        }
+      }
+
+      if (!ucId && handle && handleToUcId) {
+        const cleanH = handle.toLowerCase();
+        const mapped = handleToUcId[cleanH] || handleToUcId['@' + cleanH.replace(/^@/, '')] || handleToUcId[cleanH.replace(/^@/, '')];
+        if (mapped?.startsWith('UC')) {
+          ucId = mapped;
+        }
+      }
+
       const channelKey = ucId || handle || '';
-      if (seenIds.has(channelKey)) return;
+      if (seenIds.has(channelKey) || (handle && seenIds.has(handle.toLowerCase())) || (ucId && seenIds.has(ucId))) {
+        return;
+      }
       seenIds.add(channelKey);
+      if (handle) seenIds.add(handle.toLowerCase());
+      if (ucId) seenIds.add(ucId);
 
       const rawTitle =
         anchor.getAttribute('title') ||

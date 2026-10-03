@@ -353,7 +353,7 @@ export class SidebarManager {
 
         // 4. Run categorization across full list of channels
         await new Promise<void>((resolve) => {
-          chrome.runtime.sendMessage({ type: 'subdeck-auto-organize' }, async (res) => {
+          chrome.runtime.sendMessage({ type: 'subshelf-auto-organize' }, async (res) => {
             if (res?.success) {
               if (res.fallbackNotice) {
                 SidebarManager.showToast(res.fallbackNotice);
@@ -682,11 +682,16 @@ export class SidebarManager {
             if (avatarSrc) ch.avatarUrl = avatarSrc;
           }
 
+          const fallbackColor = (title: string): string => {
+            let h = 0;
+            for (const char of title) h = (h * 31 + char.charCodeAt(0)) >>> 0;
+            return `hsl(${h % 360} 40% 36%)`;
+          };
+
           const safe = safeAvatarUrl(avatarSrc);
           if (safe) {
             const avatar = document.createElement('img');
             avatar.className = 'subdeck-channel-avatar';
-            avatar.referrerPolicy = 'no-referrer';
             avatar.src = safe;
             avatar.alt = '';
             avatar.loading = 'lazy';
@@ -695,6 +700,8 @@ export class SidebarManager {
               const fallback = document.createElement('span');
               fallback.className = 'subdeck-channel-avatar-fallback';
               fallback.textContent = ch.title.charAt(0).toUpperCase();
+              fallback.style.background = fallbackColor(ch.title);
+              fallback.style.color = '#fff';
               link.insertBefore(fallback, titleSpan);
             };
             link.appendChild(avatar);
@@ -702,6 +709,8 @@ export class SidebarManager {
             const fallback = document.createElement('span');
             fallback.className = 'subdeck-channel-avatar-fallback';
             fallback.textContent = ch.title.charAt(0).toUpperCase();
+            fallback.style.background = fallbackColor(ch.title);
+            fallback.style.color = '#fff';
             link.appendChild(fallback);
           }
 

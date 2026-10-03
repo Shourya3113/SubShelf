@@ -633,3 +633,69 @@ ytd-mini-guide-renderer #subdeck-sidebar-container {
   opacity: 1;
   transform: translateX(-50%) translateY(0);
 }
+
+/* ---- Folder header: fixed 3-column grid, cannot wrap ---- */
+#subdeck-sidebar-container .subdeck-folder-header {
+  display: grid !important;
+  grid-template-columns: minmax(0, 1fr) auto !important;   /* [main] [actions] */
+  align-items: center !important;
+  column-gap: 4px !important;
+  width: 100% !important;
+  box-sizing: border-box !important;
+}
+
+#subdeck-sidebar-container .subdeck-folder-main {
+  display: grid !important;
+  grid-template-columns: 22px minmax(0, 1fr) auto !important; /* icon | title | count */
+  align-items: center !important;
+  column-gap: 8px !important;
+  min-width: 0 !important;
+  overflow: hidden !important;
+  padding: 2px 0 !important;
+  text-decoration: none !important;
+  color: inherit !important;
+}
+
+#subdeck-sidebar-container .subdeck-folder-icon {
+  width: 22px !important;
+  margin: 0 !important;
+  text-align: center !important;
+  font-size: 16px !important;
+  line-height: 1 !important;
+  display: block !important;
+}
+
+#subdeck-sidebar-container .subdeck-folder-title {
+  display: block !important;
+  min-width: 0 !important;
+  margin: 0 !important;
+  white-space: nowrap !important;
+  overflow: hidden !important;
+  text-overflow: ellipsis !important;
+}
+
+#subdeck-sidebar-container .subdeck-channel-count {
+  justify-self: end !important;
+  margin: 0 !important;
+}
+
+#subdeck-sidebar-container .subdeck-header-actions {
+  display: flex !important;
+  flex-wrap: nowrap !important;
+  align-items: center !important;
+  gap: 2px !important;
+  margin: 0 !important;
+}
+
+.subdeck-channel-avatar-fallback {
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  width: 24px !important;
+  height: 24px !important;
+  border-radius: 50% !important;
+  font-size: 12px !important;
+  font-weight: 600 !important;
+  flex: 0 0 24px !important;
+  margin-right: 10px !important;
+}

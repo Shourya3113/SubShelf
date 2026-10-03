@@ -12,9 +12,13 @@ export class IdNormalizer {
     }
 
     let handle: string | null = null;
-    const handleMatch = href.match(/\/@([a-zA-Z0-9_.-]+)/);
+    const handleMatch = href.match(/\/@([^/?#]+)/);
     if (handleMatch) {
-      handle = '@' + handleMatch[1].toLowerCase();
+      try {
+        handle = '@' + decodeURIComponent(handleMatch[1]).toLowerCase();
+      } catch {
+        handle = '@' + handleMatch[1].toLowerCase();
+      }
     }
 
     return { ucId, handle };

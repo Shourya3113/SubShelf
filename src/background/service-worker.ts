@@ -13,21 +13,6 @@ chrome.runtime.onInstalled.addListener(async (details) => {
     Logger.info(`[SubShelf] Initialized fresh storage schema v${CURRENT_SCHEMA_VERSION}`);
     return;
   }
-  const fromVersion = typeof raw.version === 'number' ? raw.version : 1;
-
-  if (details.reason === 'update') {
-    if (fromVersion < CURRENT_SCHEMA_VERSION) {
-      try {
-        const migrated = runMigrations(fromVersion, CURRENT_SCHEMA_VERSION, raw as any);
-        await chrome.storage.local.set(migrated);
-        Logger.info(`[SubShelf] Successfully migrated storage schema from v${fromVersion} to v${CURRENT_SCHEMA_VERSION}`);
-      } catch (err) {
-        Logger.error(`[SubShelf] Storage schema migration failed from v${fromVersion} to v${CURRENT_SCHEMA_VERSION}:`, err);
-      }
-    } else {
-      Logger.info(`[SubShelf] Storage schema up to date at v${fromVersion}`);
-    }
-  }
 });
 
 // Self-healing migration check on service worker wake-up
@@ -118,7 +103,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     return true;
   }
 
-  if (message?.type === 'subshelf-auto-organize' || message?.type === 'subdeck-auto-organize') {
+  if (message?.type === 'subshelf-auto-organize') {
     (async () => {
       try {
         Logger.info('[SubShelf Background] Running AI auto-categorization...');

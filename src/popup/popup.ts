@@ -391,7 +391,7 @@ class PopupManager {
       const file = (e.target as HTMLInputElement).files?.[0];
       if (file) {
         try {
-          await ExportImport.importFromFile(file, 'merge');
+          await ExportImport.importFromFile(file);
           this.state = await SubDeckStorage.getAll();
           toast('SubShelf backup imported successfully!');
           await this.renderDecks();

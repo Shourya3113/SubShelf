@@ -38,6 +38,7 @@ function mergeDecks(a: CategoryDeck[] = [], b: CategoryDeck[] = []): CategoryDec
 
 /** Parse model output. Each valid channel is assigned at most once across all decks. */
 function parseAIResponse(raw: string, channels: SubscribedChannel[]): CategoryDeck[] | null {
+  const ref = new Map<string, string>(channels.map((c, i) => [`c${i}`, c.ucId]));
   const valid = new Set(channels.map(c => c.ucId));
   const text = raw.replace(/`{3}(?:json)?/gi, '').trim();
   let obj: unknown;
@@ -60,9 +61,12 @@ function parseAIResponse(raw: string, channels: SubscribedChannel[]): CategoryDe
     const ids: string[] = [];
     if (Array.isArray(list)) {
       for (const x of list) {
-        if (typeof x === 'string' && valid.has(x) && !seen.has(x)) {
-          seen.add(x);
-          ids.push(x);
+        if (typeof x !== 'string') continue;
+        const trimmed = x.trim();
+        const real = ref.get(trimmed) || (valid.has(trimmed) ? trimmed : undefined);
+        if (real && !seen.has(real)) {
+          seen.add(real);
+          ids.push(real);
         }
       }
     }

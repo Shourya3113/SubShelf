@@ -1,4 +1,5 @@
 import { SubDeckStorageSchema, DEFAULT_STORAGE, SubscribedChannel, CategoryDeck, CURRENT_SCHEMA_VERSION, API_KEY_FIELD } from '@/types';
+import { Logger } from './logger';
 
 export const SUBSHELF_SECURE_API_KEY = API_KEY_FIELD;
 export { API_KEY_FIELD };
@@ -21,7 +22,7 @@ export class SubDeckStorage {
       return structuredClone(DEFAULT_STORAGE);
     }
     try {
-      const data = await chrome.storage.local.get(null);
+      const data = await chrome.storage.local.get(Object.keys(DEFAULT_STORAGE));
       if (!data || Object.keys(data).length === 0) {
         if (!this.isContextValid()) return structuredClone(DEFAULT_STORAGE);
         const defaults = structuredClone(DEFAULT_STORAGE);
@@ -150,8 +151,11 @@ export class SubDeckStorage {
         if (response && response.success) {
           return response.result;
         }
-      } catch {
-        // Fall back to direct execution below
+        if (!response?.success) {
+          Logger.warn('[SubShelf] SW mutation failed, writing locally', action, response?.error);
+        }
+      } catch (err) {
+        Logger.warn('[SubShelf] SW mutation failed, writing locally', action, err);
       }
     }
 

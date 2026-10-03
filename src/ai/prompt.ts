@@ -8,13 +8,10 @@ export function buildCategorizationPrompt(channels: SubscribedChannel[]): string
     .join('\n');
 
   // Sanitize titles and handles to protect against prompt injection (strip XML-breakout chars)
+  const clean = (s: string, n: number) => s.replace(/[<>\r\n\t"]/g, ' ').slice(0, n);
+
   const channelList = channels
-    .map(c => {
-      const safeTitle = c.title.replace(/[<>\r\n\t"]/g, ' ').slice(0, 100);
-      const safeHandle = (c.handle || '').replace(/[<>\r\n\t"]/g, ' ').slice(0, 50);
-      const safeId = c.ucId.replace(/[^a-zA-Z0-9_-]/g, '').slice(0, 50);
-      return `  <channel id="${safeId}" title="${safeTitle}" handle="${safeHandle}" />`;
-    })
+    .map((c, i) => `  <channel id="c${i}" title="${clean(c.title, 100)}" handle="${clean(c.handle ?? '', 50)}" />`)
     .join('\n');
 
   const schemaExample = SUBDECK_TAXONOMY
@@ -34,6 +31,8 @@ ${taxonomyDesc}
 <channel_list>
 ${channelList}
 </channel_list>
+
+Each channel id (c0, c1, ...) must appear in exactly one category array. Use only the ids given.
 
 Output strict JSON ONLY with this schema:
 {

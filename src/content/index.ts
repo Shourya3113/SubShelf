@@ -7,6 +7,7 @@ import { SubDeckStorage } from '@/utils/storage';
 import { debounce } from '@/utils/debounce';
 import { Logger } from '@/utils/logger';
 import { sanitizeAvatarMap } from '@/utils/avatarUrl';
+import { harvestAvatarsFromDom, harvestFromChannelsPage } from '@/utils/avatarHarvest';
 
 class SubShelfCoordinator {
   static init(): void {
@@ -50,6 +51,23 @@ class SubShelfCoordinator {
     requestAvatars();
     setTimeout(requestAvatars, 800);
     setTimeout(requestAvatars, 2000);
+
+    const applyHarvest = (map: Map<string, string>) => {
+      if (!SubDeckStorage.isContextValid() || map.size === 0) return;
+      ChannelExtractor.mergeAvatars(map);
+      SubscriptionSync.mergeAvatars(map);
+    };
+    const harvest = () => applyHarvest(harvestAvatarsFromDom());
+
+    [1500, 3500, 7000, 12000].forEach(ms => setTimeout(harvest, ms));
+    document.addEventListener('yt-navigate-finish', () => setTimeout(harvest, 1200));
+
+    // One-time catch-up for channels still without a logo, after the first harvests had a chance:
+    setTimeout(async () => {
+      if (!SubDeckStorage.isContextValid()) return;
+      const all = Object.values((await SubDeckStorage.getAll()).channels ?? {});
+      if (all.some(c => !c.avatarUrl)) applyHarvest(await harvestFromChannelsPage());
+    }, 15000);
 
     window.addEventListener('yt-navigate-start', (e: any) => {
       const url = e?.detail?.url || window.location.pathname;

@@ -5,12 +5,12 @@
 [![Manifest V3](https://img.shields.io/badge/Chrome%20Extension-Manifest%20V3-blue.svg)](https://developer.chrome.com/docs/extensions/mv3/intro/)
 [![TypeScript](https://img.shields.io/badge/TypeScript-5.4-blue.svg?logo=typescript)](https://www.typescriptlang.org/)
 [![Vite](https://img.shields.io/badge/Bundled%20with-Vite%205-purple.svg?logo=vite)](https://vitejs.dev/)
-[![Security Audit](https://img.shields.io/badge/Security%20Audit-Zero--XSS%20%7C%20Hardened-brightgreen.svg)](#-security--privacy-first-architecture)
+[![Security Audit](https://img.shields.io/badge/Security%20Audit-Hardened%20%7C%20No--Untrusted--HTML-brightgreen.svg)](#-security--privacy-first-architecture)
 [![License](https://img.shields.io/badge/License-Source--Available-yellow.svg)](./LICENSE)
 
 **SubShelf** is a lightweight, privacy-first Chrome Extension that transforms your cluttered YouTube subscriptions into organized, themed category folders directly inside YouTube's native left sidebar and subscription feed.
 
-Powered by a 3-tier categorization engine (on-device **Gemini Nano**, cloud **Google Gemini API** with configurable model IDs, and deterministic **NLP keyword heuristics**), SubShelf automatically clusters your channels into smart decks in seconds with zero data collection.
+Powered by a 3-tier categorization engine (on-device **Gemini Nano**, cloud **Google Gemini API** with configurable model IDs like `Gemini 2.5 Flash`, and deterministic **NLP keyword heuristics**), SubShelf automatically clusters your channels into smart decks in seconds.
 
 ---
 
@@ -33,11 +33,11 @@ Powered by a 3-tier categorization engine (on-device **Gemini Nano**, cloud **Go
 
 SubShelf was built from the ground up to adhere strictly to Google Chrome Web Store Developer Program Policies and YouTube Brand Guidelines:
 
-* **Zero-XSS Protection:** UI is built with `textContent` / `createElement`. No untrusted HTML is ever interpolated.
+* **No Untrusted HTML Interpolation:** UI is built with `textContent` / `createElement`. No untrusted HTML is ever interpolated.
 * **Minimal Permissions:** `storage`, plus host access to `youtube.com` (to organize your sidebar) and, only if you add your own key, `generativelanguage.googleapis.com` (Gemini Cloud option).
 * **Zero Remote Code Execution:** 100% locally compiled and bundled via Vite/CRXJS. Zero `eval()`, zero `new Function()`, and zero external CDN script tags.
 * **Local Privacy:** SubShelf has no servers, no analytics, and no tracking. Everything stays in your browser. If you choose the optional Gemini Cloud mode, your channel names and handles are sent to Google using your own API key.
-* **Credential Isolation:** Personal Google Gemini API keys are passed strictly via the `x-goog-api-key` HTTP header (never exposed in URL query strings) and stored in isolated extension storage, excluded from JSON backups.
+* **Credential Isolation:** Personal Google Gemini API keys are passed strictly via the `x-goog-api-key` HTTP header (never exposed in URL query strings) and stored in isolated extension storage, excluded from JSON backups and content-script memory.
 
 ---
 
@@ -49,7 +49,7 @@ SubShelf was built from the ground up to adhere strictly to Google Chrome Web St
          ├──► 1. Chrome Built-in AI (Gemini Nano)  [On-Device / 0 Latency]
          │           │ (if unavailable)
          │           ▼
-         ├──► 2. Google Gemini Cloud API           [Cloud / Highly Accurate]
+         ├──► 2. Google Gemini Cloud API           [Cloud / Gemini 2.5 Flash / Configurable]
          │           │ (if no key provided or fails)
          │           ▼
          └──► 3. Deterministic NLP Scoring Engine  [100% Offline / Instant]
@@ -151,6 +151,7 @@ SubShelf/
 │   │   └── popup.ts        # Decks CRUD, channel search & settings controller
 │   ├── types/index.ts      # Domain models & storage schema contracts
 │   └── utils/
+│       ├── avatarHarvest.ts # Sidebar DOM and channels page avatar harvester
 │       ├── debounce.ts     # Generic debouncer utility
 │       ├── exportImport.ts # Sanitized JSON backup export/import
 │       ├── idNormalizer.ts # Canonical UC-ID & handle extractor
@@ -165,7 +166,7 @@ SubShelf/
 
 ## 📜 Documentation
 
-* [Privacy Policy (`PRIVACY_POLICY.md`)](./PRIVACY_POLICY.md) — Certified zero-data collection policy for Web Store submission.
+* [Privacy Policy (`PRIVACY_POLICY.md`)](./PRIVACY_POLICY.md) — Extension privacy policy describing local processing and optional Gemini Cloud mode.
 * [Chrome Web Store Listing](https://chromewebstore.google.com/detail/subdeck-smart-subscripti/elmeglemgjhfadeahmlbcgkjkfkfkfgd) — Official extension installation page.
 
 ## 📄 License

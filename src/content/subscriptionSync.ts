@@ -165,9 +165,12 @@ export class SubscriptionSync {
    */
   static async removeChannelByUrl(url: string): Promise<void> {
     if (!SubDeckStorage.isContextValid()) return;
-    const handleMatch = url.match(/\/@([^\/\?]+)/);
+    const handleMatch = url.match(/\/@([^/?#]+)/);
     if (!handleMatch) return;
-    const handle = `@${handleMatch[1]}`;
+    let handle = `@${handleMatch[1].toLowerCase()}`;
+    try {
+      handle = `@${decodeURIComponent(handleMatch[1]).toLowerCase()}`;
+    } catch {}
 
     const handleToUcId = await SubDeckStorage.getHandleToUcIdMap();
     const ucId = handleToUcId[handle];

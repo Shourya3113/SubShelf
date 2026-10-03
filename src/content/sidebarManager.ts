@@ -228,7 +228,15 @@ export class SidebarManager {
     }
 
     const activeCategory = allState.activeCategoryId;
-    const channelCount = Object.keys(channelsMap).length;
+    const uniqueChannelKeys = new Set<string>();
+    for (const ch of Object.values(channelsMap)) {
+      if (!ch) continue;
+      const key = (ch.ucId && ch.ucId.startsWith('UC'))
+        ? ch.ucId
+        : (ch.handle ? ch.handle.toLowerCase() : ch.title.toLowerCase().trim());
+      uniqueChannelKeys.add(key);
+    }
+    const channelCount = uniqueChannelKeys.size;
 
     // Construct entire UI inside an in-memory DocumentFragment for an atomic swap
     const fragment = document.createDocumentFragment();
@@ -443,10 +451,24 @@ export class SidebarManager {
     fragment.appendChild(showAllBtn);
 
     // 3. Deduplicate Category Folders by normalized name
+    const handleToUc = allState.handleToUcId || {};
     const seenNames = new Set<string>();
     const uniqueCategories: CategoryDeck[] = [];
     for (const cat of categories) {
       if (cat.id === '__uncategorized__') continue;
+      // Deduplicate channelIds in cat by resolving to canonical UC ID
+      const canonicalIds: string[] = [];
+      const seenInCat = new Set<string>();
+      for (const rawId of cat.channelIds) {
+        const ch = channelsMap[rawId];
+        const canonId = (ch && ch.ucId) ? ch.ucId : (handleToUc[rawId.toLowerCase()] || rawId);
+        if (!seenInCat.has(canonId)) {
+          seenInCat.add(canonId);
+          canonicalIds.push(canonId);
+        }
+      }
+      cat.channelIds = canonicalIds;
+
       const norm = cat.name.toLowerCase().trim();
       if (!seenNames.has(norm)) {
         seenNames.add(norm);
@@ -464,6 +486,24 @@ export class SidebarManager {
       .slice()
       .sort((a, b) => a.sortOrder - b.sortOrder)
       .forEach(cat => {
+        // Resolve unique channels for this category folder (preventing duplicate renders and accurate badge count)
+        const seenFolderKeys = new Set<string>();
+        const uniqueFolderChannels: SubscribedChannel[] = [];
+        for (const id of cat.channelIds) {
+          const ch = channelsMap[id];
+          if (!ch) continue;
+          const key = (ch.ucId && ch.ucId.startsWith('UC'))
+            ? ch.ucId
+            : (ch.handle ? ch.handle.toLowerCase() : ch.title.toLowerCase().trim());
+          if (!seenFolderKeys.has(key)) {
+            seenFolderKeys.add(key);
+            uniqueFolderChannels.push(ch);
+          }
+        }
+        const sortedFolderChannels = uniqueFolderChannels.sort((a, b) =>
+          a.title.localeCompare(b.title, undefined, { sensitivity: 'base' })
+        );
+
         const folder = document.createElement('div');
         folder.className = 'subdeck-folder-container';
 
@@ -488,7 +528,7 @@ export class SidebarManager {
 
         const countSpan = document.createElement('span');
         countSpan.className = 'subdeck-channel-count';
-        countSpan.textContent = String(cat.channelIds.length);
+        countSpan.textContent = String(sortedFolderChannels.length);
 
         folderMain.appendChild(iconSpan);
         folderMain.appendChild(titleSpan);
@@ -597,9 +637,22 @@ export class SidebarManager {
         const select = document.createElement('select');
         select.className = 'subdeck-add-select';
 
-        const availableChannels = Object.values(channelsMap)
-          .filter(ch => !cat.channelIds.includes(ch.ucId))
-          .sort((a, b) => a.title.localeCompare(b.title, undefined, { sensitivity: 'base' }));
+        const inFolderKeys = new Set(sortedFolderChannels.map(ch =>
+          (ch.ucId && ch.ucId.startsWith('UC')) ? ch.ucId : (ch.handle ? ch.handle.toLowerCase() : ch.title.toLowerCase().trim())
+        ));
+        const seenAvail = new Set<string>();
+        const availableChannels: SubscribedChannel[] = [];
+        for (const ch of Object.values(channelsMap)) {
+          if (!ch) continue;
+          const key = (ch.ucId && ch.ucId.startsWith('UC'))
+            ? ch.ucId
+            : (ch.handle ? ch.handle.toLowerCase() : ch.title.toLowerCase().trim());
+          if (!inFolderKeys.has(key) && !seenAvail.has(key)) {
+            seenAvail.add(key);
+            availableChannels.push(ch);
+          }
+        }
+        availableChannels.sort((a, b) => a.title.localeCompare(b.title, undefined, { sensitivity: 'base' }));
 
         if (availableChannels.length === 0) {
           const opt = document.createElement('option');
@@ -648,10 +701,6 @@ export class SidebarManager {
         list.className = `subdeck-channel-list ${cat.isCollapsed ? 'collapsed' : ''}`;
 
         // Safe DOM construction for channel items sorted alphabetically
-        const sortedFolderChannels = cat.channelIds
-          .map(id => channelsMap[id])
-          .filter((ch): ch is SubscribedChannel => Boolean(ch))
-          .sort((a, b) => a.title.localeCompare(b.title, undefined, { sensitivity: 'base' }));
 
         sortedFolderChannels.forEach(ch => {
           const id = ch.ucId;

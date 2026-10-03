@@ -3,6 +3,7 @@ import { HeuristicCategorizer, SUBDECK_TAXONOMY } from './heuristic';
 import { buildCategorizationPrompt } from './prompt';
 import { SubDeckStorage } from '@/utils/storage';
 import { Logger } from '@/utils/logger';
+import { isSystemChannelOrCurator } from '@/utils/systemChannels';
 
 export type AIProvider = 'gemini-nano' | 'gemini-api' | 'heuristic';
 
@@ -219,6 +220,7 @@ export class AICategorizer {
     channels: SubscribedChannel[],
     apiKeyOverride?: string
   ): Promise<CategorizeAllResult> {
+    channels = channels.filter(ch => !isSystemChannelOrCurator(ch));
     if (channels.length === 0) return { decks: [], providerUsed: 'heuristic' };
 
     const state = await SubDeckStorage.getAll();

@@ -8,6 +8,7 @@ import { debounce } from '@/utils/debounce';
 import { SubscriptionSync } from './subscriptionSync';
 import { Logger } from '@/utils/logger';
 import { safeAvatarUrl } from '@/utils/avatarUrl';
+import { isSystemChannelOrCurator } from '@/utils/systemChannels';
 
 export class SidebarManager {
   private static containerId = 'subdeck-sidebar-container';
@@ -230,7 +231,7 @@ export class SidebarManager {
     const activeCategory = allState.activeCategoryId;
     const uniqueChannelKeys = new Set<string>();
     for (const ch of Object.values(channelsMap)) {
-      if (!ch) continue;
+      if (!ch || isSystemChannelOrCurator(ch)) continue;
       const key = (ch.ucId && ch.ucId.startsWith('UC'))
         ? ch.ucId
         : (ch.handle ? ch.handle.toLowerCase() : ch.title.toLowerCase().trim());
@@ -460,8 +461,11 @@ export class SidebarManager {
       const canonicalIds: string[] = [];
       const seenInCat = new Set<string>();
       for (const rawId of cat.channelIds) {
+        if (isSystemChannelOrCurator({ ucId: rawId })) continue;
         const ch = channelsMap[rawId];
+        if (ch && isSystemChannelOrCurator(ch)) continue;
         const canonId = (ch && ch.ucId) ? ch.ucId : (handleToUc[rawId.toLowerCase()] || rawId);
+        if (isSystemChannelOrCurator({ ucId: canonId })) continue;
         if (!seenInCat.has(canonId)) {
           seenInCat.add(canonId);
           canonicalIds.push(canonId);
@@ -490,8 +494,9 @@ export class SidebarManager {
         const seenFolderKeys = new Set<string>();
         const uniqueFolderChannels: SubscribedChannel[] = [];
         for (const id of cat.channelIds) {
+          if (isSystemChannelOrCurator({ ucId: id })) continue;
           const ch = channelsMap[id];
-          if (!ch) continue;
+          if (!ch || isSystemChannelOrCurator(ch)) continue;
           const key = (ch.ucId && ch.ucId.startsWith('UC'))
             ? ch.ucId
             : (ch.handle ? ch.handle.toLowerCase() : ch.title.toLowerCase().trim());
@@ -643,7 +648,7 @@ export class SidebarManager {
         const seenAvail = new Set<string>();
         const availableChannels: SubscribedChannel[] = [];
         for (const ch of Object.values(channelsMap)) {
-          if (!ch) continue;
+          if (!ch || isSystemChannelOrCurator(ch)) continue;
           const key = (ch.ucId && ch.ucId.startsWith('UC'))
             ? ch.ucId
             : (ch.handle ? ch.handle.toLowerCase() : ch.title.toLowerCase().trim());

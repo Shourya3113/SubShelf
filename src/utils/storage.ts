@@ -1,5 +1,6 @@
 import { SubDeckStorageSchema, DEFAULT_STORAGE, SubscribedChannel, CategoryDeck, CURRENT_SCHEMA_VERSION, API_KEY_FIELD } from '@/types';
 import { Logger } from './logger';
+import { isSystemChannelOrCurator } from './systemChannels';
 
 export const SUBSHELF_SECURE_API_KEY = API_KEY_FIELD;
 export { API_KEY_FIELD };
@@ -74,21 +75,31 @@ export class SubDeckStorage {
       let storageDirty = false;
       const cleanHandleMap: Record<string, string> = { ...(data.handleToUcId || {}) };
 
-      // Index all channels with canonical UC IDs
+      // Index all channels with canonical UC IDs (ignoring system curators)
       for (const ch of Object.values(data.channels as Record<string, SubscribedChannel>)) {
-        if (ch && typeof ch === 'object' && ch.ucId?.startsWith('UC') && ch.handle) {
+        if (ch && typeof ch === 'object' && !isSystemChannelOrCurator(ch) && ch.ucId?.startsWith('UC') && ch.handle) {
           const hClean = ch.handle.startsWith('@') ? ch.handle.toLowerCase() : '@' + ch.handle.toLowerCase();
           cleanHandleMap[hClean] = ch.ucId;
           cleanHandleMap[hClean.replace(/^@/, '')] = ch.ucId;
         }
       }
 
-      // Reconcile and purge duplicate channel records (e.g. key is @apple when UCE... exists)
+      // Reconcile and purge duplicate channel records AND purge system topic/feed curator records
       const aliasRemap: Record<string, string> = {};
       const canonicalChannels: Record<string, SubscribedChannel> = {};
+      const purgedSystemIds = new Set<string>();
 
       for (const [key, ch] of Object.entries(data.channels as Record<string, SubscribedChannel>)) {
         if (!ch || typeof ch !== 'object') continue;
+
+        // PURGE SYSTEM CURATORS (Gaming, Music, Sports, etc.)
+        if (isSystemChannelOrCurator(ch) || isSystemChannelOrCurator({ ucId: key, title: ch.title, handle: ch.handle, url: ch.url })) {
+          purgedSystemIds.add(key);
+          if (ch.ucId) purgedSystemIds.add(ch.ucId);
+          storageDirty = true;
+          continue;
+        }
+
         const hClean = ch.handle ? (ch.handle.startsWith('@') ? ch.handle.toLowerCase() : '@' + ch.handle.toLowerCase()) : '';
         const canonId = (ch.ucId?.startsWith('UC') ? ch.ucId : (cleanHandleMap[hClean] || cleanHandleMap[key.toLowerCase()] || ch.ucId))?.trim();
 
@@ -113,9 +124,17 @@ export class SubDeckStorage {
         }
       }
       data.channels = canonicalChannels;
+
+      // Clean handleToUcId map from any purged system channels
+      for (const [h, targetId] of Object.entries(cleanHandleMap)) {
+        if (purgedSystemIds.has(targetId) || isSystemChannelOrCurator({ handle: h, ucId: targetId })) {
+          delete cleanHandleMap[h];
+          storageDirty = true;
+        }
+      }
       data.handleToUcId = cleanHandleMap;
 
-      // Sanitize categories: guarantee valid CategoryDeck items, remap alias channel IDs, and deduplicate
+      // Sanitize categories: guarantee valid CategoryDeck items, remap alias channel IDs, remove system channels, and deduplicate
       data.categories = data.categories
         .filter((c: any) => c && typeof c === 'object' && c.id && c.id !== '__uncategorized__')
         .map((c: any) => {
@@ -125,6 +144,10 @@ export class SubDeckStorage {
 
           for (const rawId of rawIds) {
             const canonId = aliasRemap[rawId] || cleanHandleMap[rawId.toLowerCase()] || rawId;
+            if (purgedSystemIds.has(canonId) || purgedSystemIds.has(rawId) || isSystemChannelOrCurator({ ucId: canonId })) {
+              storageDirty = true;
+              continue;
+            }
             if (!seenIdsInCat.has(canonId)) {
               seenIdsInCat.add(canonId);
               dedupedIds.push(canonId);
@@ -147,12 +170,32 @@ export class SubDeckStorage {
           };
         });
 
-      // Automatically persist cleaned storage if duplicates were removed
+      // Purge manual assignments and exclusions for removed system topics
+      if (data.manualAssignments) {
+        for (const sysId of purgedSystemIds) {
+          if (data.manualAssignments[sysId]) {
+            delete data.manualAssignments[sysId];
+            storageDirty = true;
+          }
+        }
+      }
+      if (data.channelExclusions) {
+        for (const sysId of purgedSystemIds) {
+          if (data.channelExclusions[sysId]) {
+            delete data.channelExclusions[sysId];
+            storageDirty = true;
+          }
+        }
+      }
+
+      // Automatically persist cleaned storage if duplicates or system channels were removed
       if (storageDirty && this.isContextValid()) {
         chrome.storage.local.set({
           channels: data.channels,
           categories: data.categories,
           handleToUcId: data.handleToUcId,
+          manualAssignments: data.manualAssignments || {},
+          channelExclusions: data.channelExclusions || {},
         }).catch(() => {});
       }
 

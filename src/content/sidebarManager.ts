@@ -325,19 +325,33 @@ export class SidebarManager {
       };
 
       try {
-        // 1. Expand all native subscriptions so all 80+ channels mount into DOM without scroll jump
+        // 1. Expand all native subscriptions so all channels mount into DOM without scroll jump
         ChannelExtractor.autoExpandNativeSubscriptions(true);
         keepScrollLevel();
-        await new Promise(r => setTimeout(r, 400));
+        await new Promise(r => setTimeout(r, 600));
         keepScrollLevel();
 
         // 2. Scrape and sync all channels into storage
         await this.syncWithNativeSubscriptions();
         keepScrollLevel();
 
+        // 3. Verify channel count, retry once after brief pause if empty
+        let channelsMap = await SubDeckStorage.getChannels();
+        if (Object.keys(channelsMap).length === 0) {
+          await new Promise(r => setTimeout(r, 600));
+          await this.syncWithNativeSubscriptions();
+          channelsMap = await SubDeckStorage.getChannels();
+        }
+
+        const channelCount = Object.keys(channelsMap).length;
+        if (channelCount === 0) {
+          SidebarManager.showToast('No subscriptions found in YouTube sidebar. Please ensure you are signed in.');
+          return;
+        }
+
         aiBtn.textContent = '⏳ Clustering...';
 
-        // 3. Run categorization across full list of channels
+        // 4. Run categorization across full list of channels
         await new Promise<void>((resolve) => {
           chrome.runtime.sendMessage({ type: 'subdeck-auto-organize' }, async (res) => {
             if (res?.success) {
@@ -771,7 +785,7 @@ export class SidebarManager {
     }
     const finalDecks = AICategorizer.applyOverrides(
       rawDecks,
-      state.categories,
+      state.categories || [],
       state.manualAssignments || {},
       state.channelExclusions || {},
       channels

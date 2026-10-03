@@ -53,13 +53,36 @@ export class SubDeckStorage {
         delete data.settings.apiKey;
       }
 
-      // Backward compatibility: ensure exclusion and manual assignment maps exist
-      if (!data.channelExclusions) data.channelExclusions = {};
-      if (!data.manualAssignments) data.manualAssignments = {};
-      // Seamlessly purge any legacy __uncategorized__ deck from categories
-      if (Array.isArray(data.categories)) {
-        data.categories = data.categories.filter((c: CategoryDeck) => c.id !== '__uncategorized__');
+      // Backward compatibility & fresh-install safety: guarantee all fields exist
+      if (!Array.isArray(data.categories)) data.categories = [];
+      if (!data.channels || typeof data.channels !== 'object') data.channels = {};
+      if (!data.handleToUcId || typeof data.handleToUcId !== 'object') data.handleToUcId = {};
+      if (!data.channelExclusions || typeof data.channelExclusions !== 'object') data.channelExclusions = {};
+      if (!data.manualAssignments || typeof data.manualAssignments !== 'object') data.manualAssignments = {};
+      if (!data.settings || typeof data.settings !== 'object') {
+        data.settings = structuredClone(DEFAULT_STORAGE.settings);
+      } else {
+        data.settings = { ...DEFAULT_STORAGE.settings, ...data.settings };
       }
+      if (typeof data.lastScrapedAt !== 'number') data.lastScrapedAt = 0;
+      if (typeof data.activeCategoryId !== 'string' && data.activeCategoryId !== null) {
+        data.activeCategoryId = null;
+      }
+
+      // Sanitize categories: guarantee valid CategoryDeck items and purge any legacy __uncategorized__
+      data.categories = data.categories
+        .filter((c: any) => c && typeof c === 'object' && c.id && c.id !== '__uncategorized__')
+        .map((c: any) => ({
+          id: String(c.id),
+          name: String(c.name || 'Untitled'),
+          icon: String(c.icon || '📁'),
+          color: typeof c.color === 'string' ? c.color : '#3B82F6',
+          channelIds: Array.isArray(c.channelIds) ? c.channelIds.filter((id: any) => typeof id === 'string') : [],
+          isCollapsed: Boolean(c.isCollapsed),
+          sortOrder: typeof c.sortOrder === 'number' ? c.sortOrder : 0,
+          isSystem: Boolean(c.isSystem),
+        }));
+
       return data as SubDeckStorageSchema;
     } catch (err: any) {
       if (err?.message?.includes('Extension context invalidated')) {
@@ -342,7 +365,7 @@ export class SubDeckStorage {
   static async getChannels(): Promise<Record<string, SubscribedChannel>> {
     if (!this.isContextValid()) return structuredClone(DEFAULT_STORAGE.channels);
     const data = await chrome.storage.local.get('channels');
-    return data.channels || {};
+    return (data.channels && typeof data.channels === 'object') ? data.channels : {};
   }
 
   static async addChannel(channel: SubscribedChannel): Promise<void> {
@@ -366,7 +389,12 @@ export class SubDeckStorage {
     if (!this.isContextValid()) return [];
     const data = await chrome.storage.local.get('categories');
     const cats = Array.isArray(data.categories) ? data.categories : [];
-    return cats.filter((c: CategoryDeck) => c.id !== '__uncategorized__');
+    return cats
+      .filter((c: any) => c && typeof c === 'object' && c.id && c.id !== '__uncategorized__')
+      .map((c: any) => ({
+        ...c,
+        channelIds: Array.isArray(c.channelIds) ? c.channelIds : [],
+      }));
   }
 
   static async addChannelToCategory(ucId: string, categoryId: string): Promise<void> {
@@ -400,7 +428,7 @@ export class SubDeckStorage {
   static async getHandleToUcIdMap(): Promise<Record<string, string>> {
     if (!this.isContextValid()) return {};
     const data = await chrome.storage.local.get('handleToUcId');
-    return data.handleToUcId || {};
+    return (data.handleToUcId && typeof data.handleToUcId === 'object') ? data.handleToUcId : {};
   }
 
   static async setActiveCategoryId(id: string | null): Promise<void> {

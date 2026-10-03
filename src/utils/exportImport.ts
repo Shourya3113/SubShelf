@@ -206,7 +206,7 @@ export class ExportImport {
       const current = await SubDeckStorage.getAll();
 
       // Merge categories: union channelIds for existing categories, add new ones
-      const mergedCategories = current.categories.map(existing => {
+      const mergedCategories = (current.categories || []).map(existing => {
         const imported = validatedCategories.find(c => c.id === existing.id);
         if (imported) {
           const mergedIds = new Set([...existing.channelIds, ...imported.channelIds]);
@@ -218,7 +218,7 @@ export class ExportImport {
         }
         return existing;
       });
-      const existingCategoryIds = new Set(current.categories.map(c => c.id));
+      const existingCategoryIds = new Set((current.categories || []).map(c => c.id));
       for (const cat of validatedCategories) {
         if (!existingCategoryIds.has(cat.id)) {
           mergedCategories.push(cat);

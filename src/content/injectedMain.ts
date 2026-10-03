@@ -4,6 +4,7 @@
 
 (() => {
   const avatars: Record<string, string> = {};
+  const channels: Record<string, { ucId: string; title: string; handle: string; url: string; avatarUrl: string }> = {};
   const MAX_DEPTH = 35;
   const scanned = new WeakSet<object>();
   let dirty = false;
@@ -38,6 +39,31 @@
     }
   };
 
+  const addChannel = (id?: string, canonical?: string, title?: string, rawUrl?: string | null) => {
+    if (!id && !canonical) return;
+    const cleanTitle = (title || '').trim();
+    if (!cleanTitle) return;
+
+    const browseId = id?.startsWith('UC') ? id : null;
+    const canon = canonical?.includes('@') ? canonical : null;
+    const isChannel = Boolean(browseId || canon);
+    if (!isChannel) return;
+
+    const key = browseId || (canon ? canon.replace(/^[\/@]+/, '') : id!);
+    if (!channels[key]) {
+      const url = rawUrl ? norm(rawUrl) : '';
+      const handle = canon ? (canon.startsWith('@') ? canon : `@${canon.replace(/^[\/@]+/, '')}`) : `@${key}`;
+      channels[key] = {
+        ucId: key,
+        title: cleanTitle,
+        handle,
+        url: canon ? `https://www.youtube.com/${canon.replace(/^\/+/, '')}` : `https://www.youtube.com/channel/${key}`,
+        avatarUrl: url || '',
+      };
+      dirty = true;
+    }
+  };
+
   const index = (id?: string, canonical?: string, title?: string, rawUrl?: string | null) => {
     if (!rawUrl) return;
     const url = norm(rawUrl);
@@ -62,7 +88,9 @@
         typeof g.title === 'string'
           ? g.title
           : g.title?.runs?.[0]?.text || g.title?.simpleText || g.formattedTitle?.simpleText;
-      index(be?.browseId, be?.canonicalBaseUrl, t, pick(g.thumbnail));
+      const thumb = pick(g.thumbnail);
+      index(be?.browseId, be?.canonicalBaseUrl, t, thumb);
+      addChannel(be?.browseId, be?.canonicalBaseUrl, t, thumb);
     }
 
     // 2. YouTube modern guideEntryViewModel (2024–2026 UI)
@@ -70,14 +98,18 @@
     if (v) {
       const be = v.rendererContext?.commandContext?.onTap?.innertubeCommand?.browseEndpoint;
       const t = v.title?.content || v.formattedTitle?.content;
-      index(be?.browseId, be?.canonicalBaseUrl, t, pick(v.thumbnail));
+      const thumb = pick(v.thumbnail);
+      index(be?.browseId, be?.canonicalBaseUrl, t, thumb);
+      addChannel(be?.browseId, be?.canonicalBaseUrl, t, thumb);
     }
 
     // 3. channelRenderer, compactChannelRenderer, gridChannelRenderer
     const c = n.channelRenderer || n.compactChannelRenderer || n.gridChannelRenderer;
     if (c) {
       const t = c.title?.simpleText || c.title?.runs?.[0]?.text;
-      index(c.channelId, c.navigationEndpoint?.browseEndpoint?.canonicalBaseUrl, t, pick(c.thumbnail));
+      const thumb = pick(c.thumbnail);
+      index(c.channelId, c.navigationEndpoint?.browseEndpoint?.canonicalBaseUrl, t, thumb);
+      addChannel(c.channelId, c.navigationEndpoint?.browseEndpoint?.canonicalBaseUrl, t, thumb);
     }
 
     for (const k in n) {
@@ -89,15 +121,25 @@
 
   const broadcast = (force = false) => {
     if (!force && !dirty) return;
-    if (Object.keys(avatars).length === 0) return;
     dirty = false;
-    const snapshot = { ...avatars };
-    try {
-      document.dispatchEvent(new CustomEvent('subshelf-avatars-broadcast', { detail: snapshot }));
-    } catch {}
-    try {
-      window.postMessage({ type: 'SUBSHELF_AVATARS_BROADCAST', avatars: snapshot }, location.origin);
-    } catch {}
+    if (Object.keys(avatars).length > 0) {
+      const snapshot = { ...avatars };
+      try {
+        document.dispatchEvent(new CustomEvent('subshelf-avatars-broadcast', { detail: snapshot }));
+      } catch {}
+      try {
+        window.postMessage({ type: 'SUBSHELF_AVATARS_BROADCAST', avatars: snapshot }, location.origin);
+      } catch {}
+    }
+    if (Object.keys(channels).length > 0) {
+      const channelList = Object.values(channels);
+      try {
+        document.dispatchEvent(new CustomEvent('subshelf-channels-broadcast', { detail: channelList }));
+      } catch {}
+      try {
+        window.postMessage({ type: 'SUBSHELF_CHANNELS_BROADCAST', channels: channelList }, location.origin);
+      } catch {}
+    }
   };
 
   const ingest = (data: any) => {

@@ -1,8 +1,8 @@
 export const YT_SELECTORS = {
   guideRenderer: 'ytd-guide-renderer',
-  guideSectionRenderer: 'ytd-guide-section-renderer',
-  guideEntry: 'ytd-guide-entry-renderer',
-  subscriptionSection: '#sections > ytd-guide-section-renderer:has(#guide-section-title)',
+  guideSectionRenderer: 'ytd-guide-section-renderer, yt-guide-section-view-model',
+  guideEntry: 'ytd-guide-entry-renderer, yt-guide-entry-view-model',
+  subscriptionSection: '#sections > ytd-guide-section-renderer, #sections > yt-guide-section-view-model',
   richGridRenderer: 'ytd-rich-grid-renderer',
   richItemRenderer: 'ytd-rich-item-renderer',
   richSectionRenderer: 'ytd-rich-section-renderer',
@@ -34,7 +34,7 @@ export function getSubscriptionSection(): Element | null {
   }) || guideRenderers[0];
 
   const sectionsContainer = visibleGuide.querySelector('#sections') || visibleGuide;
-  const sections = Array.from(sectionsContainer.querySelectorAll('ytd-guide-section-renderer'));
+  const sections = Array.from(sectionsContainer.querySelectorAll('ytd-guide-section-renderer, yt-guide-section-view-model'));
 
   // 1. Structural match: section containing header link to /feed/channels
   for (const s of sections) {
@@ -43,7 +43,14 @@ export function getSubscriptionSection(): Element | null {
     }
   }
 
-  // 2. Multi-lingual title check across common YouTube interface languages
+  // 2. Direct lookup fallback: locate section from feed/channels link anywhere in visible guide
+  const feedChannelsLink = visibleGuide.querySelector('a[href*="/feed/channels"]');
+  if (feedChannelsLink) {
+    const parentSection = feedChannelsLink.closest('ytd-guide-section-renderer, yt-guide-section-view-model, #sections > *');
+    if (parentSection) return parentSection;
+  }
+
+  // 3. Multi-lingual title check across common YouTube interface languages
   const SUB_KEYWORDS = [
     'subscription', 'suscrip', 'abonnements', 'abos', 'iscrizioni',
     'inscrições', 'inscricoes', 'subskrypcje', 'подписки', 'सदस्यता',
@@ -51,16 +58,16 @@ export function getSubscriptionSection(): Element | null {
   ];
 
   for (const s of sections) {
-    const titleEl = s.querySelector('#guide-section-title');
+    const titleEl = s.querySelector('#guide-section-title, .guide-section-title, yt-formatted-string');
     const title = titleEl?.textContent?.trim().toLowerCase() || '';
     if (SUB_KEYWORDS.some(kw => title.includes(kw))) {
       return s;
     }
   }
 
-  // 3. Structural fallback: section containing multiple channel links (/@ or /channel/UC)
+  // 4. Structural fallback: section containing multiple channel links (/@ or /channel/UC)
   for (const s of sections) {
-    const channelLinks = s.querySelectorAll('a[href*="/@"], a[href*="/channel/UC"]');
+    const channelLinks = s.querySelectorAll('a[href*="/@"], a[href*="/channel/UC"], a[href*="/channel/"]');
     if (channelLinks.length >= 2) {
       return s;
     }
@@ -77,7 +84,7 @@ export function getNativeExpander(subSection?: Element | null): HTMLElement | nu
   if (!section) return null;
 
   const expander = section.querySelector<HTMLElement>(
-    'ytd-guide-collapsible-entry-renderer, #expander-item, #expander-button, #expand-button, ytd-guide-entry-renderer#collapsible-expander, ytd-guide-collapsible-section-entry-renderer'
+    'ytd-guide-collapsible-entry-renderer, #expander-item, #expander-button, #expand-button, ytd-guide-entry-renderer#collapsible-expander, ytd-guide-collapsible-section-entry-renderer, yt-guide-entry-view-model#expander-item'
   );
 
   return expander;

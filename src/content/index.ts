@@ -21,11 +21,23 @@ class SubShelfCoordinator {
       SubscriptionSync.mergeAvatars(map);
     };
 
+    // Secure channel broadcasts handling from YouTube's initial guide payload
+    const handleChannels = (payload: unknown) => {
+      if (!SubDeckStorage.isContextValid()) return;
+      if (!Array.isArray(payload) || payload.length === 0) return;
+      SubscriptionSync.syncInitialChannels(payload);
+    };
+
     document.addEventListener('subshelf-avatars-broadcast', (e) => handleAvatars((e as CustomEvent).detail));
+    document.addEventListener('subshelf-channels-broadcast', (e) => handleChannels((e as CustomEvent).detail));
+
     window.addEventListener('message', (e) => {
       if (e.source !== window || e.origin !== location.origin) return;
-      if (e.data?.type !== 'SUBSHELF_AVATARS_BROADCAST') return;
-      handleAvatars(e.data.avatars);
+      if (e.data?.type === 'SUBSHELF_AVATARS_BROADCAST') {
+        handleAvatars(e.data.avatars);
+      } else if (e.data?.type === 'SUBSHELF_CHANNELS_BROADCAST') {
+        handleChannels(e.data.channels);
+      }
     });
 
     const requestAvatars = () => {
@@ -160,13 +172,19 @@ class SubShelfCoordinator {
       } else {
         HealthMonitor.hideDegradationBanner();
         await SidebarManager.ensureInjected();
+
+        // If storage has no channels yet, expand native subscriptions so full channel list mounts
+        const currentChannelCount = Object.keys(await SubDeckStorage.getChannels()).length;
+        if (currentChannelCount === 0) {
+          ChannelExtractor.autoExpandNativeSubscriptions();
+        }
         await SubscriptionSync.diffAndSync();
 
         // Manage feed filter state across navigation
         if (window.location.pathname.startsWith('/feed/subscriptions')) {
           const state = await SubDeckStorage.getAll();
           if (state.activeCategoryId) {
-            const cat = state.categories.find(c => c.id === state.activeCategoryId);
+            const cat = (state.categories || []).find(c => c.id === state.activeCategoryId);
             if (cat) {
               await FeedFilter.setCategory(cat);
             }

@@ -8,28 +8,37 @@ import { HeuristicCategorizer } from '@/ai/heuristic';
 export class SubscriptionSync {
   private static isSyncing = false;
 
-  static async diffAndSync(): Promise<void> {
+  static async diffAndSync(additionalChannels: SubscribedChannel[] = []): Promise<void> {
     if (!SubDeckStorage.isContextValid()) return;
     if (this.isSyncing) return;
     this.isSyncing = true;
 
     try {
       const scraped = ChannelExtractor.scrapeFromSidebar();
-      if (scraped.length === 0) return;
+      const allDiscovered = [...scraped];
+      const seenIds = new Set(allDiscovered.map(c => c.ucId));
+      for (const ch of additionalChannels) {
+        if (!seenIds.has(ch.ucId)) {
+          seenIds.add(ch.ucId);
+          allDiscovered.push(ch);
+        }
+      }
+
+      if (allDiscovered.length === 0) return;
 
       const state = await SubDeckStorage.getAll();
-      const currentChannels = { ...state.channels };
-      const categories: CategoryDeck[] = state.categories.map(c => ({
+      const currentChannels = { ...(state.channels || {}) };
+      const categories: CategoryDeck[] = (state.categories || []).map(c => ({
         ...c,
-        channelIds: [...c.channelIds],
+        channelIds: Array.isArray(c?.channelIds) ? [...c.channelIds] : [],
       }));
-      const handleToUcId = { ...state.handleToUcId };
+      const handleToUcId = { ...(state.handleToUcId || {}) };
 
       let hasChanges = false;
       const newChannels: SubscribedChannel[] = [];
 
       // 1. Reconcile new subscriptions
-      for (const ch of scraped) {
+      for (const ch of allDiscovered) {
         if (!currentChannels[ch.ucId]) {
           currentChannels[ch.ucId] = ch;
           if (ch.handle) {
@@ -44,6 +53,10 @@ export class SubscriptionSync {
             currentChannels[ch.ucId].avatarUrl = ch.avatarUrl;
             hasChanges = true;
           }
+          if (ch.handle && !handleToUcId[ch.handle]) {
+            handleToUcId[ch.handle] = ch.ucId;
+            hasChanges = true;
+          }
         }
       }
 
@@ -54,7 +67,10 @@ export class SubscriptionSync {
           // Find matching existing category by id
           const existingCat = categories.find(c => c.id === deck.id);
           if (existingCat) {
-            for (const id of deck.channelIds) {
+            if (!Array.isArray(existingCat.channelIds)) {
+              existingCat.channelIds = [];
+            }
+            for (const id of deck.channelIds || []) {
               if (!existingCat.channelIds.includes(id)) {
                 existingCat.channelIds.push(id);
               }
@@ -65,8 +81,8 @@ export class SubscriptionSync {
 
       // 3. Reconcile deleted/unsubscribed channels if sidebar is fully expanded
       if (ChannelExtractor.isSidebarFullyExpanded()) {
-        const scrapedUcIds = new Set(scraped.map(c => c.ucId));
-        const scrapedHandles = new Set(scraped.map(c => (c.handle || '').toLowerCase()));
+        const scrapedUcIds = new Set(allDiscovered.map(c => c.ucId));
+        const scrapedHandles = new Set(allDiscovered.map(c => (c.handle || '').toLowerCase()));
 
         for (const [ucId, ch] of Object.entries(currentChannels)) {
           const handleLower = (ch.handle || '').toLowerCase();
@@ -75,7 +91,11 @@ export class SubscriptionSync {
             delete currentChannels[ucId];
             if (ch.handle) delete handleToUcId[ch.handle];
             categories.forEach(cat => {
-              cat.channelIds = cat.channelIds.filter(id => id !== ucId);
+              if (Array.isArray(cat.channelIds)) {
+                cat.channelIds = cat.channelIds.filter(id => id !== ucId);
+              } else {
+                cat.channelIds = [];
+              }
             });
             hasChanges = true;
             Logger.info(`[SubShelf] Removed unsubscribed channel: ${ch.title} (${ucId})`);
@@ -108,6 +128,38 @@ export class SubscriptionSync {
   }
 
   /**
+   * Syncs initial channels broadcast from YouTube's in-memory ytInitialGuideData.
+   */
+  static async syncInitialChannels(rawChannels: unknown[]): Promise<void> {
+    if (!SubDeckStorage.isContextValid() || !Array.isArray(rawChannels) || rawChannels.length === 0) return;
+    try {
+      const validChannels: SubscribedChannel[] = [];
+      for (const item of rawChannels) {
+        if (
+          item &&
+          typeof item === 'object' &&
+          typeof (item as any).ucId === 'string' &&
+          typeof (item as any).title === 'string'
+        ) {
+          validChannels.push({
+            ucId: (item as any).ucId,
+            title: (item as any).title,
+            handle: (item as any).handle || `@${(item as any).ucId}`,
+            url: (item as any).url || `https://www.youtube.com/channel/${(item as any).ucId}`,
+            avatarUrl: typeof (item as any).avatarUrl === 'string' ? (item as any).avatarUrl : '',
+            discoveredAt: Date.now(),
+          });
+        }
+      }
+      if (validChannels.length > 0) {
+        await this.diffAndSync(validChannels);
+      }
+    } catch (err) {
+      Logger.error('Error syncing initial channels from broadcast:', err);
+    }
+  }
+
+  /**
    * Remove a channel by URL (used for unsubscribe detection on channel pages
    * where the sidebar may not be fully expanded).
    */
@@ -133,11 +185,12 @@ export class SubscriptionSync {
     if (!SubDeckStorage.isContextValid() || avatarMap.size === 0) return;
     try {
       const state = await SubDeckStorage.getAll();
-      const currentChannels = { ...state.channels };
+      const currentChannels = { ...(state.channels || {}) };
+      const handleToUcId = state.handleToUcId || {};
       let hasChanges = false;
 
       for (const [key, url] of avatarMap.entries()) {
-        const ucId = key.startsWith('UC') ? key : state.handleToUcId[key] || state.handleToUcId['@' + key];
+        const ucId = key.startsWith('UC') ? key : handleToUcId[key] || handleToUcId['@' + key];
         if (ucId && currentChannels[ucId]) {
           if (!currentChannels[ucId].avatarUrl || currentChannels[ucId].avatarUrl !== url) {
             currentChannels[ucId].avatarUrl = url;

@@ -133,7 +133,7 @@ class PopupManager {
 
         const subsCountDiv = document.createElement('div');
         subsCountDiv.className = 'deck-subs-count';
-        subsCountDiv.textContent = `${cat.channelIds.length} channels`;
+        subsCountDiv.textContent = `${(cat.channelIds || []).length} channels`;
 
         infoDiv.appendChild(titleDiv);
         infoDiv.appendChild(subsCountDiv);

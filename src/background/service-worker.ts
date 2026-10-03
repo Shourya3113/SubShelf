@@ -2,14 +2,20 @@ import { SubDeckStorage } from '@/utils/storage';
 import { AICategorizer } from '@/ai/categorizer';
 import { Logger } from '@/utils/logger';
 import { runMigrations } from './migrations';
-import { CURRENT_SCHEMA_VERSION } from '@/types';
+import { CURRENT_SCHEMA_VERSION, DEFAULT_STORAGE } from '@/types';
 
 chrome.runtime.onInstalled.addListener(async (details) => {
   const raw = await chrome.storage.local.get(null);
-  if (!raw || Object.keys(raw).length === 0) return;
+  if (!raw || Object.keys(raw).length === 0 || details.reason === 'install') {
+    const defaults = structuredClone(DEFAULT_STORAGE);
+    const initial = { ...defaults, ...(raw || {}) };
+    await chrome.storage.local.set(initial);
+    Logger.info(`[SubShelf] Initialized fresh storage schema v${CURRENT_SCHEMA_VERSION}`);
+    return;
+  }
   const fromVersion = typeof raw.version === 'number' ? raw.version : 1;
 
-  if (details.reason === 'update' || details.reason === 'install') {
+  if (details.reason === 'update') {
     if (fromVersion < CURRENT_SCHEMA_VERSION) {
       try {
         const migrated = runMigrations(fromVersion, CURRENT_SCHEMA_VERSION, raw as any);

@@ -64,7 +64,9 @@ export class ChannelExtractor {
     if (!subSection) return false;
 
     // Look specifically for the collapsible container
-    const collapsible = subSection.querySelector<HTMLElement>('ytd-guide-collapsible-entry-renderer, #expander-item');
+    const collapsible = subSection.querySelector<HTMLElement>(
+      'ytd-guide-collapsible-entry-renderer, #expander-item, ytd-guide-collapsible-section-entry-renderer, yt-guide-entry-view-model#expander-item'
+    );
     if (!collapsible) return false;
 
     // Check if already expanded
@@ -89,7 +91,9 @@ export class ChannelExtractor {
     }
 
     // Find the toggle button
-    const toggleBtn = collapsible.querySelector<HTMLElement>('tp-yt-paper-button, #button, #endpoint, yt-formatted-string');
+    const toggleBtn = collapsible.querySelector<HTMLElement>(
+      'tp-yt-paper-button, #button, #endpoint, yt-formatted-string, button, [role="button"], a'
+    );
     if (!toggleBtn) return false;
 
     // Double check toggleBtn is not inside a navigation link
@@ -164,10 +168,16 @@ export class ChannelExtractor {
     const subSection = getSubscriptionSection();
     if (!subSection) return channels;
 
-    const entries = subSection.querySelectorAll(YT_SELECTORS.guideEntry);
+    let entries = Array.from(subSection.querySelectorAll<HTMLElement>(YT_SELECTORS.guideEntry));
+    if (entries.length === 0) {
+      const channelAnchors = Array.from(subSection.querySelectorAll<HTMLAnchorElement>('a[href*="/@"], a[href*="/channel/"]'));
+      entries = channelAnchors.map(a => a.closest<HTMLElement>('ytd-guide-entry-renderer, yt-guide-entry-view-model, tp-yt-paper-item, #items > *') || a);
+    }
+
+    const seenIds = new Set<string>();
 
     entries.forEach(entry => {
-      const anchor = entry.querySelector('a') as HTMLAnchorElement | null;
+      const anchor = (entry.tagName === 'A' ? entry : entry.querySelector('a')) as HTMLAnchorElement | null;
       if (!anchor) return;
 
       const href = anchor.getAttribute('href') || '';
@@ -178,10 +188,15 @@ export class ChannelExtractor {
       const { ucId, handle } = IdNormalizer.extractFromAnchor(anchor);
       if (!ucId && !handle) return;
 
+      const channelKey = ucId || handle || '';
+      if (seenIds.has(channelKey)) return;
+      seenIds.add(channelKey);
+
       const rawTitle =
         anchor.getAttribute('title') ||
-        (entry.querySelector('yt-formatted-string') as HTMLElement)?.innerText?.trim() ||
+        (entry.querySelector('yt-formatted-string, .yt-core-attributed-string, #guide-entry-title, .title') as HTMLElement)?.innerText?.trim() ||
         (entry.querySelector('#guide-entry-title') as HTMLElement)?.textContent?.trim() ||
+        anchor.textContent?.trim() ||
         handle ||
         'Channel';
 
@@ -189,7 +204,7 @@ export class ChannelExtractor {
       if (SYSTEM_NAMES.has(title.toLowerCase())) return;
 
       // Extract real channel avatar directly from sidebar DOM entry
-      const imgEl = entry.querySelector('yt-img-shadow img, yt-avatar-shape img, #avatar img, img') as HTMLImageElement | null;
+      const imgEl = entry.querySelector('yt-img-shadow img, yt-avatar-shape img, yt-avatar-view-model img, #avatar img, img') as HTMLImageElement | null;
       const ytImgShadow = entry.querySelector('yt-img-shadow') as HTMLElement | null;
       let avatarUrl = '';
       if (imgEl) {
@@ -219,8 +234,6 @@ export class ChannelExtractor {
           avatarUrl = '';
         }
       }
-
-      const channelKey = ucId || handle || '';
 
       // Check extracted initial avatars cache as fallback (catches off-screen/unrendered items)
       if (!avatarUrl || avatarUrl.startsWith('data:image')) {

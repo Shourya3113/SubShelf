@@ -1,5 +1,13 @@
 # Changelog
 
+## 1.2.1 — 2026-10-13
+
+### A new icon
+- SubShelf has a new icon: a folder with shelf rows, in its own colors. The previous icon looked too much like YouTube's logo.
+- The icon now follows Chrome's icon guidelines and stays clear at toolbar size in light and dark themes.
+
+No other changes since 1.2.0.
+
 ## 1.2.0 — 2026-10-13
 
 A reliability, privacy and design release. Folders you already have are kept.

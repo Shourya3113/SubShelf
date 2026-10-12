@@ -20,12 +20,17 @@ const LOAD_BUDGET_STEP = 300;
 
 const onSubscriptionsFeed = () => window.location.pathname.startsWith('/feed/subscriptions');
 
+/** Fired on document when the active folder changes (detail: folder ID or null), e.g. from a chip. */
+export const FILTER_CHANGED_EVENT = 'subshelf-filter-changed';
+
 export class FeedFilter {
   private static activeCategory: CategoryDeck | null = null;
   private static targets = new Set<string>();
   private static hideShorts = false;
   private static observer: MutationObserver | null = null;
   private static bannerId = 'subdeck-feed-banner';
+  private static folders: CategoryDeck[] = [];
+  private static barRetries = 0;
   private static loadedAtStart = 0;
   private static loadBudget = LOAD_BUDGET_STEP;
   private static loadingPaused = false;
@@ -60,10 +65,11 @@ export class FeedFilter {
     if (!SubDeckStorage.isContextValid()) return;
     this.activeCategory = category;
     this.setActiveCategoryId(category ? category.id : null);
+    document.dispatchEvent(new CustomEvent(FILTER_CHANGED_EVENT, { detail: category ? category.id : null }));
 
     if (!category) {
       this.clearFilter();
-      this.removeBanner();
+      this.renderBar();
       this.syncObserver();
       return;
     }
@@ -71,23 +77,26 @@ export class FeedFilter {
     this.loadedAtStart = this.gridItems().length;
     this.loadBudget = LOAD_BUDGET_STEP;
     await this.refreshTargets();
-    this.renderBanner(category);
+    this.renderBar();
     this.applyFilter();
     this.syncObserver();
   }
 
-  /** Re-reads the active folder after storage changes (membership edits, rename, deletion). */
+  /** Re-reads folders after storage changes (new/renamed/deleted folders, membership edits). */
   static async refreshFromStorage(): Promise<void> {
-    if (!this.activeCategory || !SubDeckStorage.isContextValid()) return;
-    const fresh = (await SubDeckStorage.getCategories()).find(c => c.id === this.activeCategory?.id);
-    if (!fresh) {
-      await this.setCategory(null);
-      return;
+    if (!SubDeckStorage.isContextValid()) return;
+    this.folders = await SubDeckStorage.getCategories();
+    if (this.activeCategory) {
+      const fresh = this.folders.find(c => c.id === this.activeCategory?.id);
+      if (!fresh) {
+        await this.setCategory(null);
+        return;
+      }
+      this.activeCategory = fresh;
+      await this.refreshTargets();
     }
-    this.activeCategory = fresh;
-    await this.refreshTargets();
     if (onSubscriptionsFeed()) {
-      this.renderBanner(fresh);
+      this.renderBar();
       this.applyFilter();
     }
   }
@@ -186,86 +195,96 @@ export class FeedFilter {
     });
   }
 
-  // ---- Banner ----
+  // ---- Folder chips (YouTube-style "All · Tech · Gaming …" row above the feed) ----
 
   private static updateBannerStatus(count: number): void {
     const statusEl = document.getElementById('subdeck-feed-banner-status');
     if (!statusEl) return;
-    if (count > 0) {
-      statusEl.textContent = ` — ${count} video${count === 1 ? '' : 's'} shown`;
+    if (!this.activeCategory) {
+      statusEl.textContent = '';
+    } else if (count > 0) {
+      statusEl.textContent = `${count} video${count === 1 ? '' : 's'}`;
     } else if (this.loadingPaused) {
-      statusEl.textContent = ` — No videos from this folder in your latest ${this.scannedCount} uploads`;
+      statusEl.textContent = `None in your latest ${this.scannedCount} uploads`;
     } else {
-      statusEl.textContent = ' — Looking for videos…';
+      statusEl.textContent = 'Looking for videos…';
     }
   }
 
-  private static renderBanner(category: CategoryDeck): void {
-    this.removeBanner();
+  private static buildChip(label: string, emoji: string | null, active: boolean, onClick: () => void): HTMLButtonElement {
+    const chip = document.createElement('button');
+    chip.type = 'button';
+    chip.className = 'subdeck-chip';
+    chip.setAttribute('aria-pressed', String(active));
+    if (emoji) {
+      const e = document.createElement('span');
+      e.className = 'subdeck-chip-emoji';
+      e.setAttribute('aria-hidden', 'true');
+      e.textContent = emoji;
+      chip.appendChild(e);
+    }
+    chip.appendChild(document.createTextNode(label));
+    chip.addEventListener('click', onClick);
+    return chip;
+  }
 
-    const banner = document.createElement('div');
-    banner.id = this.bannerId;
-    banner.className = 'subdeck-feed-banner';
+  /** Renders (or refreshes) the chip row above the grid; waits briefly if the grid isn't there yet. */
+  private static renderBar(): void {
+    if (!onSubscriptionsFeed() || this.folders.length === 0) {
+      this.removeBanner();
+      return;
+    }
+    const grid = this.feedRoot();
+    if (!grid?.parentNode) {
+      if (this.barRetries++ < 20) setTimeout(() => this.renderBar(), 500);
+      return;
+    }
+    this.barRetries = 0;
 
-    const infoDiv = document.createElement('div');
-    infoDiv.style.display = 'flex';
-    infoDiv.style.alignItems = 'center';
-    infoDiv.style.gap = '8px';
-    infoDiv.style.flexWrap = 'wrap';
+    const activeId = this.activeCategory?.id ?? null;
+    const bar = document.createElement('div');
+    bar.id = this.bannerId;
+    bar.className = 'subdeck-chipbar';
+    bar.setAttribute('role', 'toolbar');
+    bar.setAttribute('aria-label', 'Filter subscriptions by folder');
 
-    const iconSpan = document.createElement('span');
-    iconSpan.style.fontSize = '16px';
-    iconSpan.textContent = category.icon;
+    const chips = document.createElement('div');
+    chips.className = 'subdeck-chips';
+    chips.appendChild(this.buildChip('All', null, activeId === null, () => {
+      if (this.activeCategory) this.setCategory(null);
+    }));
+    for (const folder of [...this.folders].sort((a, b) => a.sortOrder - b.sortOrder)) {
+      chips.appendChild(this.buildChip(folder.name, folder.icon, folder.id === activeId, () => {
+        if (this.activeCategory?.id !== folder.id) this.setCategory(folder);
+      }));
+    }
 
-    const labelSpan = document.createElement('span');
-    labelSpan.textContent = 'Showing: ';
-
-    const strongEl = document.createElement('strong');
-    strongEl.style.color = 'var(--sd-brand-blue, #065fd4)';
-    strongEl.textContent = category.name;
-
-    labelSpan.appendChild(strongEl);
-    labelSpan.appendChild(document.createTextNode(` (${category.channelIds.length} channels)`));
-
-    const statusSpan = document.createElement('span');
-    statusSpan.id = 'subdeck-feed-banner-status';
-    statusSpan.style.color = 'var(--sd-text-secondary, #aaa)';
-    statusSpan.style.fontSize = '12px';
-
-    infoDiv.appendChild(iconSpan);
-    infoDiv.appendChild(labelSpan);
-    infoDiv.appendChild(statusSpan);
-
-    const actions = document.createElement('div');
-    actions.style.display = 'flex';
-    actions.style.gap = '8px';
-
+    const status = document.createElement('div');
+    status.className = 'subdeck-chip-status';
+    const statusText = document.createElement('span');
+    statusText.id = 'subdeck-feed-banner-status';
+    statusText.setAttribute('aria-live', 'polite');
     const loadMoreBtn = document.createElement('button');
-    loadMoreBtn.className = 'subdeck-banner-dismiss';
+    loadMoreBtn.type = 'button';
+    loadMoreBtn.className = 'subdeck-chip subdeck-chip-outline';
     loadMoreBtn.id = 'subdeck-feed-load-more';
     loadMoreBtn.textContent = 'Load more';
-    loadMoreBtn.style.display = 'none';
+    loadMoreBtn.style.display = this.loadingPaused ? '' : 'none';
     loadMoreBtn.addEventListener('click', () => this.loadMore());
+    status.append(statusText, loadMoreBtn);
 
-    const dismissBtn = document.createElement('button');
-    dismissBtn.className = 'subdeck-banner-dismiss';
-    dismissBtn.id = 'subdeck-feed-clear-btn';
-    dismissBtn.textContent = '✕ Show All Videos';
-    dismissBtn.addEventListener('click', () => {
-      document.querySelectorAll('.subdeck-folder-header').forEach(el => el.classList.remove('active-filter'));
-      this.setCategory(null);
-    });
+    bar.append(chips, status);
 
-    actions.appendChild(loadMoreBtn);
-    actions.appendChild(dismissBtn);
-    banner.appendChild(infoDiv);
-    banner.appendChild(actions);
-
-    const grid = this.feedRoot();
-    if (grid?.parentNode) {
-      grid.parentNode.insertBefore(banner, grid);
-    } else {
-      document.body.prepend(banner);
+    // Keep the horizontal scroll position when refreshing an existing bar
+    const existing = document.getElementById(this.bannerId);
+    const scrollLeft = existing?.querySelector('.subdeck-chips')?.scrollLeft ?? 0;
+    existing?.remove();
+    grid.parentNode.insertBefore(bar, grid);
+    chips.scrollLeft = scrollLeft;
+    // Bring the active chip into view horizontally only (scrollIntoView could also scroll the page)
+    const active = chips.querySelector<HTMLElement>('[aria-pressed="true"]');
+    if (active && (active.offsetLeft < chips.scrollLeft || active.offsetLeft + active.offsetWidth > chips.scrollLeft + chips.clientWidth)) {
+      chips.scrollLeft = Math.max(0, active.offsetLeft - 16);
     }
   }
 
@@ -291,9 +310,8 @@ export class FeedFilter {
     }
     this.observeRetries = 0;
     if (this.observer) this.observer.disconnect();
-    // The banner may have been created before the grid existed (arriving from another page)
-    const banner = document.getElementById(this.bannerId);
-    if (this.activeCategory && banner?.nextElementSibling !== target) this.renderBanner(this.activeCategory);
+    // The chip row may have been rendered before the grid existed (arriving from another page)
+    if (document.getElementById(this.bannerId)?.nextElementSibling !== target) this.renderBar();
     this.applyFilter();
 
     const debouncedFilter = debounce(() => this.applyFilter(), 200);
@@ -312,6 +330,7 @@ export class FeedFilter {
 
   /** Called on every navigation: re-applies or tears down feed state for the current page. */
   static async onNavigation(categories: CategoryDeck[]): Promise<void> {
+    this.folders = categories;
     if (!onSubscriptionsFeed()) {
       this.activeCategory = null;
       this.setActiveCategoryId(null);
@@ -327,6 +346,8 @@ export class FeedFilter {
       await this.setCategory(cat);
     } else {
       if (id) this.setActiveCategoryId(null);
+      this.activeCategory = null;
+      this.renderBar();
       this.applyShorts();
       this.syncObserver();
     }

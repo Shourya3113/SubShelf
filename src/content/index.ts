@@ -13,6 +13,7 @@ import { DETAILS_RECHECK_MS, needsDetailsLookup } from '@/utils/channelDetails';
 class SubShelfCoordinator {
   static init(): void {
     Logger.info('Initializing SubShelf Coordinator');
+    SidebarManager.listenForFilterChanges();
 
     // Secure avatar broadcasts handling
     const handleAvatars = (payload: unknown) => {

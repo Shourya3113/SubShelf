@@ -146,12 +146,12 @@ class PopupManager {
 
         const editBtn = document.createElement('button');
         editBtn.className = 'action-btn edit';
-        editBtn.title = 'Edit Deck';
+        editBtn.title = 'Rename folder';
         editBtn.textContent = '✏️';
 
         const deleteBtn = document.createElement('button');
         deleteBtn.className = 'action-btn delete';
-        deleteBtn.title = 'Delete Deck';
+        deleteBtn.title = 'Delete folder';
         deleteBtn.textContent = '🗑️';
 
         actionsDiv.appendChild(editBtn);
@@ -340,7 +340,7 @@ class PopupManager {
     });
 
     resetOverridesBtn?.addEventListener('click', async () => {
-      if (confirm('Reset all manual channel assignments and exclusions? Auto-AI will re-categorize all channels from scratch next time it runs.')) {
+      if (confirm('Reset all manual channel assignments and exclusions? Auto-sort will re-sort all channels from scratch next time it runs.')) {
         await SubDeckStorage.clearOverrides();
         this.state = await SubDeckStorage.getAll();
         toast('AI exclusions and manual assignments have been reset.');

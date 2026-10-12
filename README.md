@@ -19,11 +19,13 @@ Channels are sorted by a fast offline engine that learns from your own correctio
 | Feature | Description |
 |---|---|
 | 📁 **Native Sidebar Folders** | Seamless accordion folders (*Tech & Coding, Gaming, Music & Audio, Education, etc.*) embedded directly above your native YouTube subscriptions. |
-| ✨ **1-Click AI Auto-Categorization** | Automatically clusters 100+ subscriptions into smart category decks using on-device AI or high-precision NLP heuristics. |
+| ✨ **1-Click Auto-sort** | Sorts hundreds of subscriptions into folders instantly, on your device, and learns from the channels you move by hand. |
 | 🎯 **Custom Feed Filtering** | Clicking any category folder instantly filters `/feed/subscriptions` to display only videos from channels in that folder. |
 | ⚡ **Live Feed Filtering** | Filters as YouTube loads more videos, without moving your scroll position. Quiet folders pause loading and offer a **Load more** button. |
-| 📺 **In-Sidebar Channel Controls** | Add channels via the inline picker (`+`), remove channels (`✕`), or create new custom folders (`+ Folder`) without leaving YouTube. |
-| 🎛️ **Full Popup Manager** | 3-tab dashboard to search channels, reassign folders via inline dropdowns, rename/delete decks, and configure AI providers. |
+| 📺 **In-Sidebar Folder Controls** | Each folder's ⋯ menu renames it, adds channels with a searchable picker, or deletes it; ✕ removes a channel; the folder icon next to Auto-sort creates a new folder. |
+| 🖱️ **Drag & Drop** | Drag channels between folders, or straight from YouTube's own subscription list. Each move teaches Auto-sort. |
+| 🏷️ **Folder Chips** | YouTube-style chips above your subscriptions feed (*All · Tech · Gaming …*) filter it in one click. |
+| 🎛️ **Popup Manager** | Search channels, move them between folders, rename/delete folders, and configure sorting. |
 | 🚫 **Hide Shorts** | Optional toggle in Settings that hides the Shorts shelf and Shorts cards on your subscription feed, applied instantly. |
 | 📥 **Backup & Restore** | Export and import timestamped JSON backups (`subshelf_backup_YYYY-MM-DD.json`) with automated API key sanitization. |
 
@@ -119,7 +121,7 @@ subshelf-v1.1.1.zip (manifest.json at archive root)
 1. Open Chrome and navigate to `chrome://extensions`.
 2. Enable **Developer mode** in the top-right corner.
 3. Click **Load unpacked** and select the `dist/` directory.
-4. Open [YouTube](https://www.youtube.com) and click **`✨ Auto-AI`** in the left sidebar!
+4. Open [YouTube](https://www.youtube.com) and click **Auto-sort** next to SubShelf in the left sidebar!
 
 ---
 
@@ -155,7 +157,7 @@ SubShelf/
 │   ├── popup/
 │   │   ├── popup.html      # 3-tab popup interface shell
 │   │   ├── popup.css       # Theme-adaptive popup styling
-│   │   └── popup.ts        # Decks CRUD, channel search & settings controller
+│   │   └── popup.ts        # Folders, channel search & settings controller
 │   ├── types/index.ts      # Domain models & storage schema contracts
 │   └── utils/
 │       ├── avatarHarvest.ts # Sidebar DOM and channels page avatar harvester

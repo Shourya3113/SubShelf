@@ -1,291 +1,272 @@
 /* ==========================================================================
-   SubShelf Content Script Styles — Seamless Light & Dark YouTube Integration
+   SubShelf content styles — built on YouTube's own tokens (--yt-spec-*) so the sidebar folders,
+   menus and feed chips look native in both light and dark themes.
    ========================================================================== */
 
-/* Universal box-sizing reset for SubDeck containers */
 #subdeck-sidebar-container,
 #subdeck-sidebar-container *,
-.subdeck-feed-banner,
-.subdeck-feed-banner *,
+.subdeck-chipbar,
+.subdeck-chipbar *,
+.subdeck-menu,
+.subdeck-menu *,
 .subdeck-degradation-banner,
 .subdeck-degradation-banner * {
   box-sizing: border-box;
 }
 
 /* --------------------------------------------------------------------------
-   THEME VARIABLES: Strict YouTube Light & Dark Mode Pairing
+   THEME (fallbacks when YouTube's variables are missing)
    -------------------------------------------------------------------------- */
 
-/* Light Theme (Default when html does not have [dark]) */
 :root,
 html:not([dark]) {
-  --sd-text-primary: #0f0f0f;
-  --sd-text-secondary: #606060;
-  --sd-text-muted: #909090;
-  --sd-bg-card: rgba(0, 0, 0, 0.04);
-  --sd-bg-card-border: rgba(0, 0, 0, 0.1);
-  --sd-bg-hover: rgba(0, 0, 0, 0.06);
-  --sd-bg-active: rgba(0, 0, 0, 0.06);
-  --sd-active-text: #0f0f0f;
-  --sd-badge-bg: rgba(0, 0, 0, 0.06);
-  --sd-badge-text: #606060;
-  --sd-input-bg: #ffffff;
-  --sd-input-border: #cccccc;
-  --sd-brand-blue: #065fd4;
-  --sd-btn-ai-bg: #065fd4;
-  --sd-btn-ai-hover: #004bb5;
-  --sd-banner-bg: #f9f9f9;
-  --sd-banner-border: #e0e0e0;
+  --sd-text-primary: var(--yt-spec-text-primary, #0f0f0f);
+  --sd-text-secondary: var(--yt-spec-text-secondary, #606060);
+  --sd-hover: var(--yt-spec-10-percent-layer, rgba(0, 0, 0, 0.1));
+  --sd-subtle: var(--yt-spec-badge-chip-background, rgba(0, 0, 0, 0.05));
+  --sd-active: var(--yt-spec-badge-chip-background, rgba(0, 0, 0, 0.05));
+  --sd-surface: var(--yt-spec-menu-background, #ffffff);
+  --sd-base: var(--yt-spec-base-background, #ffffff);
+  --sd-border: var(--yt-spec-10-percent-layer, rgba(0, 0, 0, 0.1));
+  --sd-input-bg: var(--yt-spec-base-background, #ffffff);
+  --sd-accent: var(--yt-spec-call-to-action, #065fd4);
+  --sd-danger: #cc0000;
+  --sd-chip-active-bg: var(--yt-spec-text-primary, #0f0f0f);
+  --sd-chip-active-text: var(--yt-spec-text-primary-inverse, #ffffff);
   --sd-scrollbar-thumb: rgba(0, 0, 0, 0.2);
 }
 
-/* Dark Theme Overrides (when html has [dark]) */
 html[dark],
 [dark] {
-  --sd-text-primary: #f1f1f1;
-  --sd-text-secondary: #aaaaaa;
-  --sd-text-muted: #717171;
-  --sd-bg-card: rgba(255, 255, 255, 0.06);
-  --sd-bg-card-border: rgba(255, 255, 255, 0.12);
-  --sd-bg-hover: rgba(255, 255, 255, 0.1);
-  --sd-bg-active: rgba(255, 255, 255, 0.12);
-  --sd-active-text: #ffffff;
-  --sd-badge-bg: rgba(255, 255, 255, 0.08);
-  --sd-badge-text: #aaaaaa;
-  --sd-input-bg: rgba(0, 0, 0, 0.35);
-  --sd-input-border: rgba(255, 255, 255, 0.2);
-  --sd-brand-blue: #3ea6ff;
-  --sd-btn-ai-bg: #065fd4;
-  --sd-btn-ai-hover: #0056b3;
-  --sd-banner-bg: rgba(255, 255, 255, 0.08);
-  --sd-banner-border: rgba(255, 255, 255, 0.15);
-  --sd-scrollbar-thumb: rgba(255, 255, 255, 0.2);
+  --sd-text-primary: var(--yt-spec-text-primary, #f1f1f1);
+  --sd-text-secondary: var(--yt-spec-text-secondary, #aaaaaa);
+  --sd-hover: var(--yt-spec-10-percent-layer, rgba(255, 255, 255, 0.1));
+  --sd-subtle: var(--yt-spec-badge-chip-background, rgba(255, 255, 255, 0.1));
+  --sd-active: var(--yt-spec-badge-chip-background, rgba(255, 255, 255, 0.1));
+  --sd-surface: var(--yt-spec-menu-background, #282828);
+  --sd-base: var(--yt-spec-base-background, #0f0f0f);
+  --sd-border: var(--yt-spec-10-percent-layer, rgba(255, 255, 255, 0.2));
+  --sd-input-bg: rgba(0, 0, 0, 0.3);
+  --sd-accent: var(--yt-spec-call-to-action, #3ea6ff);
+  --sd-danger: #ff4e45;
+  --sd-chip-active-bg: var(--yt-spec-text-primary, #f1f1f1);
+  --sd-chip-active-text: var(--yt-spec-text-primary-inverse, #0f0f0f);
+  --sd-scrollbar-thumb: rgba(255, 255, 255, 0.25);
+}
+
+/* Keyboard focus is always visible */
+#subdeck-sidebar-container :focus-visible,
+.subdeck-chipbar :focus-visible,
+.subdeck-menu :focus-visible {
+  outline: 2px solid var(--sd-accent);
+  outline-offset: 1px;
+}
+
+.subdeck-icon {
+  display: block;
+  flex-shrink: 0;
+}
+
+.subdeck-icon-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  border: none;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--sd-text-secondary);
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+.subdeck-icon-btn:hover {
+  background: var(--sd-hover);
+  color: var(--sd-text-primary);
 }
 
 /* --------------------------------------------------------------------------
-   CONTAINER & FOLDERS
+   SIDEBAR: compact header row
    -------------------------------------------------------------------------- */
 
 #subdeck-sidebar-container {
   width: 100%;
-  padding: 0;
-  margin: 0;
+  padding: 4px 0 8px;
   font-family: "Roboto", "Arial", sans-serif;
   color: var(--sd-text-primary);
 }
 
-.subdeck-folder-container {
-  margin: 2px 4px;
-  border-radius: 8px;
-  background-color: transparent;
-  color: var(--sd-text-primary);
-  overflow: hidden;
+.subdeck-header {
+  display: flex;
+  align-items: center;
+  gap: 4px; /* the guide is 216px wide: brand + count + Auto-sort + new folder must fit */
+  height: 40px;
+  padding: 0 4px 0 12px;
 }
 
-.subdeck-folder-header,
-.subdeck-channel-item,
-.subdeck-channel-link {
-  color: var(--sd-text-primary) !important;
+.subdeck-brand {
+  font-size: 15px;
+  font-weight: 600;
+  line-height: 22px;
+  color: var(--sd-text-primary);
+}
+
+.subdeck-subtext {
+  font-size: 13px;
+  color: var(--sd-text-secondary);
+}
+
+.subdeck-autosort-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  height: 28px;
+  margin-left: auto;
+  padding: 0 8px 0 6px;
+  border: none;
+  border-radius: 14px;
+  background: var(--sd-subtle);
+  color: var(--sd-text-primary);
+  font: 500 12px/1 "Roboto", "Arial", sans-serif;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.subdeck-autosort-btn:hover {
+  background: var(--sd-hover);
+}
+
+.subdeck-autosort-btn:disabled {
+  opacity: 0.7;
+  cursor: progress;
+}
+
+.subdeck-autosort-btn .subdeck-icon {
+  color: var(--sd-accent);
+}
+
+/* --------------------------------------------------------------------------
+   SIDEBAR: folders
+   -------------------------------------------------------------------------- */
+
+.subdeck-folder-container {
+  margin: 0 0 2px;
+  border-radius: 10px;
+  outline: 2px solid transparent;
+  transition: background-color 0.15s ease, outline-color 0.15s ease;
+}
+
+.subdeck-folder-container.subdeck-drop-target {
+  outline: 2px dashed var(--sd-accent);
+  outline-offset: -2px;
+  background: var(--sd-subtle);
 }
 
 .subdeck-folder-header {
-  display: flex !important;
-  align-items: center !important;
-  flex-direction: row !important;
-  flex-wrap: nowrap !important;
-  padding: 5px 6px;
-  border-radius: 8px;
-  transition: background-color 0.15s ease;
+  display: flex;
+  align-items: center;
+  height: 40px;
+  padding: 0 4px 0 12px;
+  border-radius: 10px;
   user-select: none;
-  font-size: 14px;
-  min-width: 0 !important;
-  width: 100% !important;
-  box-sizing: border-box !important;
 }
 
 .subdeck-folder-header:hover {
-  background-color: var(--sd-bg-hover);
+  background: var(--sd-hover);
 }
 
 .subdeck-folder-header.active-filter {
-  background-color: var(--sd-bg-active);
-  font-weight: 600;
-  border-radius: 8px;
+  background: var(--sd-active);
 }
 
-.subdeck-folder-header.active-filter:hover {
-  background-color: var(--sd-bg-active);
-}
-
-.subdeck-folder-header.active-filter .subdeck-folder-title {
-  color: var(--sd-active-text);
-  font-weight: 600;
-}
-
-.subdeck-folder-header.active-filter .subdeck-channel-count {
-  background-color: var(--sd-bg-card-border);
-  color: var(--sd-text-primary) !important;
-  font-weight: 600;
-}
-
-.subdeck-folder-header.active-filter .subdeck-chevron-btn {
-  color: var(--sd-text-primary);
-}
-
-/* Main Clickable Title Area */
 .subdeck-folder-main {
-  display: flex !important;
-  align-items: center !important;
-  flex-direction: row !important;
-  flex-wrap: nowrap !important;
-  flex: 1 1 0% !important;
-  min-width: 0 !important;
-  cursor: pointer;
-  padding: 2px 0;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  flex: 1 1 auto;
+  min-width: 0;
+  height: 100%;
+  color: var(--sd-text-primary) !important;
   text-decoration: none !important;
-  color: inherit !important;
-  overflow: hidden !important;
 }
 
 .subdeck-folder-icon {
-  font-size: 16px;
-  width: 20px;
-  flex-shrink: 0 !important;
-  margin-right: 6px;
-  line-height: 1;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
+  width: 24px;
+  flex: 0 0 24px;
+  font-size: 18px;
+  line-height: 24px;
+  text-align: center;
 }
 
 .subdeck-folder-title {
-  margin-left: 0 !important;
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  font-size: 14px;
+  line-height: 20px;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.subdeck-folder-header.active-filter .subdeck-folder-title {
   font-weight: 500;
-  white-space: nowrap !important;
-  overflow: hidden !important;
-  text-overflow: ellipsis !important;
-  flex: 1 1 auto !important;
-  min-width: 0 !important;
-  display: block !important;
-  color: var(--sd-text-primary);
 }
 
 .subdeck-channel-count {
-  margin-left: 4px;
-  margin-right: 2px;
-  font-size: 11px;
-  color: var(--sd-badge-text) !important;
-  background: var(--sd-badge-bg);
-  padding: 1px 5px;
-  border-radius: 10px;
-  flex-shrink: 0 !important;
-  font-weight: 500;
-  white-space: nowrap !important;
-  display: inline-flex;
-  align-items: center;
+  flex-shrink: 0;
+  margin-right: 4px;
+  font-size: 12px;
+  color: var(--sd-text-secondary);
 }
 
-/* Action Buttons (+ / Delete) */
 .subdeck-header-actions {
-  display: flex !important;
-  align-items: center !important;
-  flex-direction: row !important;
-  flex-wrap: nowrap !important;
-  gap: 2px;
-  margin-left: auto !important;
-  flex-shrink: 0 !important;
-}
-
-.subdeck-header-actions .subdeck-header-btn {
-  display: none;
-  background: transparent;
-  border: none;
-  color: var(--sd-text-secondary);
-  cursor: pointer;
-  padding: 2px 5px;
-  border-radius: 4px;
-  font-size: 13px;
-  line-height: 1;
-  transition: all 0.15s ease;
-}
-
-.subdeck-folder-header:hover .subdeck-header-actions .subdeck-header-btn {
-  display: inline-flex;
-}
-
-.subdeck-header-btn:hover {
-  color: var(--sd-text-primary);
-  background: var(--sd-bg-hover);
-}
-
-.subdeck-header-btn.delete:hover {
-  color: #ef4444 !important;
-}
-
-/* Chevron Button */
-.subdeck-chevron-btn {
-  background: transparent;
-  border: none;
-  color: var(--sd-text-secondary);
-  cursor: pointer;
-  padding: 4px 4px;
-  border-radius: 4px;
-  font-size: 10px;
-  line-height: 1;
-  transition: transform 0.2s ease, background 0.15s ease;
+  display: flex;
+  align-items: center;
   flex-shrink: 0;
 }
 
-.subdeck-chevron-btn:hover {
-  background: var(--sd-bg-hover);
-  color: var(--sd-text-primary);
+/* Compact icon buttons in the 216px-wide guide */
+.subdeck-newfolder-btn,
+.subdeck-chevron-btn {
+  width: 28px;
+  height: 28px;
 }
 
-.subdeck-chevron-btn.open {
+/* The ⋯ menu button takes no width until the row is hovered or focused, so folder names keep the
+   space; the collapse arrow is always available */
+.subdeck-more-btn {
+  width: 0;
+  height: 28px;
+  overflow: hidden;
+  opacity: 0;
+  transition: width 0.12s ease, opacity 0.12s ease;
+}
+
+.subdeck-folder-header:hover .subdeck-more-btn,
+.subdeck-folder-header:focus-within .subdeck-more-btn,
+.subdeck-more-btn[aria-expanded="true"] {
+  width: 28px;
+  opacity: 1;
+}
+
+.subdeck-chevron-btn .subdeck-icon {
+  transition: transform 0.2s ease;
+}
+
+.subdeck-chevron-btn.open .subdeck-icon {
   transform: rotate(180deg);
 }
 
-/* Inline Add Channel Picker Box */
-.subdeck-add-picker {
-  display: flex;
-  gap: 4px;
-  margin: 4px 4px 6px 4px;
-  padding: 5px 6px;
-  background: var(--sd-bg-card);
-  border-radius: 6px;
-  border: 1px solid var(--sd-bg-card-border);
-}
+/* --------------------------------------------------------------------------
+   SIDEBAR: channel list
+   -------------------------------------------------------------------------- */
 
-.subdeck-add-select {
-  flex: 1;
-  min-width: 0;
-  background: var(--sd-input-bg);
-  color: var(--sd-text-primary);
-  border: 1px solid var(--sd-input-border);
-  border-radius: 4px;
-  padding: 4px 6px;
-  font-size: 12px;
-  outline: none;
-}
-
-.subdeck-add-confirm-btn {
-  background: var(--sd-brand-blue);
-  color: #ffffff !important;
-  border: none;
-  border-radius: 4px;
-  padding: 4px 8px;
-  font-size: 12px;
-  font-weight: 600;
-  cursor: pointer;
-}
-
-/* Scrollable Channel List */
 .subdeck-channel-list {
   max-height: 0;
-  overflow-y: hidden;
+  overflow: hidden;
   transition: max-height 0.25s cubic-bezier(0.4, 0, 0.2, 1);
-  padding-left: 2px;
-  box-sizing: border-box;
   scrollbar-width: thin;
   scrollbar-color: var(--sd-scrollbar-thumb) transparent;
 }
@@ -295,307 +276,302 @@ html[dark],
   overflow-y: auto;
 }
 
-.subdeck-channel-list::-webkit-scrollbar {
-  width: 4px;
-}
-.subdeck-channel-list::-webkit-scrollbar-track {
-  background: transparent;
-}
-.subdeck-channel-list::-webkit-scrollbar-thumb {
-  background: var(--sd-scrollbar-thumb);
-  border-radius: 4px;
-}
-.subdeck-channel-list::-webkit-scrollbar-thumb:hover {
-  background: var(--sd-text-secondary);
-}
-.subdeck-channel-list::-webkit-scrollbar-button {
-  display: none !important;
-  width: 0 !important;
-  height: 0 !important;
-}
-
-/* Channel Item */
 .subdeck-channel-item {
-  display: flex !important;
-  align-items: center !important;
-  justify-content: space-between !important;
-  padding: 4px 6px;
-  border-radius: 6px;
-  font-size: 13px;
-  transition: background-color 0.15s ease;
-  box-sizing: border-box;
-  width: 100%;
+  display: flex;
+  align-items: center;
+  height: 36px;
+  padding: 0 4px 0 24px;
+  border-radius: 8px;
+  cursor: grab;
 }
 
 .subdeck-channel-item:hover {
-  background-color: var(--sd-bg-hover);
+  background: var(--sd-hover);
+}
+
+.subdeck-channel-item.dragging {
+  opacity: 0.45;
 }
 
 .subdeck-channel-link {
-  display: flex !important;
-  align-items: center !important;
-  flex: 1 1 0% !important;
-  min-width: 0 !important;
-  text-decoration: none !important;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex: 1 1 auto;
+  min-width: 0;
   color: var(--sd-text-primary) !important;
-  overflow: hidden !important;
+  text-decoration: none !important;
 }
 
 .subdeck-channel-title {
-  white-space: nowrap !important;
-  overflow: hidden !important;
-  text-overflow: ellipsis !important;
-  flex: 1 1 auto !important;
-  min-width: 0 !important;
-  display: block !important;
-  color: var(--sd-text-primary) !important;
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  font-size: 13px;
+  white-space: nowrap;
+  text-overflow: ellipsis;
 }
 
-.subdeck-channel-remove-btn {
-  background: transparent;
-  border: none;
-  color: var(--sd-text-secondary);
-  cursor: pointer;
-  padding: 2px 5px;
-  border-radius: 3px;
-  font-size: 12px;
-  line-height: 1;
-  opacity: 0;
-  transition: opacity 0.15s ease, color 0.15s ease;
-  flex-shrink: 0 !important;
-}
-
-.subdeck-channel-item:hover .subdeck-channel-remove-btn {
-  opacity: 1;
-}
-
-.subdeck-channel-remove-btn:hover {
-  color: #ef4444 !important;
-  background: rgba(239, 68, 68, 0.15);
-}
-
-/* Channel Avatar (24px matching YouTube native sidebar) */
-.subdeck-channel-avatar {
-  width: 24px;
-  height: 24px;
-  border-radius: 50%;
-  flex-shrink: 0 !important;
-  margin-right: 8px;
-  object-fit: cover;
-  display: block;
-}
-
-/* Letter-initial fallback when avatar URL is missing/broken */
+.subdeck-channel-avatar,
 .subdeck-channel-avatar-fallback {
   width: 24px;
   height: 24px;
+  flex: 0 0 24px;
   border-radius: 50%;
-  flex-shrink: 0;
-  margin-right: 8px;
-  background: var(--sd-bg-card-border);
-  color: var(--sd-text-secondary);
-  display: flex;
+}
+
+.subdeck-channel-avatar {
+  display: block;
+  object-fit: cover;
+}
+
+.subdeck-channel-avatar-fallback {
+  display: inline-flex;
   align-items: center;
   justify-content: center;
   font-size: 12px;
   font-weight: 600;
-  text-transform: uppercase;
+}
+
+.subdeck-channel-remove-btn {
+  width: 28px;
+  height: 28px;
+  opacity: 0;
+}
+
+.subdeck-channel-item:hover .subdeck-channel-remove-btn,
+.subdeck-channel-remove-btn:focus-visible {
+  opacity: 1;
+}
+
+.subdeck-channel-remove-btn:hover {
+  color: var(--sd-danger);
+}
+
+/* While dragging anything of ours, show every folder as a possible drop target */
+html.subdeck-dragging .subdeck-folder-container:not(.subdeck-drop-target) .subdeck-folder-header {
+  background: var(--sd-subtle);
 }
 
 /* --------------------------------------------------------------------------
-   ACTION BAR & BUTTONS
+   SIDEBAR: inline forms and channel picker
    -------------------------------------------------------------------------- */
 
-/* Clear Filter / Show All Button */
-.subdeck-clear-filter {
-  display: block;
-  width: calc(100% - 8px);
-  margin: 4px 4px 6px 4px;
-  padding: 6px 8px;
-  background-color: var(--sd-bg-card);
-  color: var(--sd-text-primary) !important;
-  border: 1px solid var(--sd-bg-card-border);
-  border-radius: 8px;
-  font-size: 13px;
-  font-weight: 500;
-  cursor: pointer;
-  text-align: left;
-  transition: background-color 0.15s ease;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.subdeck-clear-filter:hover {
-  background-color: var(--sd-bg-hover);
-}
-
-/* Action Card */
-.subdeck-action-card {
-  margin: 4px 4px 6px 4px;
-  padding: 7px 8px;
-  background: var(--sd-bg-card);
-  border: 1px solid var(--sd-bg-card-border);
-  border-radius: 8px;
-}
-
-.subdeck-action-header {
+.subdeck-inline-form {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  margin-bottom: 6px;
-}
-
-.subdeck-brand {
-  font-weight: 700;
-  font-size: 14px;
-  color: var(--sd-brand-blue);
-}
-
-.subdeck-subtext {
-  font-size: 12px;
-  color: var(--sd-text-secondary);
-  font-weight: 500;
-}
-
-.subdeck-action-buttons {
-  display: flex;
   gap: 6px;
+  padding: 4px 4px 8px 12px;
 }
 
-.subdeck-btn-ai {
-  flex: 1;
-  background: var(--sd-btn-ai-bg);
-  color: #ffffff !important;
-  border: none;
-  border-radius: 6px;
-  padding: 5px 6px;
-  font-size: 12.5px;
-  font-weight: 600;
-  cursor: pointer;
-  transition: background 0.15s ease;
-  white-space: nowrap;
-  text-align: center;
+.subdeck-inline-form[hidden] {
+  display: none;
 }
 
-.subdeck-btn-ai:hover {
-  background: var(--sd-btn-ai-hover);
-}
-
-.subdeck-btn-ai:disabled {
-  opacity: 0.6;
-  cursor: not-allowed;
-}
-
-.subdeck-btn-manual {
-  flex: 1;
-  background: transparent;
-  color: var(--sd-text-primary) !important;
-  border: 1px solid var(--sd-bg-card-border);
-  border-radius: 6px;
-  padding: 5px 6px;
-  font-size: 12.5px;
-  font-weight: 500;
-  cursor: pointer;
-  transition: background 0.15s ease;
-  white-space: nowrap;
-  text-align: center;
-}
-
-.subdeck-btn-manual:hover {
-  background: var(--sd-bg-hover);
-}
-
-.subdeck-manual-input-box,
-.subdeck-folder-edit-box {
-  display: flex;
-  gap: 4px;
-  margin-top: 6px;
-  align-items: center;
-}
-
-.subdeck-folder-edit-box {
-  padding: 4px 6px 6px;
-  margin-top: 2px;
-}
-
-.subdeck-manual-input-box input,
-.subdeck-folder-edit-box input {
+.subdeck-inline-form input,
+.subdeck-picker-search input {
+  height: 32px;
+  padding: 0 8px;
+  border: 1px solid var(--sd-border);
+  border-radius: 8px;
   background: var(--sd-input-bg);
-  border: 1px solid var(--sd-input-border);
-  border-radius: 4px;
   color: var(--sd-text-primary);
-  font-size: 12px;
-  padding: 4px 6px;
+  font: 400 13px "Roboto", "Arial", sans-serif;
   outline: none;
 }
 
+.subdeck-inline-form input:focus,
+.subdeck-picker-search input:focus {
+  border-color: var(--sd-accent);
+}
+
 .subdeck-input-icon {
-  width: 32px !important;
-  flex: 0 0 32px !important;
+  width: 40px;
+  flex: 0 0 40px;
   text-align: center;
-  font-size: 13px !important;
-  padding: 4px 2px !important;
 }
 
 .subdeck-input-name {
-  flex: 1;
+  flex: 1 1 auto;
   min-width: 0;
 }
 
 .subdeck-btn-save {
-  background: var(--sd-brand-blue);
-  color: #ffffff !important;
+  height: 32px;
+  padding: 0 12px;
   border: none;
-  border-radius: 4px;
-  padding: 4px 8px;
-  font-size: 12px;
-  font-weight: 600;
+  border-radius: 16px;
+  background: var(--sd-chip-active-bg);
+  color: var(--sd-chip-active-text);
+  font: 500 13px "Roboto", "Arial", sans-serif;
   cursor: pointer;
   flex-shrink: 0;
 }
 
-.subdeck-btn-cancel {
-  background: transparent;
-  color: var(--sd-text-secondary) !important;
+.subdeck-picker {
+  margin: 0 4px 8px 12px;
+  padding: 6px;
+  border: 1px solid var(--sd-border);
+  border-radius: 12px;
+}
+
+.subdeck-picker-search {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--sd-text-secondary);
+}
+
+.subdeck-picker-search input {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.subdeck-picker-list {
+  max-height: 220px;
+  margin-top: 6px;
+  overflow-y: auto;
+  scrollbar-width: thin;
+}
+
+.subdeck-picker-option {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  height: 36px;
+  padding: 0 8px;
   border: none;
-  font-size: 12px;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--sd-text-primary);
+  font: 400 13px "Roboto", "Arial", sans-serif;
+  text-align: left;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
   cursor: pointer;
-  padding: 2px 4px;
-  flex-shrink: 0;
+}
+
+.subdeck-picker-option:hover,
+.subdeck-picker-option:focus-visible {
+  background: var(--sd-hover);
 }
 
 /* --------------------------------------------------------------------------
-   BANNERS
+   POPOVER MENU (attached to <body>)
    -------------------------------------------------------------------------- */
 
-.subdeck-degradation-banner,
-.subdeck-feed-banner {
-  background-color: var(--sd-banner-bg);
-  color: var(--sd-text-primary);
-  padding: 10px 18px;
+.subdeck-menu {
+  position: fixed;
+  z-index: 2300;
+  min-width: 180px;
+  padding: 8px 0;
+  border-radius: 12px;
+  background: var(--sd-surface);
+  box-shadow: 0 4px 32px rgba(0, 0, 0, 0.1), 0 0 0 1px var(--sd-border);
+  font-family: "Roboto", "Arial", sans-serif;
+}
+
+.subdeck-menu-item {
   display: flex;
-  justify-content: space-between;
   align-items: center;
-  margin: 8px 16px;
-  border-radius: 8px;
-  font-size: 13px;
-  border: 1px solid var(--sd-banner-border);
-}
-
-.subdeck-banner-dismiss {
-  cursor: pointer;
-  color: var(--sd-text-primary);
+  gap: 16px;
+  width: 100%;
+  height: 36px;
+  padding: 0 16px;
+  border: none;
   background: transparent;
-  border: 1px solid var(--sd-text-secondary);
-  border-radius: 4px;
-  padding: 4px 10px;
-  font-size: 12px;
-  font-weight: 500;
+  color: var(--sd-text-primary);
+  font-size: 14px;
+  text-align: left;
+  cursor: pointer;
 }
 
-.subdeck-banner-dismiss:hover {
-  background: var(--sd-bg-hover);
+.subdeck-menu-item:hover,
+.subdeck-menu-item:focus-visible {
+  background: var(--sd-hover);
+  outline: none;
+}
+
+.subdeck-menu-item.danger,
+.subdeck-menu-item.danger .subdeck-icon {
+  color: var(--sd-danger);
+}
+
+/* --------------------------------------------------------------------------
+   FEED: folder chips above the subscriptions grid
+   -------------------------------------------------------------------------- */
+
+.subdeck-chipbar {
+  position: sticky;
+  top: var(--ytd-masthead-height, 56px);
+  z-index: 3;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin: 0 16px;
+  padding: 12px 0;
+  background: var(--sd-base);
+  font-family: "Roboto", "Arial", sans-serif;
+}
+
+.subdeck-chips {
+  display: flex;
+  gap: 12px;
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+.subdeck-chips::-webkit-scrollbar {
+  display: none;
+}
+
+.subdeck-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+  height: 32px;
+  padding: 0 12px;
+  border: none;
+  border-radius: 8px;
+  background: var(--sd-subtle);
+  color: var(--sd-text-primary);
+  font: 500 14px/20px "Roboto", "Arial", sans-serif;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: background-color 0.1s ease;
+}
+
+.subdeck-chip:hover {
+  background: var(--sd-hover);
+}
+
+.subdeck-chip[aria-pressed="true"] {
+  background: var(--sd-chip-active-bg);
+  color: var(--sd-chip-active-text);
+}
+
+.subdeck-chip-emoji {
+  font-size: 15px;
+  line-height: 1;
+}
+
+.subdeck-chip-outline {
+  background: transparent;
+  box-shadow: inset 0 0 0 1px var(--sd-border);
+}
+
+.subdeck-chip-status {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+  color: var(--sd-text-secondary);
+  font-size: 13px;
 }
 
 /* Feed curation: classes rather than inline styles so the folder filter and Hide Shorts never undo each other */
@@ -608,6 +584,38 @@ html[dark],
 }
 
 /* --------------------------------------------------------------------------
+   DEGRADED-MODE BANNER
+   -------------------------------------------------------------------------- */
+
+.subdeck-degradation-banner {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin: 8px 16px;
+  padding: 10px 18px;
+  border: 1px solid var(--sd-border);
+  border-radius: 8px;
+  background: var(--sd-subtle);
+  color: var(--sd-text-primary);
+  font-size: 13px;
+}
+
+.subdeck-banner-dismiss {
+  padding: 4px 10px;
+  border: 1px solid var(--sd-text-secondary);
+  border-radius: 4px;
+  background: transparent;
+  color: var(--sd-text-primary);
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+}
+
+.subdeck-banner-dismiss:hover {
+  background: var(--sd-hover);
+}
+
+/* --------------------------------------------------------------------------
    RESPONSIVE
    -------------------------------------------------------------------------- */
 
@@ -617,98 +625,31 @@ ytd-mini-guide-renderer #subdeck-sidebar-container {
 }
 
 /* --------------------------------------------------------------------------
-   TOAST NOTIFICATION
+   TOAST
    -------------------------------------------------------------------------- */
 
 .subdeck-toast {
   position: fixed;
   bottom: 28px;
   left: 50%;
-  transform: translateX(-50%) translateY(20px);
-  background-color: var(--yt-spec-brand-background-solid, #1f1f1f);
-  color: var(--yt-spec-text-primary, #ffffff);
-  border: 1px solid var(--yt-spec-10-percent-layer, #3f3f3f);
-  padding: 10px 18px;
-  border-radius: 8px;
-  font-size: 13px;
-  font-weight: 500;
-  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.45);
   z-index: 9999999;
-  opacity: 0;
-  pointer-events: none;
-  transition: opacity 0.25s ease, transform 0.25s ease;
   display: flex;
   align-items: center;
   gap: 8px;
+  max-width: min(640px, calc(100vw - 32px));
+  padding: 12px 16px;
+  border-radius: 8px;
+  background: var(--yt-spec-inverted-background, #0f0f0f);
+  color: var(--yt-spec-text-primary-inverse, #ffffff);
+  font: 400 14px/20px "Roboto", "Arial", sans-serif;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.3);
+  opacity: 0;
+  pointer-events: none;
+  transform: translateX(-50%) translateY(20px);
+  transition: opacity 0.25s ease, transform 0.25s ease;
 }
 
 .subdeck-toast.subdeck-toast-visible {
   opacity: 1;
   transform: translateX(-50%) translateY(0);
-}
-
-/* ---- Folder header: fixed 3-column grid, cannot wrap ---- */
-#subdeck-sidebar-container .subdeck-folder-header {
-  display: grid !important;
-  grid-template-columns: minmax(0, 1fr) auto !important;   /* [main] [actions] */
-  align-items: center !important;
-  column-gap: 4px !important;
-  width: 100% !important;
-  box-sizing: border-box !important;
-}
-
-#subdeck-sidebar-container .subdeck-folder-main {
-  display: grid !important;
-  grid-template-columns: 22px minmax(0, 1fr) auto !important; /* icon | title | count */
-  align-items: center !important;
-  column-gap: 8px !important;
-  min-width: 0 !important;
-  overflow: hidden !important;
-  padding: 2px 0 !important;
-  text-decoration: none !important;
-  color: inherit !important;
-}
-
-#subdeck-sidebar-container .subdeck-folder-icon {
-  width: 22px !important;
-  margin: 0 !important;
-  text-align: center !important;
-  font-size: 16px !important;
-  line-height: 1 !important;
-  display: block !important;
-}
-
-#subdeck-sidebar-container .subdeck-folder-title {
-  display: block !important;
-  min-width: 0 !important;
-  margin: 0 !important;
-  white-space: nowrap !important;
-  overflow: hidden !important;
-  text-overflow: ellipsis !important;
-}
-
-#subdeck-sidebar-container .subdeck-channel-count {
-  justify-self: end !important;
-  margin: 0 !important;
-}
-
-#subdeck-sidebar-container .subdeck-header-actions {
-  display: flex !important;
-  flex-wrap: nowrap !important;
-  align-items: center !important;
-  gap: 2px !important;
-  margin: 0 !important;
-}
-
-.subdeck-channel-avatar-fallback {
-  display: inline-flex !important;
-  align-items: center !important;
-  justify-content: center !important;
-  width: 24px !important;
-  height: 24px !important;
-  border-radius: 50% !important;
-  font-size: 12px !important;
-  font-weight: 600 !important;
-  flex: 0 0 24px !important;
-  margin-right: 10px !important;
 }

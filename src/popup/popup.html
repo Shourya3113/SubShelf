@@ -15,7 +15,7 @@
   </header>
 
   <nav class="tabs">
-    <button class="tab-btn active" data-tab="decks">📁 Decks</button>
+    <button class="tab-btn active" data-tab="decks">📁 Folders</button>
     <button class="tab-btn" data-tab="channels">📺 Channels</button>
     <button class="tab-btn" data-tab="settings">⚙️ Settings</button>
   </nav>
@@ -24,18 +24,18 @@
     <!-- TAB 1: DECKS -->
     <section id="tab-decks" class="tab-panel active">
       <div class="deck-actions">
-        <button id="add-deck-btn" class="btn btn-primary">+ New Category Deck</button>
+        <button id="add-deck-btn" class="btn btn-primary">+ New folder</button>
       </div>
 
-      <!-- Create/Edit Deck Form (hidden by default) -->
+      <!-- Create/Edit folder form (hidden by default) -->
       <div id="deck-form" class="deck-form" style="display: none;">
         <input type="hidden" id="deck-edit-id" value="" />
         <div class="form-row">
           <input type="text" id="deck-icon-input" class="icon-input" placeholder="📁" maxlength="8" />
-          <input type="text" id="deck-name-input" class="text-input" placeholder="Deck Name (e.g. Coding)" />
+          <input type="text" id="deck-name-input" class="text-input" placeholder="Folder name (e.g. Coding)" />
         </div>
         <div class="form-buttons">
-          <button id="deck-save-btn" class="btn btn-sm btn-primary">Save Deck</button>
+          <button id="deck-save-btn" class="btn btn-sm btn-primary">Save folder</button>
           <button id="deck-cancel-btn" class="btn btn-sm btn-secondary">Cancel</button>
         </div>
       </div>
@@ -98,7 +98,7 @@
       <div class="settings-group">
         <label class="settings-label">AI Preferences & Overrides</label>
         <button id="reset-overrides-btn" class="btn btn-secondary" style="width: 100%;">🔄 Reset AI Exclusions</button>
-        <span class="settings-help">Clears manual channel removals and custom category assignments, allowing Auto-AI to re-categorize from scratch.</span>
+        <span class="settings-help">Clears manual channel removals and custom category assignments, so Auto-sort re-sorts everything from scratch (it also stops learning from those corrections).</span>
       </div>
 
       <div class="settings-group">

@@ -8,8 +8,11 @@ import { debounce } from '@/utils/debounce';
 import { SubscriptionSync } from './subscriptionSync';
 import { Logger } from '@/utils/logger';
 import { DETAILS_RECHECK_ON_DEMAND_MS } from '@/utils/channelDetails';
-import { buildActionCard } from './sidebar/actionCard';
-import { buildFolder, FolderHandlers, FolderMember } from './sidebar/folderView';
+import { buildActionCard, setAutoSortLabel } from './sidebar/actionCard';
+import { buildFolder, DroppedChannel, FolderHandlers, FolderMember } from './sidebar/folderView';
+import { IdNormalizer } from '@/utils/idNormalizer';
+import { resolveChannelId } from '@/utils/channelIdentity';
+import { FILTER_CHANGED_EVENT } from './feedFilter';
 
 const byTitle = (a: FolderMember, b: FolderMember) =>
   a.channel.title.localeCompare(b.channel.title, undefined, { sensitivity: 'base' });
@@ -206,13 +209,8 @@ export class SidebarManager {
 
     const fragment = document.createDocumentFragment();
     fragment.appendChild(buildActionCard(entries.length, {
-      onAutoAI: (button) => this.runAutoAI(button),
+      onAutoSort: (button) => this.runAutoAI(button),
       onCreateFolder: (name, icon) => this.createFolder(name, icon),
-      onShowAll: async () => {
-        this.clearActiveFilterHighlight();
-        await FeedFilter.setCategory(null);
-        if (!window.location.pathname.startsWith('/feed/subscriptions')) this.navigateToSubscriptionsFeed();
-      },
     }));
 
     const activeId = window.location.pathname.startsWith('/feed/subscriptions') ? FeedFilter.getActiveCategoryId() : null;
@@ -257,7 +255,31 @@ export class SidebarManager {
       onDelete: (cat) => rerenderAfter(SubDeckStorage.deleteCategory(cat.id)),
       onRemoveChannel: (cat, id) => rerenderAfter(SubDeckStorage.removeChannelFromCategory(id, cat.id)),
       onToggle: (cat, collapsed) => SubDeckStorage.updateCategory(cat.id, { isCollapsed: collapsed }),
+      onDropChannel: (cat, dropped) => this.moveDroppedChannel(cat, dropped),
     };
+  }
+
+  /** Drag & drop: moving a channel onto a folder is a manual correction (the learner uses it). */
+  private static async moveDroppedChannel(cat: CategoryDeck, dropped: DroppedChannel): Promise<void> {
+    const state = await SubDeckStorage.getAll();
+    let id = dropped.channelId;
+    if (!id && dropped.url) {
+      // A link dragged from YouTube's own subscription list: /@handle or /channel/UC...
+      const anchor = document.createElement('a');
+      anchor.href = dropped.url;
+      if (!/(^|\.)youtube\.com$/.test(anchor.hostname)) return;
+      const { ucId, handle } = IdNormalizer.extractFromAnchor(anchor);
+      id = ucId || (handle ? resolveChannelId(handle, state.handleToUcId) : undefined);
+    }
+    const channel = id ? state.channels[id] : undefined;
+    if (!id || !channel) {
+      this.showToast('That channel isn\'t in your subscriptions yet. Subscribe first, then try again.');
+      return;
+    }
+    if (cat.channelIds.includes(id) && (state.manualAssignments[id] ?? []).join() === cat.id) return;
+    await SubDeckStorage.setChannelCategory(id, cat.id);
+    await this.render();
+    this.showToast(`Moved ${channel.title} to ${cat.name}`);
   }
 
   private static async createFolder(name: string, icon: string): Promise<void> {
@@ -276,7 +298,7 @@ export class SidebarManager {
     await this.render();
   }
 
-  /** Auto-AI: expand YouTube's full subscription list, sync it, then categorize every channel. */
+  /** Auto-sort: expand YouTube's full subscription list, sync it, then categorize every channel. */
   private static async runAutoAI(aiBtn: HTMLButtonElement): Promise<void> {
     // After the extension is reloaded or updated, scripts already on this page lose access to it
     // until the page reloads; every read comes back empty, so say that instead of "not signed in".
@@ -285,7 +307,7 @@ export class SidebarManager {
       return;
     }
     aiBtn.disabled = true;
-    aiBtn.textContent = '⏳ Discovering...';
+    setAutoSortLabel(aiBtn, 'Finding channels…');
 
     const guideInner = document.querySelector<HTMLElement>('#guide-inner-content');
     const savedGuideScroll = guideInner ? guideInner.scrollTop : 0;
@@ -317,12 +339,12 @@ export class SidebarManager {
       }
 
       // 3. Descriptions give every engine more to go on than the channel name
-      aiBtn.textContent = '⏳ Reading channels...';
+      setAutoSortLabel(aiBtn, 'Reading channels…');
       await SubscriptionSync.refreshChannelDescriptions(DETAILS_RECHECK_ON_DEMAND_MS);
       keepScrollLevel();
 
       // 4. Categorize in the service worker; fall back to this page if it can't
-      aiBtn.textContent = '⏳ Sorting...';
+      setAutoSortLabel(aiBtn, 'Sorting…');
       const startedAt = performance.now();
       await new Promise<void>((resolve) => {
         chrome.runtime.sendMessage({ type: 'subshelf-auto-organize' }, async (res) => {
@@ -338,12 +360,12 @@ export class SidebarManager {
         });
       });
     } catch (err) {
-      Logger.warn('[SubShelf Sidebar] Auto-AI failed in the worker path, running in page:', err);
+      Logger.warn('[SubShelf Sidebar] Auto-sort failed in the worker path, running in page:', err);
       await this.runDirectCategorization();
       keepScrollLevel();
     } finally {
       aiBtn.disabled = false;
-      aiBtn.textContent = '✨ Auto-AI';
+      setAutoSortLabel(aiBtn, 'Auto-sort');
       keepScrollLevel();
     }
   }
@@ -365,7 +387,7 @@ export class SidebarManager {
     await this.render();
   }
 
-  /** Always tells the user what Auto-AI did: how many channels, which engine, how long. */
+  /** Always tells the user what Auto-sort did: how many channels, which engine, how long. */
   private static showAutoAISummary(
     res: { count?: number; decks?: number; provider?: string; aiReviewed?: number; learnedMoves?: number; fallbackNotice?: string },
     elapsedMs: number
@@ -398,6 +420,17 @@ export class SidebarManager {
 
   static async syncWithNativeSubscriptions(): Promise<void> {
     await SubscriptionSync.diffAndSync();
+  }
+
+  /** Highlights the folder the feed is filtered by (the chips can change it without a re-render). */
+  static syncActiveHighlight(activeId: string | null): void {
+    document.querySelectorAll<HTMLElement>('#subdeck-sidebar-container .subdeck-folder-header').forEach(el => {
+      el.classList.toggle('active-filter', Boolean(activeId) && el.dataset.folderId === activeId);
+    });
+  }
+
+  static listenForFilterChanges(): void {
+    document.addEventListener(FILTER_CHANGED_EVENT, (e) => this.syncActiveHighlight((e as CustomEvent<string | null>).detail));
   }
 
   static clearActiveFilterHighlight(): void {

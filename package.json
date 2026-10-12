@@ -8,7 +8,7 @@
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "package": "npm run typecheck && npm test && npm run build && python3 scripts/package.py",
-    "audit:dom": "! grep -rnE '(innerHTML\\s*=\\s*[^\"\\x27`])|insertAdjacentHTML|outerHTML|document\\.write|eval\\(|new Function' src",
+    "audit:dom": "node scripts/audit-dom.mjs",
     "audit:deps": "npm audit --omit=dev --audit-level=high"
   },
   "devDependencies": {
@@ -16,7 +16,7 @@
     "@types/chrome": "^0.0.268",
     "@types/node": "^20.12.7",
     "typescript": "^5.4.5",
-    "vite": "^5.4.21",
-    "vitest": "^2.1.9"
+    "vite": "^7.3.6",
+    "vitest": "^4.1.11"
   }
 }

@@ -71,3 +71,35 @@ describe('system channel detection keeps real creators', () => {
     expect(isSystemChannelOrCurator({ title: 'Help' })).toBe(true);
   });
 });
+
+describe('optional Gemini host permission', () => {
+  afterEach(() => vi.unstubAllGlobals());
+
+  const stubChrome = (granted: boolean) =>
+    vi.stubGlobal('chrome', {
+      runtime: { id: 'test-extension' },
+      storage: { local: { get: async () => ({ settings: { aiProvider: 'gemini-api' } }) } },
+      permissions: { contains: async () => granted },
+    });
+
+  it('does not call the Gemini API when Cloud is selected but the permission was not granted', async () => {
+    stubChrome(false);
+    const fetchSpy = vi.fn();
+    vi.stubGlobal('fetch', fetchSpy);
+    const result = await AICategorizer.categorizeAll([ch(UC1, '@fireship', 'Fireship')], 'test-key');
+    expect(fetchSpy).not.toHaveBeenCalled();
+    expect(result.providerUsed).toBe('heuristic');
+    expect(result.fallbackNotice).toMatch(/permission/i);
+  });
+
+  it('calls the Gemini API once the permission is granted', async () => {
+    stubChrome(true);
+    const fetchSpy = vi.fn(async () => new Response(JSON.stringify({
+      candidates: [{ content: { parts: [{ text: JSON.stringify({ 'tech-coding': ['c0'] }) }] } }],
+    })));
+    vi.stubGlobal('fetch', fetchSpy);
+    const result = await AICategorizer.categorizeAll([ch(UC1, '@fireship', 'Fireship')], 'test-key');
+    expect(fetchSpy).toHaveBeenCalledTimes(1);
+    expect(result.providerUsed).toBe('gemini-api');
+  });
+});

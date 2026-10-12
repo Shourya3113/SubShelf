@@ -4,6 +4,7 @@ import { debounce } from '@/utils/debounce';
 import { CategoryDeck, SubDeckStorageSchema, SubscribedChannel } from '@/types';
 import { toast } from '@/utils/toast';
 import { isSystemChannelOrCurator } from '@/utils/systemChannels';
+import { hasCloudPermission, requestCloudPermission } from '@/utils/cloudPermission';
 
 class PopupManager {
   private static state: SubDeckStorageSchema | null = null;
@@ -369,8 +370,31 @@ class PopupManager {
       }
     });
 
+    let previousProvider = aiProvider.value;
+    // Known up front so the change handler can call permissions.request without awaiting first
+    // (an await before it could lose the click's user gesture)
+    let cloudGranted = false;
+    hasCloudPermission().then(granted => {
+      cloudGranted = granted;
+      if (!granted && aiProvider.value === 'gemini-api') {
+        toast('Cloud AI is selected, but Chrome\'s permission was not granted. Select it again to allow access.');
+      }
+    });
+
     aiProvider.addEventListener('change', async () => {
       const val = aiProvider.value as 'gemini-nano' | 'gemini-api' | 'openai' | 'heuristic';
+      if (val === 'gemini-api' && !cloudGranted) {
+        // Chrome's permission prompt usually closes this popup, so the service worker records the
+        // opt-in and switches the provider itself once the permission is granted (onAdded).
+        const granted = requestCloudPermission();
+        chrome.runtime.sendMessage({ type: 'subshelf-cloud-optin-pending' });
+        if (!(await granted)) {
+          aiProvider.value = previousProvider;
+          toast('Cloud AI needs permission to contact Google\'s Gemini API. Your setting was not changed.');
+          return;
+        }
+      }
+      previousProvider = val;
       if (this.state) {
         this.state.settings.aiProvider = val;
       }

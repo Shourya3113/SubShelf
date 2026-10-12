@@ -6,7 +6,9 @@
   "description": "Smart Subscription Category Folders & Feed Curator for YouTube™",
   "permissions": ["storage"],
   "host_permissions": [
-    "https://*.youtube.com/*",
+    "https://www.youtube.com/*"
+  ],
+  "optional_host_permissions": [
     "https://generativelanguage.googleapis.com/*"
   ],
   "content_security_policy": {
@@ -19,7 +21,7 @@
   "content_scripts": [
     {
       "matches": [
-        "https://*.youtube.com/*"
+        "https://www.youtube.com/*"
       ],
       "js": ["src/content/injectedMain.ts"],
       "world": "MAIN",
@@ -27,7 +29,7 @@
     },
     {
       "matches": [
-        "https://*.youtube.com/*"
+        "https://www.youtube.com/*"
       ],
       "js": ["src/content/index.ts"],
       "css": ["src/content/styles/subdeck.css"],

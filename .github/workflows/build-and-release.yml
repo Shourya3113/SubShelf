@@ -30,6 +30,12 @@ jobs:
       - name: Typecheck
         run: npm run typecheck
 
+      - name: Unit tests
+        run: npm test
+
+      - name: DOM safety audit
+        run: npm run audit:dom
+
       - name: Production Build
         run: npm run build
 
@@ -37,9 +43,9 @@ jobs:
         run: python3 scripts/package.py
 
       - name: Create GitHub Release
-        uses: softprops/action-gh-release@v1
+        uses: softprops/action-gh-release@v2
         if: startsWith(github.ref, 'refs/tags/')
         with:
-          files: subdeck-*.zip
+          files: subshelf-v*.zip
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

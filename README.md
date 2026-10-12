@@ -5,12 +5,12 @@
 [![Manifest V3](https://img.shields.io/badge/Chrome%20Extension-Manifest%20V3-blue.svg)](https://developer.chrome.com/docs/extensions/mv3/intro/)
 [![TypeScript](https://img.shields.io/badge/TypeScript-5.4-blue.svg?logo=typescript)](https://www.typescriptlang.org/)
 [![Vite](https://img.shields.io/badge/Bundled%20with-Vite%205-purple.svg?logo=vite)](https://vitejs.dev/)
-[![Security Audit](https://img.shields.io/badge/Security%20Audit-Hardened%20%7C%20No--Untrusted--HTML-brightgreen.svg)](#-security--privacy-first-architecture)
+[![CI](https://github.com/Shourya3113/SubShelf/actions/workflows/ci.yml/badge.svg)](https://github.com/Shourya3113/SubShelf/actions/workflows/ci.yml)
 [![License](https://img.shields.io/badge/License-Source--Available-yellow.svg)](./LICENSE)
 
 **SubShelf** is a lightweight, privacy-first Chrome Extension that transforms your cluttered YouTube subscriptions into organized, themed category folders directly inside YouTube's native left sidebar and subscription feed.
 
-Powered by a 3-tier categorization engine (on-device **Gemini Nano**, cloud **Google Gemini API** with configurable model IDs like `Gemini 2.5 Flash`, and deterministic **NLP keyword heuristics**), SubShelf automatically clusters your channels into smart decks in seconds.
+Choose how channels are categorized: on-device **Gemini Nano**, an offline **keyword engine**, or (opt-in) the cloud **Google Gemini API** with your own key. SubShelf clusters your channels into smart decks in seconds.
 
 ---
 
@@ -21,10 +21,10 @@ Powered by a 3-tier categorization engine (on-device **Gemini Nano**, cloud **Go
 | 📁 **Native Sidebar Folders** | Seamless accordion folders (*Tech & Coding, Gaming, Music & Audio, Education, etc.*) embedded directly above your native YouTube subscriptions. |
 | ✨ **1-Click AI Auto-Categorization** | Automatically clusters 100+ subscriptions into smart category decks using on-device AI or high-precision NLP heuristics. |
 | 🎯 **Custom Feed Filtering** | Clicking any category folder instantly filters `/feed/subscriptions` to display only videos from channels in that folder. |
-| ⚡ **Live Feed Filtering** | Real-time DOM filtering as you scroll naturally, matching channel categories without jarring jumps or redundant downloads. |
+| ⚡ **Live Feed Filtering** | Filters as YouTube loads more videos, without moving your scroll position. Quiet folders pause loading and offer a **Load more** button. |
 | 📺 **In-Sidebar Channel Controls** | Add channels via the inline picker (`+`), remove channels (`✕`), or create new custom folders (`+ Folder`) without leaving YouTube. |
 | 🎛️ **Full Popup Manager** | 3-tab dashboard to search channels, reassign folders via inline dropdowns, rename/delete decks, and configure AI providers. |
-| 🚫 **Hide Shorts Shelves** | Optional one-click toggle in Settings to remove distracting Shorts carousels from your subscription feed. |
+| 🚫 **Hide Shorts** | Optional toggle in Settings that hides the Shorts shelf and Shorts cards on your subscription feed, applied instantly. |
 | 📥 **Backup & Restore** | Export and import timestamped JSON backups (`subshelf_backup_YYYY-MM-DD.json`) with automated API key sanitization. |
 
 ---
@@ -33,30 +33,27 @@ Powered by a 3-tier categorization engine (on-device **Gemini Nano**, cloud **Go
 
 SubShelf was built from the ground up to adhere strictly to Google Chrome Web Store Developer Program Policies and YouTube Brand Guidelines:
 
-* **No Untrusted HTML Interpolation:** UI is built with `textContent` / `createElement`. No untrusted HTML is ever interpolated.
-* **Minimal Permissions:** `storage`, plus host access to `youtube.com` (to organize your sidebar) and, only if you add your own key, `generativelanguage.googleapis.com` (Gemini Cloud option).
+* **No Untrusted HTML Interpolation:** UI is built with `textContent` / `createElement`; `npm run audit:dom` enforces this in CI.
+* **Minimal Permissions:** `storage` and `www.youtube.com`. Access to `generativelanguage.googleapis.com` is an *optional* permission that Chrome asks for only when you select the Gemini Cloud option.
 * **Zero Remote Code Execution:** 100% locally compiled and bundled via Vite/CRXJS. Zero `eval()`, zero `new Function()`, and zero external CDN script tags.
 * **Local Privacy:** SubShelf has no servers, no analytics, and no tracking. Everything stays in your browser. If you choose the optional Gemini Cloud mode, your channel names and handles are sent to Google using your own API key.
-* **Credential Isolation:** Personal Google Gemini API keys are passed strictly via the `x-goog-api-key` HTTP header (never exposed in URL query strings) and stored in isolated extension storage, excluded from JSON backups and content-script memory.
+* **API Key Handling:** Your Gemini API key is sent only in the `x-goog-api-key` header (never in URLs), is read only by the background service worker, is never handed to the code running on YouTube pages, and is excluded from JSON backups.
 
 ---
 
-## 🧠 3-Tier AI Categorization Engine
+## 🧠 Categorization Engines
+
+You pick the engine in Settings. Every engine falls back to the offline engine, never to the cloud:
 
 ```
-[User Subscriptions]
-         │
-         ├──► 1. Chrome Built-in AI (Gemini Nano)  [On-Device / 0 Latency]
-         │           │ (if unavailable)
-         │           ▼
-         ├──► 2. Google Gemini Cloud API           [Cloud / Gemini 2.5 Flash / Configurable]
-         │           │ (if no key provided or fails)
-         │           ▼
-         └──► 3. Deterministic NLP Scoring Engine  [100% Offline / Instant]
-                     - Strict word-boundary matching (\b)
-                     - 100+ Pre-trained Creator Signatures
-                     - Multi-class weighted confidence scoring
+Gemini Nano (default, on-device) ──(unavailable)──► Offline keyword engine
+Gemini Cloud API (opt-in, your key) ──(fails)─────► Offline keyword engine
+Offline keyword engine ──────────────────────────► (always available)
 ```
+
+* **Gemini Nano:** Chrome's built-in model; nothing leaves your device.
+* **Offline keyword engine:** word-boundary keyword matching plus a built-in list of well-known creators, with weighted scoring.
+* **Gemini Cloud API:** sends channel titles and handles to Google with your own API key (model configurable, default `gemini-2.5-flash`).
 
 ### Pre-Configured Taxonomies
 1. 💻 **Tech & Coding** (*Programming, Apple, Linux, AI, Hardware, Gadgets*)
@@ -101,7 +98,14 @@ npm install
 npm run dev
 ```
 
-### 3. Production Build & Package
+### 3. Tests & Checks
+```bash
+npm run typecheck
+npm test
+npm run audit:dom
+```
+
+### 4. Production Build & Package
 ```bash
 npm run package
 ```
@@ -110,7 +114,7 @@ This compiles the production bundle in `dist/` and generates a Chrome Web Store-
 subshelf-v1.1.1.zip (manifest.json at archive root)
 ```
 
-### 4. Load into Chrome
+### 5. Load into Chrome
 1. Open Chrome and navigate to `chrome://extensions`.
 2. Enable **Developer mode** in the top-right corner.
 3. Click **Load unpacked** and select the `dist/` directory.
@@ -122,15 +126,17 @@ subshelf-v1.1.1.zip (manifest.json at archive root)
 
 ```text
 SubShelf/
-├── .github/workflows/      # Automated CI/CD release workflow
+├── .github/workflows/      # CI (typecheck, tests, DOM audit, build) and tag-triggered release
 ├── assets/icons/           # High-DPI extension icon set (16px, 48px, 128px)
 ├── scripts/
+│   ├── audit-dom.mjs       # Fails the build on unsafe DOM sinks (innerHTML, eval, ...)
 │   ├── package.py          # Chrome Web Store root-zip packaging script
-│   └── package.sh          # Cross-platform packaging shell script
+│   └── package.sh          # Packaging shell script
 ├── src/
 │   ├── ai/
 │   │   ├── categorizer.ts  # 3-tier AI fallback engine
-│   │   ├── heuristic.ts    # NLP weighted scoring & creator signatures
+│   │   ├── heuristic.ts    # Offline keyword scoring & creator list
+│   │   ├── overrides.ts    # Merges AI output with your manual assignments
 │   │   └── prompt.ts       # Structured prompt generator with XML envelopes
 │   ├── background/
 │   │   ├── migrations.ts   # Schema migration handler
@@ -143,7 +149,7 @@ SubShelf/
 │   │   ├── healthMonitor.ts    # YouTube DOM layout degradation monitor
 │   │   ├── index.ts            # Content script entry point & coordinator
 │   │   ├── sidebarManager.ts   # Sidebar accordion folders & in-DOM controls
-│   │   ├── subscriptionSync.ts # Atomic delta synchronization
+│   │   ├── subscriptionSync.ts # Reports observed subscriptions to the service worker
 │   │   └── styles/subdeck.css  # Scoped YouTube-adaptive styling
 │   ├── popup/
 │   │   ├── popup.html      # 3-tab popup interface shell
@@ -152,11 +158,15 @@ SubShelf/
 │   ├── types/index.ts      # Domain models & storage schema contracts
 │   └── utils/
 │       ├── avatarHarvest.ts # Sidebar DOM and channels page avatar harvester
+│       ├── cloudPermission.ts # Optional Gemini host permission helpers
 │       ├── debounce.ts     # Generic debouncer utility
 │       ├── exportImport.ts # Sanitized JSON backup export/import
+│       ├── feedMatch.ts    # Matches feed cards (UC ID or @handle) to folders
 │       ├── idNormalizer.ts # Canonical UC-ID & handle extractor
 │       ├── logger.ts       # Dev-guarded logger
-│       └── storage.ts      # Typed chrome.storage wrapper
+│       ├── storage.ts      # Typed storage layer; all writes serialized in the service worker
+│       └── syncEngine.ts   # Pure subscription reconciliation with removal safeguards
+├── tests/                  # Vitest unit tests
 ├── manifest.json           # Manifest V3 configuration
 ├── PRIVACY_POLICY.md       # Privacy policy compliance document
 └── vite.config.ts          # Vite extension build configuration

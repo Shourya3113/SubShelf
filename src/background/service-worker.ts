@@ -3,6 +3,7 @@ import { AICategorizer } from '@/ai/categorizer';
 import { Logger } from '@/utils/logger';
 import { runMigrations } from './migrations';
 import { CURRENT_SCHEMA_VERSION, DEFAULT_STORAGE } from '@/types';
+import { GEMINI_ORIGIN } from '@/utils/cloudPermission';
 
 // All storage writes below go through the shared queue so they serialize with content/popup mutations.
 chrome.runtime.onInstalled.addListener((details) => {
@@ -29,6 +30,25 @@ enqueueStorageTask(async () => {
 }).catch(err => Logger.error('[SubShelf] Startup schema migration check failed:', err));
 
 enqueueMutation('normalize').catch(err => Logger.error('[SubShelf] Startup normalization failed:', err));
+
+// Cloud opt-in: Chrome's permission prompt closes the popup, so the popup records the user's intent
+// here and the provider is switched only when Chrome reports the permission as granted.
+const CLOUD_OPTIN_KEY = 'cloudOptInPendingAt';
+const CLOUD_OPTIN_TTL_MS = 10 * 60_000;
+
+chrome.permissions.onAdded.addListener(async (perms) => {
+  if (!perms.origins?.includes(GEMINI_ORIGIN)) return;
+  try {
+    const pending = (await chrome.storage.session.get(CLOUD_OPTIN_KEY))[CLOUD_OPTIN_KEY];
+    await chrome.storage.session.remove(CLOUD_OPTIN_KEY);
+    if (typeof pending === 'number' && Date.now() - pending < CLOUD_OPTIN_TTL_MS) {
+      await enqueueMutation('updateSettings', { aiProvider: 'gemini-api' });
+      Logger.info('[SubShelf] Cloud permission granted; provider switched to Gemini Cloud');
+    }
+  } catch (err) {
+    Logger.error('[SubShelf] Failed to apply Cloud opt-in:', err);
+  }
+});
 
 // Handle auto-categorization and background tasks
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
@@ -82,6 +102,12 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       sendResponse({ success: true });
     })();
     return true;
+  }
+
+  if (message?.type === 'subshelf-cloud-optin-pending') {
+    if (!sender.url?.startsWith(chrome.runtime.getURL(''))) return false;
+    chrome.storage.session.set({ [CLOUD_OPTIN_KEY]: Date.now() }).catch(() => {});
+    return false;
   }
 
   if (message?.type === 'subshelf-auto-organize') {

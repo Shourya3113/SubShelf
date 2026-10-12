@@ -6,7 +6,7 @@ import { buildFeedTargets, cardMatches } from '@/utils/feedMatch';
 
 const FILTERED_CLASS = 'subshelf-filtered-out';
 const SHORTS_CLASS = 'subshelf-shorts-hidden';
-const PARKED_CLASS = 'subshelf-continuation-parked';
+const PAUSED_CLASS = 'subshelf-loading-paused';
 const ACTIVE_KEY = 'subshelf.activeCategoryId';
 
 /** Below this many matches YouTube keeps auto-loading (its continuation stays on screen). */
@@ -24,6 +24,8 @@ export class FeedFilter {
   private static bannerId = 'subdeck-feed-banner';
   private static loadedAtStart = 0;
   private static loadBudget = LOAD_BUDGET_STEP;
+  private static loadingPaused = false;
+  private static scannedCount = 0;
 
   // ---- Per-tab active folder (sessionStorage is per tab, so tabs no longer clear each other) ----
 
@@ -136,7 +138,11 @@ export class FeedFilter {
   private static manageLoading(root: Element, visible: number): void {
     const loadedSinceStart = this.gridItems().length - this.loadedAtStart;
     const pause = visible < MIN_VISIBLE && loadedSinceStart >= this.loadBudget;
-    root.querySelectorAll<HTMLElement>('ytd-continuation-item-renderer').forEach(c => c.classList.toggle(PARKED_CLASS, pause));
+    // A class on the grid (not on each spinner) hides every continuation YouTube appends the moment it
+    // is inserted; hiding them one by one after a debounce let YouTube start the next load each time.
+    root.classList.toggle(PAUSED_CLASS, pause);
+    this.loadingPaused = pause;
+    this.scannedCount = this.gridItems().length;
     const loadMore = document.getElementById('subdeck-feed-load-more');
     if (loadMore) loadMore.style.display = pause ? '' : 'none';
   }
@@ -148,7 +154,8 @@ export class FeedFilter {
 
   static clearFilter(): void {
     document.querySelectorAll(`.${FILTERED_CLASS}`).forEach(el => el.classList.remove(FILTERED_CLASS));
-    document.querySelectorAll(`.${PARKED_CLASS}`).forEach(el => el.classList.remove(PARKED_CLASS));
+    document.querySelectorAll(`.${PAUSED_CLASS}`).forEach(el => el.classList.remove(PAUSED_CLASS));
+    this.loadingPaused = false;
   }
 
   // ---- Hide Shorts setting ----
@@ -179,9 +186,13 @@ export class FeedFilter {
   private static updateBannerStatus(count: number): void {
     const statusEl = document.getElementById('subdeck-feed-banner-status');
     if (!statusEl) return;
-    statusEl.textContent = count === 0
-      ? ' — No matching videos loaded yet'
-      : ` — ${count} video${count === 1 ? '' : 's'} shown`;
+    if (count > 0) {
+      statusEl.textContent = ` — ${count} video${count === 1 ? '' : 's'} shown`;
+    } else if (this.loadingPaused) {
+      statusEl.textContent = ` — No videos from this folder in your latest ${this.scannedCount} uploads`;
+    } else {
+      statusEl.textContent = ' — Looking for videos…';
+    }
   }
 
   private static renderBanner(category: CategoryDeck): void {
@@ -275,6 +286,9 @@ export class FeedFilter {
     }
     this.observeRetries = 0;
     if (this.observer) this.observer.disconnect();
+    // The banner may have been created before the grid existed (arriving from another page)
+    const banner = document.getElementById(this.bannerId);
+    if (this.activeCategory && banner?.nextElementSibling !== target) this.renderBanner(this.activeCategory);
     this.applyFilter();
 
     const debouncedFilter = debounce(() => this.applyFilter(), 200);

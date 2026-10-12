@@ -1,6 +1,6 @@
 # Privacy Policy for SubShelf — Smart YouTube™ Subscription Folders
 
-**Last Updated:** October 2, 2026  
+**Last Updated:** October 12, 2026  
 **Extension Name:** SubShelf — Smart YouTube™ Subscription Folders  
 **Repository:** [https://github.com/Shourya3113/SubShelf](https://github.com/Shourya3113/SubShelf)
 
@@ -21,7 +21,7 @@ SubShelf is designed from the ground up on a **strict local-first, zero-telemetr
 ## 2. Information Handled by the Extension
 
 ### A. YouTube™ Subscription Data
-- **What is accessed:** Publicly visible channel titles, handles, channel IDs (`ucId`), and thumbnail URLs rendered in your YouTube left sidebar navigation.
+- **What is accessed:** Channel titles, handles, channel IDs (`ucId`), and avatar URLs of the channels you subscribe to, read from the YouTube pages you visit (the left sidebar and the subscription data YouTube already loads for that sidebar). To fill in missing channel avatars, the extension may also load YouTube's own "All subscriptions" page (`youtube.com/feed/channels`) in the background, using your existing YouTube session. This request goes only to YouTube.
 - **Why it is accessed:** To organize your subscribed channels into custom folder decks, filter your subscriptions feed by topic, and render collapsible shelves.
 - **Where it is stored:** Exclusively inside your browser's local storage (`chrome.storage.local`). This data is never sent to any server operated by SubShelf.
 
@@ -30,7 +30,8 @@ SubShelf is designed from the ground up on a **strict local-first, zero-telemetr
 - **Where it is stored:** Exclusively in local storage on your device.
 
 ### C. Optional Gemini Cloud API & Key Handling
-- **Optional Feature:** Categorization via Google's Gemini Cloud API is strictly optional and disabled by default. It is only activated if you explicitly select the "Google Gemini (Cloud API)" provider and enter your personal Gemini API key in Settings.
+- **Optional Feature:** Categorization via Google's Gemini Cloud API is strictly optional and disabled by default. It is only activated if you explicitly select the "Google Gemini (Cloud API)" provider, grant the extension permission to contact `generativelanguage.googleapis.com` (Chrome asks you at that moment), and enter your personal Gemini API key in Settings.
+- **No automatic escalation:** If Gemini Nano is selected but unavailable on your device, SubShelf falls back to the offline engine. It never switches to the Cloud API on its own.
 - **Data Transmitted:** If you enable the Cloud API tier, the extension sends your subscribed channel titles and handles over HTTPS to Google's official Generative Language API endpoint (`https://generativelanguage.googleapis.com/*`) in order to categorize them into relevant topics.
 - **Google Gemini API Free-Tier Data Terms:**
   > [!WARNING]
@@ -43,8 +44,8 @@ SubShelf is designed from the ground up on a **strict local-first, zero-telemetr
 ## 3. Security & API Key Isolation
 
 We take the security of your configuration and credentials seriously:
-- **Service Worker Key Isolation:** If you provide a Gemini API key, it is saved in an isolated storage partition. Content scripts injected into YouTube webpages are strictly blocked from accessing, reading, or receiving the API key.
-- **No Content Script Exposure:** The extension's storage layer actively scrubs and strips the API key before passing state to content scripts. Only the background extension service worker reads the key when executing user-requested cloud categorization.
+- **Key Storage:** If you provide a Gemini API key, it is saved in the extension's local storage (`chrome.storage.local`) on your device, separately from your folder data. Web pages, including YouTube itself, cannot access extension storage.
+- **Limited Use Inside the Extension:** The extension's code running on YouTube pages never requests or receives the key; the storage layer strips it from the state it hands to that code. Only the background service worker reads the key, and only to make a Cloud categorization request you started. The settings popup displays it so you can edit or remove it.
 - **Zero Extension Server Transmission:** Your API key is communicated directly from your browser to Google's official endpoints. SubShelf does not operate intermediary servers, proxies, or relays.
 - **Sanitized Backups:** When exporting your folder configuration to a JSON backup file, the API key is stripped from the export payload to prevent accidental credential leakage.
 
@@ -57,8 +58,8 @@ SubShelf requests only the minimal permissions required to provide its features:
 | Permission | Purpose & Justification |
 |---|---|
 | `storage` | Storing subscription folders, channel-to-deck mappings, manual overrides, and preferences locally on your machine. |
-| `https://www.youtube.com/*` | Interacting with YouTube web pages to render the native folder accordion in the left sidebar and filter the subscriptions feed according to the active folder. |
-| `https://generativelanguage.googleapis.com/*` | (Optional) Communicating directly with Google's Gemini API endpoints only if you explicitly choose to configure a personal Gemini API key for cloud categorization. |
+| `https://www.youtube.com/*` | Interacting with YouTube web pages to render the native folder accordion in the left sidebar and filter the subscriptions feed according to the active folder. The extension does not run on other YouTube sites (YouTube Music, Studio, mobile). |
+| `https://generativelanguage.googleapis.com/*` | **Optional permission**, not granted at install. Chrome asks for it only when you select the Cloud provider; it lets the extension call Google's Gemini API with your own key. You can revoke it at any time from the extension's details page. |
 
 ---
 
@@ -67,12 +68,12 @@ SubShelf requests only the minimal permissions required to provide its features:
 SubShelf provides three distinct categorization engines:
 
 1. **On-Device Gemini Nano (Chrome Built-in AI — Default):**
-   - Utilizes Chrome's local W3C Prompt API (`globalThis.LanguageModel`).
+   - Utilizes Chrome's built-in Prompt API (`globalThis.LanguageModel`).
    - Runs inference entirely on your device hardware (NPU/GPU/CPU).
-   - **Privacy:** 100% On-Device. Zero network requests. No data leaves your machine.
+   - **Privacy:** 100% On-Device. Zero network requests. No data leaves your machine. If Nano is unavailable, the offline engine below is used instead.
 
 2. **Offline Heuristic Categorization:**
-   - Utilizes deterministic natural language processing, regular expressions, and 400+ pre-trained creator signatures.
+   - Utilizes deterministic keyword matching, regular expressions, and a built-in list of well-known creator names.
    - Runs instantaneously in browser memory.
    - **Privacy:** 100% Offline. Zero network requests.
 
@@ -95,7 +96,7 @@ SubShelf provides three distinct categorization engines:
 
 - All data stored by SubShelf remains on your local machine for as long as the extension is installed.
 - You can delete all SubShelf data at any time by:
-  1. Resetting overrides or clearing extension data from the Settings tab in the popup, or
+  1. Deleting folders and channels from the popup, and using "Reset overrides" in the Settings tab to clear manual assignments, or
   2. Uninstalling the extension from Chrome (`chrome://extensions` -> "Remove").
 - Uninstalling the extension immediately and permanently removes all stored data from your browser's local storage.
 

@@ -876,9 +876,11 @@ export class SidebarManager {
    * allowing YouTube's internal SPA router to handle the transition without a page reload.
    */
   static navigateToSubscriptionsFeed(): void {
-    const link = document.querySelector<HTMLAnchorElement>(
-      'ytd-guide-renderer a[href="/feed/subscriptions"], ytd-mini-guide-renderer a[href="/feed/subscriptions"], ytd-guide-entry-renderer a[href="/feed/subscriptions"], #guide a[href="/feed/subscriptions"]'
-    );
+    // Our own folder headers also link to /feed/subscriptions and sit above YouTube's entry in the
+    // guide, so skip them: clicking one from here re-enters this handler and the browser ignores it.
+    const link = Array.from(document.querySelectorAll<HTMLAnchorElement>(
+      'ytd-guide-renderer a[href="/feed/subscriptions"], ytd-mini-guide-renderer a[href="/feed/subscriptions"], #guide a[href="/feed/subscriptions"]'
+    )).find(a => !a.closest(`#${this.containerId}`));
     if (link) {
       link.click();
     } else {

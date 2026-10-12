@@ -2,6 +2,7 @@ import { SubscribedChannel, CategoryDeck, DEFAULT_GEMINI_CLOUD_MODEL, DEFAULT_ST
 import { HeuristicCategorizer, SUBDECK_TAXONOMY } from './heuristic';
 import { buildCategorizationPrompt } from './prompt';
 import { applyOverrides } from './overrides';
+import { hasCloudPermission } from '@/utils/cloudPermission';
 import { SubDeckStorage } from '@/utils/storage';
 import { Logger } from '@/utils/logger';
 import { isSystemChannelOrCurator } from '@/utils/systemChannels';
@@ -246,6 +247,10 @@ export class AICategorizer {
         } else if (p === 'gemini-api') {
           if (!apiKey) {
             failures.push('Cloud: no API key configured');
+            continue;
+          }
+          if (!(await hasCloudPermission())) {
+            failures.push('Cloud: permission to contact the Gemini API was not granted (re-select Cloud in Settings)');
             continue;
           }
           const model = settings.geminiModel || DEFAULT_GEMINI_MODEL;

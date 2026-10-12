@@ -10,7 +10,7 @@
 
 **SubShelf** is a lightweight, privacy-first Chrome Extension that transforms your cluttered YouTube subscriptions into organized, themed category folders directly inside YouTube's native left sidebar and subscription feed.
 
-Choose how channels are categorized: on-device **Gemini Nano**, an offline **keyword engine**, or (opt-in) the cloud **Google Gemini API** with your own key. SubShelf clusters your channels into smart decks in seconds.
+Channels are sorted by a fast offline engine that learns from your own corrections, optionally helped by Chrome's on-device AI (if Chrome already has it) or, opt-in, the cloud **Google Gemini API** with your own key. SubShelf never downloads AI models.
 
 ---
 
@@ -46,13 +46,14 @@ SubShelf was built from the ground up to adhere strictly to Google Chrome Web St
 You pick the engine in Settings. Every engine falls back to the offline engine, never to the cloud:
 
 ```
-Gemini Nano (default, on-device) ──(unavailable)──► Offline keyword engine
-Gemini Cloud API (opt-in, your key) ──(fails)─────► Offline keyword engine
-Offline keyword engine ──────────────────────────► (always available)
+Offline (default) ─────────────────────────────────► instant, any list size
+Offline + on-device AI ──(Nano only for channels Offline can't place; skipped if Chrome has no model)
+Gemini Cloud API (opt-in, your key) ──(fails)──────► Offline
 ```
 
-* **Gemini Nano:** Chrome's built-in model; nothing leaves your device.
-* **Offline keyword engine:** word-boundary keyword matching plus a built-in list of well-known creators, with weighted scoring.
+* **Offline (default):** keyword matching on channel names, handles and descriptions, a built-in list of well-known creators, and what it learns from your manual moves. Instant even for 500+ channels.
+* **Offline + on-device AI:** uses Chrome's Gemini Nano only if Chrome already has it installed, and only for channels left in "General & Others". SubShelf never downloads the model; nothing leaves your device.
+* **Learning from your corrections:** every channel you move by hand teaches its folder; similar channels follow it, including into folders you created.
 * **Gemini Cloud API:** sends channel titles, handles and short descriptions to Google with your own API key (model configurable, default `gemini-2.5-flash`).
 
 ### Pre-Configured Taxonomies

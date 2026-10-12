@@ -14,7 +14,7 @@ SubShelf is designed from the ground up on a **strict local-first, zero-telemetr
 - **Zero Data Collection:** We do not collect, store, sell, or monetize any personal user data.
 - **100% Local Storage:** All subscription data, folder hierarchies, category mappings, and preferences are stored exclusively on your device using Chrome's `chrome.storage.local` API.
 - **Zero Telemetry or Analytics:** The extension contains no analytics packages (e.g., Google Analytics, Mixpanel), no telemetry beacons, no diagnostic pings, and no tracking cookies.
-- **Default 100% On-Device AI:** By default, channel categorization is performed entirely on your device using either Chrome's on-device Built-in AI (**Gemini Nano**) or deterministic **Offline Regex Heuristics**. No channel data leaves your computer under the default configuration.
+- **On-Device by Default:** By default, channel categorization runs entirely on your device with the offline engine (and, if you choose, Chrome's on-device AI when Chrome already has it). SubShelf never downloads AI models. No channel data leaves your computer under the default configuration.
 
 ---
 
@@ -67,15 +67,15 @@ SubShelf requests only the minimal permissions required to provide its features:
 
 SubShelf provides three distinct categorization engines:
 
-1. **On-Device Gemini Nano (Chrome Built-in AI — Default):**
-   - Utilizes Chrome's built-in Prompt API (`globalThis.LanguageModel`).
-   - Runs inference entirely on your device hardware (NPU/GPU/CPU).
-   - **Privacy:** 100% On-Device. Zero network requests. No data leaves your machine. If Nano is unavailable, the offline engine below is used instead.
-
-2. **Offline Heuristic Categorization:**
-   - Utilizes deterministic keyword matching, regular expressions, and a built-in list of well-known creator names.
+1. **Offline Categorization (Default):**
+   - Utilizes deterministic keyword matching, a built-in list of well-known creator names, and word profiles learned from your own manual corrections.
    - Runs instantaneously in browser memory.
    - **Privacy:** 100% Offline. Zero network requests.
+
+2. **Optional On-Device AI (Chrome's Gemini Nano):**
+   - Used only if you select it and Chrome already has its on-device model installed; SubShelf never downloads the model.
+   - Only reviews channels the offline engine could not place. Runs entirely on your device hardware.
+   - **Privacy:** 100% On-Device. Zero network requests.
 
 3. **Optional Google Gemini Cloud API:**
    - Utilizes Google's cloud-hosted Gemini models (e.g., `gemini-2.5-flash`).

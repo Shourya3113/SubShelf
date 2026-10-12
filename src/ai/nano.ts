@@ -87,31 +87,7 @@ export function nanoUnavailableReason(status: NanoStatus): string {
  * Converts a downloadprogress event to a 0–100 percentage. Current Chrome reports `loaded` as a
  * 0–1 fraction (total = 1); early builds reported bytes with a separate `total`.
  */
-export function downloadProgressPercent(loaded: unknown, total?: unknown): number {
-  const l = typeof loaded === 'number' && Number.isFinite(loaded) ? loaded : 0;
-  const t = typeof total === 'number' && Number.isFinite(total) && total > 1 ? total : 1;
-  const pct = Math.round((l / t) * 100);
-  return Math.min(100, Math.max(0, pct));
-}
 
-/**
- * Starts (or attaches to) the model download. Must be called from a user gesture handler, because
- * Chrome only allows create() to trigger a download with transient user activation.
- */
-export async function downloadNanoModel(LM: any, onProgress: (percent: number) => void): Promise<void> {
-  if (!LM) throw new Error('On-device AI is not available in this browser');
-  const session = await LM.create({
-    ...NANO_OPTS,
-    monitor(m: EventTarget) {
-      m.addEventListener('downloadprogress', (e: Event) => {
-        const ev = e as Event & { loaded?: number; total?: number };
-        onProgress(downloadProgressPercent(ev.loaded, ev.total));
-      });
-    },
-  });
-  // The session was only needed to trigger the download
-  session?.destroy?.();
-}
 
 /** Runs prompts against a LanguageModel in the current context. Fresh session per prompt. */
 export function localNanoRunner(LM: any): NanoRunner {
@@ -140,8 +116,6 @@ export function localNanoRunner(LM: any): NanoRunner {
 export interface NanoStatusView {
   badge: string;
   text: string;
-  /** Label for the download button, or null when no download can be offered. */
-  action: string | null;
 }
 
 /** What the popup shows for each status. A download is only ever offered, never started. */
@@ -150,32 +124,18 @@ export function describeNanoStatus(status: NanoStatus): NanoStatusView {
     case 'available':
       return {
         badge: 'Ready',
-        text: 'Gemini Nano is installed. Auto-AI runs on this device and channel names never leave your computer.',
-        action: null,
+        text: 'Chrome already has its on-device AI model, so Auto-AI uses it for channels the offline engine can\'t place. Nothing leaves your computer.',
       };
     case 'downloadable':
-      return {
-        badge: 'Not downloaded',
-        text: 'Auto-AI uses offline keywords until the on-device model is downloaded.',
-        action: 'Download on-device AI model',
-      };
     case 'downloading':
       return {
-        badge: 'Downloading',
-        text: 'Chrome is downloading the model. Auto-AI uses offline keywords until it finishes.',
-        action: 'Show download progress',
-      };
-    case 'no-api':
-      return {
-        badge: 'Not supported',
-        text: 'This version of Chrome does not offer on-device AI. Update Chrome, or choose "Offline keywords" above, which works everywhere.',
-        action: null,
+        badge: 'Not installed',
+        text: 'SubShelf never downloads AI models. If Chrome installs its on-device model for its own features, SubShelf will use it; until then this works exactly like Offline.',
       };
     default:
       return {
-        badge: 'Not supported',
-        text: 'Chrome cannot run on-device AI on this computer. It needs about 22 GB of free disk space and either a GPU with more than 4 GB of video memory or 16 GB of RAM. Choose "Offline keywords" above, which works on any computer.',
-        action: null,
+        badge: 'Not available',
+        text: 'This computer or Chrome version has no on-device AI, so this works exactly like Offline.',
       };
   }
 }

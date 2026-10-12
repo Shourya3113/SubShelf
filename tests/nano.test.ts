@@ -1,10 +1,7 @@
 import { describe, it, expect, vi, afterEach, beforeEach } from 'vitest';
 import {
-  NANO_OPTS,
   NanoRunner,
   describeNanoStatus,
-  downloadNanoModel,
-  downloadProgressPercent,
   getNanoStatus,
   normalizeNanoAvailability,
 } from '@/ai/nano';
@@ -44,50 +41,14 @@ describe('Gemini Nano status helpers', () => {
     expect(await getNanoStatus({ create() {}, capabilities: async () => ({ available: 'after-download' }) })).toBe('downloadable');
   });
 
-  it('converts fractional and byte-based progress to a clamped percentage', () => {
-    expect(downloadProgressPercent(0.5)).toBe(50);
-    expect(downloadProgressPercent(0.5, 1)).toBe(50);
-    expect(downloadProgressPercent(250, 1000)).toBe(25);
-    expect(downloadProgressPercent(2)).toBe(100);
-    expect(downloadProgressPercent(undefined)).toBe(0);
-    expect(downloadProgressPercent(Number.NaN)).toBe(0);
-  });
-
-  it('offers a download only when Chrome can actually download the model', () => {
-    expect(describeNanoStatus('downloadable').action).toBe('Download on-device AI model');
-    expect(describeNanoStatus('downloading').action).not.toBeNull();
-    for (const s of ['available', 'unavailable', 'no-api'] as const) {
-      expect(describeNanoStatus(s).action).toBeNull();
+  it('never offers a download; without the model the option works like Offline', () => {
+    expect(describeNanoStatus('available').badge).toBe('Ready');
+    for (const s of ['downloadable', 'downloading'] as const) {
+      expect(describeNanoStatus(s).text).toMatch(/never downloads/);
     }
-    expect(describeNanoStatus('unavailable').text).toContain('Offline keywords');
-    expect(describeNanoStatus('no-api').text).toContain('Offline keywords');
-  });
-});
-
-describe('downloadNanoModel', () => {
-  it('creates a session with the shared options, reports progress, and discards the session', async () => {
-    const destroy = vi.fn();
-    const LM = {
-      create: vi.fn(async (opts: any) => {
-        const monitor = new EventTarget();
-        opts.monitor(monitor);
-        for (const loaded of [0, 0.42, 1]) {
-          monitor.dispatchEvent(Object.assign(new Event('downloadprogress'), { loaded, total: 1 }));
-        }
-        return { destroy };
-      }),
-    };
-    const seen: number[] = [];
-    await downloadNanoModel(LM, p => seen.push(p));
-
-    expect(LM.create).toHaveBeenCalledTimes(1);
-    expect(LM.create.mock.calls[0][0]).toMatchObject(NANO_OPTS);
-    expect(seen).toEqual([0, 42, 100]);
-    expect(destroy).toHaveBeenCalled();
-  });
-
-  it('fails clearly when the API is missing', async () => {
-    await expect(downloadNanoModel(null, () => {})).rejects.toThrow(/not available/);
+    for (const s of ['downloadable', 'downloading', 'unavailable', 'no-api'] as const) {
+      expect(describeNanoStatus(s).text).toMatch(/exactly like Offline/);
+    }
   });
 });
 

@@ -202,37 +202,14 @@ export class ExportImport {
       }
     }
 
-    const mergeLists = (a: Record<string, string[]> = {}, b: Record<string, string[]> = {}) => {
-      const out: Record<string, string[]> = { ...a };
-      for (const [k, v] of Object.entries(b)) {
-        out[k] = [...new Set([...(out[k] ?? []), ...v])].slice(0, 100);
-      }
-      return out;
-    };
-
-    // Merge incoming data with current storage; existing storage is preserved
-    await SubDeckStorage.update(
-      ['categories', 'channels', 'handleToUcId', 'channelExclusions', 'manualAssignments'],
-      cur => {
-        const cats = (cur.categories ?? []).map((d: CategoryDeck) => {
-          const inc = validatedCategories.find(x => x.id === d.id);
-          return inc
-            ? { ...d, channelIds: [...new Set([...d.channelIds, ...inc.channelIds])].slice(0, MAX_CHANNELS_PER_CATEGORY) }
-            : d;
-        });
-        const have = new Set(cats.map((d: CategoryDeck) => d.id));
-        for (const d of validatedCategories) {
-          if (!have.has(d.id)) cats.push(d);
-        }
-
-        return {
-          categories: cats,
-          channels: { ...(cur.channels ?? {}), ...validatedChannels },
-          handleToUcId: { ...(cur.handleToUcId ?? {}), ...validatedHandles },
-          channelExclusions: mergeLists(cur.channelExclusions, validatedExclusions),
-          manualAssignments: mergeLists(cur.manualAssignments, validatedManualAssignments),
-        };
-      }
-    );
+    // Merge incoming data with current storage inside the service worker's write queue;
+    // existing storage is preserved
+    await SubDeckStorage.requestMutation('importMerge', {
+      categories: validatedCategories,
+      channels: { ...validatedChannels },
+      handleToUcId: { ...validatedHandles },
+      channelExclusions: { ...validatedExclusions },
+      manualAssignments: { ...validatedManualAssignments },
+    });
   }
 }

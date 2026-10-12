@@ -77,12 +77,7 @@ class PopupManager {
 
       if (editId) {
         // Edit existing deck
-        const target = categories.find(c => c.id === editId);
-        if (target) {
-          target.name = name;
-          target.icon = icon;
-          await SubDeckStorage.saveCategories(categories);
-        }
+        await SubDeckStorage.updateCategory(editId, { name, icon });
       } else {
         // Create new deck
         let cleanId = name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');

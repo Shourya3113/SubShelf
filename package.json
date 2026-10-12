@@ -6,7 +6,8 @@
     "dev": "vite build --watch --mode development",
     "build": "vite build --mode production",
     "typecheck": "tsc --noEmit",
-    "package": "npm run typecheck && npm run build && python3 scripts/package.py",
+    "test": "vitest run",
+    "package": "npm run typecheck && npm test && npm run build && python3 scripts/package.py",
     "audit:dom": "! grep -rnE '(innerHTML\\s*=\\s*[^\"\\x27`])|insertAdjacentHTML|outerHTML|document\\.write|eval\\(|new Function' src",
     "audit:deps": "npm audit --omit=dev --audit-level=high"
   },
@@ -15,6 +16,7 @@
     "@types/chrome": "^0.0.268",
     "@types/node": "^20.12.7",
     "typescript": "^5.4.5",
-    "vite": "^5.4.21"
+    "vite": "^5.4.21",
+    "vitest": "^2.1.9"
   }
 }

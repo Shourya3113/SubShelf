@@ -88,7 +88,11 @@ import { isSystemChannelOrCurator } from '@/utils/systemChannels';
     if (title) put(title.toLowerCase().trim(), url);
   };
 
-  const walk = (n: any, depth = 0) => {
+  // Only entries under the guide's subscriptions section are subscriptions. Everything else
+  // ("Your channel", Explore topics, featured channels on other pages) is used for avatars only.
+  const SUBSCRIPTIONS_SECTION_KEY = /subscriptions?section/i;
+
+  const walk = (n: any, depth = 0, inSubscriptions = false) => {
     if (!n || typeof n !== 'object' || depth > MAX_DEPTH) return;
 
     // 1. YouTube classic guideEntryRenderer
@@ -101,7 +105,7 @@ import { isSystemChannelOrCurator } from '@/utils/systemChannels';
           : g.title?.runs?.[0]?.text || g.title?.simpleText || g.formattedTitle?.simpleText;
       const thumb = pick(g.thumbnail);
       index(be?.browseId, be?.canonicalBaseUrl, t, thumb);
-      addChannel(be?.browseId, be?.canonicalBaseUrl, t, thumb);
+      if (inSubscriptions) addChannel(be?.browseId, be?.canonicalBaseUrl, t, thumb);
     }
 
     // 2. YouTube modern guideEntryViewModel (2024–2026 UI)
@@ -111,21 +115,20 @@ import { isSystemChannelOrCurator } from '@/utils/systemChannels';
       const t = v.title?.content || v.formattedTitle?.content;
       const thumb = pick(v.thumbnail);
       index(be?.browseId, be?.canonicalBaseUrl, t, thumb);
-      addChannel(be?.browseId, be?.canonicalBaseUrl, t, thumb);
+      if (inSubscriptions) addChannel(be?.browseId, be?.canonicalBaseUrl, t, thumb);
     }
 
-    // 3. channelRenderer, compactChannelRenderer, gridChannelRenderer
+    // 3. channelRenderer, compactChannelRenderer, gridChannelRenderer (avatars only)
     const c = n.channelRenderer || n.compactChannelRenderer || n.gridChannelRenderer;
     if (c) {
       const t = c.title?.simpleText || c.title?.runs?.[0]?.text;
       const thumb = pick(c.thumbnail);
       index(c.channelId, c.navigationEndpoint?.browseEndpoint?.canonicalBaseUrl, t, thumb);
-      addChannel(c.channelId, c.navigationEndpoint?.browseEndpoint?.canonicalBaseUrl, t, thumb);
     }
 
     for (const k in n) {
       if (Object.prototype.hasOwnProperty.call(n, k)) {
-        walk(n[k], depth + 1);
+        walk(n[k], depth + 1, inSubscriptions || SUBSCRIPTIONS_SECTION_KEY.test(k));
       }
     }
   };

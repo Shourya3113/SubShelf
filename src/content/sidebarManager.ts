@@ -216,15 +216,7 @@ export class SidebarManager {
         }
       }
       if (Object.keys(repaired).length > 0) {
-        SubDeckStorage.update(['channels'], cur => {
-          const channels = { ...(cur.channels || {}) };
-          for (const [id, url] of Object.entries(repaired)) {
-            if (channels[id]) {
-              channels[id].avatarUrl = url;
-            }
-          }
-          return { channels };
-        }).catch(() => {});
+        SubDeckStorage.mergeAvatars(repaired).catch(() => {});
       }
     }
 
@@ -618,9 +610,7 @@ export class SidebarManager {
           const newIcon = editIcon.value.trim() || '📁';
           if (!newName) return;
 
-          cat.name = newName;
-          cat.icon = newIcon;
-          await SubDeckStorage.saveCategories(categories);
+          await SubDeckStorage.updateCategory(cat.id, { name: newName, icon: newIcon });
           await this.render();
         };
 
@@ -794,7 +784,7 @@ export class SidebarManager {
           chevronBtn.classList.toggle('open', !isNowCollapsed);
 
           cat.isCollapsed = isNowCollapsed;
-          await SubDeckStorage.saveCategories(categories);
+          await SubDeckStorage.updateCategory(cat.id, { isCollapsed: isNowCollapsed });
         });
 
         // 2. FOLDER TITLE CLICK: Opens and filters the feed directly via YouTube's SPA router!
@@ -841,19 +831,12 @@ export class SidebarManager {
     if (channels.length === 0) return;
 
     Logger.info('[SubShelf Sidebar] Running AICategorizer in YouTube Window context...');
-    const state = await SubDeckStorage.getAll();
     const { decks: rawDecks, fallbackNotice } = await AICategorizer.categorizeAll(channels);
     if (fallbackNotice) {
       SidebarManager.showToast(fallbackNotice);
     }
-    const finalDecks = AICategorizer.applyOverrides(
-      rawDecks,
-      state.categories || [],
-      state.manualAssignments || {},
-      state.channelExclusions || {},
-      channels
-    );
-    await SubDeckStorage.saveCategories(finalDecks);
+    // Overrides are applied against fresh storage inside the service worker's write queue
+    await SubDeckStorage.applyGeneratedDecks(rawDecks);
     await this.render();
   }
 

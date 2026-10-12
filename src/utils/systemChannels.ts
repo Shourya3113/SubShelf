@@ -5,18 +5,19 @@
  * explore topic channels, system navigation destinations, and non-subscription links.
  */
 
+// YouTube's built-in topic destinations. Verified 2026-10-12 against the live guide's Explore
+// section and /channel/<id> pages. Never add an ID without checking it isn't a real creator:
+// a wrong entry silently drops that channel for every user (this list once contained T-Series).
 export const SYSTEM_BROWSE_IDS = new Set([
   'UCOpNcN46UbXVtpKMrmU4Abg', // Gaming
   'UC-9-kyTW8ZkZNDHQJ6FgpwQ', // Music
   'UCEgdi0XIXXZ-qJOFPf4JSKw', // Sports
   'UCYfdidRxbB8Qhf0Nx7ioOYw', // News
-  'UClgRkhTL3_hImCAmdLfDE4g', // Movies & TV / Movies & Shows
-  'UC1x8rV_f-2yPpzlN0JWZXIQ', // Fashion & Beauty
+  'UClgRkhTL3_hImCAmdLfDE4g', // Movies & Shows
+  'UC4R8DWoMoI7CAwX8_LjQHig', // Live
   'UCtFRv9O2AHqOZjjynzrv-xg', // Learning
-  'UC4R8DWoMoI7CAwX8_bqQ5yQ', // Live
+  'UC1x8rV_f-2yPpzlN0JWZXIQ', // Fashion & Beauty
   'UClzC1VT7QCk7ap1sLWKG_Xg', // Podcasts
-  'UCq-Fj5jknLsUf-MWSy4_brA', // Trending
-  'UCBR8-60-lk78Kz5fFVvf6JA', // Official YouTube
 ]);
 
 export const SYSTEM_TITLES = new Set([
@@ -74,7 +75,6 @@ export const SYSTEM_HANDLES = new Set([
   'trending',
   'shopping',
   'learning',
-  'youtube',
   'youtubegaming',
   'youtubemusic',
   'youtubekids',

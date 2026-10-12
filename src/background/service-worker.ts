@@ -1,51 +1,34 @@
-import { SubDeckStorage } from '@/utils/storage';
+import { SubDeckStorage, enqueueMutation, enqueueStorageTask } from '@/utils/storage';
 import { AICategorizer } from '@/ai/categorizer';
 import { Logger } from '@/utils/logger';
 import { runMigrations } from './migrations';
 import { CURRENT_SCHEMA_VERSION, DEFAULT_STORAGE } from '@/types';
 
-chrome.runtime.onInstalled.addListener(async (details) => {
-  const raw = await chrome.storage.local.get(null);
-  if (!raw || Object.keys(raw).length === 0 || details.reason === 'install') {
-    const defaults = structuredClone(DEFAULT_STORAGE);
-    const initial = { ...defaults, ...(raw || {}) };
-    await chrome.storage.local.set(initial);
-    Logger.info(`[SubShelf] Initialized fresh storage schema v${CURRENT_SCHEMA_VERSION}`);
-    return;
-  }
+// All storage writes below go through the shared queue so they serialize with content/popup mutations.
+chrome.runtime.onInstalled.addListener((details) => {
+  enqueueStorageTask(async () => {
+    const raw = await chrome.storage.local.get(null);
+    if (!raw || Object.keys(raw).length === 0 || details.reason === 'install') {
+      const defaults = structuredClone(DEFAULT_STORAGE);
+      await chrome.storage.local.set({ ...defaults, ...(raw || {}) });
+      Logger.info(`[SubShelf] Initialized fresh storage schema v${CURRENT_SCHEMA_VERSION}`);
+    }
+  }).catch(err => Logger.error('[SubShelf] Install initialization failed:', err));
 });
 
-// Self-healing migration check on service worker wake-up
-(async () => {
-  try {
-    const raw = await chrome.storage.local.get(null);
-    if (!raw || Object.keys(raw).length === 0) return;
-    const v = typeof raw.version === 'number' ? raw.version : 1;
-    if (v < CURRENT_SCHEMA_VERSION) {
-      const migrated = runMigrations(v, CURRENT_SCHEMA_VERSION, raw as any);
-      await chrome.storage.local.set(migrated);
-      Logger.info(`[SubShelf] Background startup applied schema migration from v${v} to v${CURRENT_SCHEMA_VERSION}`);
-    }
-  } catch (err) {
-    Logger.error('[SubShelf] Startup schema migration check failed:', err);
+// Self-healing on every service worker wake-up: migrate, then persist normalized state
+enqueueStorageTask(async () => {
+  const raw = await chrome.storage.local.get(null);
+  if (!raw || Object.keys(raw).length === 0) return;
+  const v = typeof raw.version === 'number' ? raw.version : 1;
+  if (v < CURRENT_SCHEMA_VERSION) {
+    const migrated = runMigrations(v, CURRENT_SCHEMA_VERSION, raw as any);
+    await chrome.storage.local.set(migrated);
+    Logger.info(`[SubShelf] Background startup applied schema migration from v${v} to v${CURRENT_SCHEMA_VERSION}`);
   }
-})();
+}).catch(err => Logger.error('[SubShelf] Startup schema migration check failed:', err));
 
-// FIFO write queue to serialize all storage mutations and eliminate write races
-class StorageWriteQueue {
-  private queue: Promise<unknown> = Promise.resolve();
-
-  enqueue<T>(task: () => Promise<T>): Promise<T> {
-    const next = this.queue.then(
-      () => task(),
-      () => task()
-    );
-    this.queue = next.catch(() => {});
-    return next;
-  }
-}
-
-const storageQueue = new StorageWriteQueue();
+enqueueMutation('normalize').catch(err => Logger.error('[SubShelf] Startup normalization failed:', err));
 
 // Handle auto-categorization and background tasks
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
@@ -58,9 +41,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   if (message?.type === 'subshelf-storage-mutate') {
     (async () => {
       try {
-        const result = await storageQueue.enqueue(async () => {
-          return await SubDeckStorage.executeMutation(message.action, message.payload);
-        });
+        const result = await enqueueMutation(message.action, message.payload);
         sendResponse({ success: true, result });
       } catch (err) {
         Logger.error('[SubShelf Background] Storage mutation failed:', err);
@@ -117,24 +98,8 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 
         const result = await AICategorizer.categorizeAll(channels);
 
-        // Serialize overrides application and storage commit through the write queue
-        const finalDecks = await storageQueue.enqueue(async () => {
-          const raw = await chrome.storage.local.get(['categories', 'manualAssignments', 'channelExclusions']);
-          const currentCategories = Array.isArray(raw.categories) ? raw.categories : [];
-          const manualAssignments = raw.manualAssignments || {};
-          const channelExclusions = raw.channelExclusions || {};
-
-          const applied = AICategorizer.applyOverrides(
-            result.decks,
-            currentCategories,
-            manualAssignments,
-            channelExclusions,
-            channels
-          );
-
-          await chrome.storage.local.set({ categories: applied });
-          return applied;
-        });
+        // Overrides are applied against fresh storage inside the write queue
+        const finalDecks = await SubDeckStorage.applyGeneratedDecks(result.decks);
 
         Logger.info(`[SubShelf Background] Categorized into ${finalDecks.length} unique decks`);
         sendResponse({

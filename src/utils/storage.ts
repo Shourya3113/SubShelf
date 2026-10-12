@@ -1,9 +1,151 @@
 import { SubDeckStorageSchema, DEFAULT_STORAGE, SubscribedChannel, CategoryDeck, CURRENT_SCHEMA_VERSION, API_KEY_FIELD } from '@/types';
 import { Logger } from './logger';
 import { isSystemChannelOrCurator } from './systemChannels';
+import { computeSync, MissingRecord, SYNC_MISSING_KEY } from './syncEngine';
+import { sanitizeAvatarMap } from './avatarUrl';
+import { applyOverrides } from '@/ai/overrides';
 
 export const SUBSHELF_SECURE_API_KEY = API_KEY_FIELD;
 export { API_KEY_FIELD };
+
+const MAX_CHANNELS_PER_CATEGORY = 5_000;
+
+/**
+ * Single FIFO queue for every storage read-modify-write. It lives in the service worker;
+ * other contexts reach it through requestMutation(), so all writers are serialized.
+ */
+let storageQueue: Promise<unknown> = Promise.resolve();
+
+export function enqueueStorageTask<T>(task: () => Promise<T>): Promise<T> {
+  const run = storageQueue.then(task, task);
+  storageQueue = run.catch(() => {});
+  return run;
+}
+
+export function enqueueMutation(action: string, payload?: unknown): Promise<any> {
+  return enqueueStorageTask(() => SubDeckStorage.executeMutation(action, payload));
+}
+
+const normalizeHandleKey = (h: string): string =>
+  h.startsWith('@') ? h.toLowerCase() : '@' + h.toLowerCase();
+
+/**
+ * Pure cleanup of a raw storage snapshot: fills missing fields, merges handle-keyed duplicates into
+ * their UC ID record, drops system curators, and dedupes folder membership.
+ * `dirty` reports whether the persisted copy would change. Never writes.
+ */
+export function normalizeState(raw: Record<string, any>): { data: SubDeckStorageSchema; dirty: boolean } {
+  const data: Record<string, any> = { ...raw };
+  if (typeof data.version !== 'number') data.version = CURRENT_SCHEMA_VERSION;
+
+  // Credentials never leave this function
+  delete data[API_KEY_FIELD];
+  delete data['subshelf_gemini_api_key'];
+
+  if (!Array.isArray(data.categories)) data.categories = [];
+  if (!data.channels || typeof data.channels !== 'object') data.channels = {};
+  if (!data.handleToUcId || typeof data.handleToUcId !== 'object') data.handleToUcId = {};
+  if (!data.channelExclusions || typeof data.channelExclusions !== 'object') data.channelExclusions = {};
+  if (!data.manualAssignments || typeof data.manualAssignments !== 'object') data.manualAssignments = {};
+  const settings = data.settings && typeof data.settings === 'object' ? { ...data.settings } : {};
+  delete settings.apiKey;
+  data.settings = { ...DEFAULT_STORAGE.settings, ...settings };
+  if (typeof data.lastScrapedAt !== 'number') data.lastScrapedAt = 0;
+  if (typeof data.activeCategoryId !== 'string' && data.activeCategoryId !== null) data.activeCategoryId = null;
+
+  let dirty = false;
+  const cleanHandleMap: Record<string, string> = { ...data.handleToUcId };
+
+  // Index all channels with canonical UC IDs (ignoring system curators)
+  for (const ch of Object.values(data.channels as Record<string, SubscribedChannel>)) {
+    if (ch && typeof ch === 'object' && !isSystemChannelOrCurator(ch) && ch.ucId?.startsWith('UC') && ch.handle) {
+      const h = normalizeHandleKey(ch.handle);
+      cleanHandleMap[h] = ch.ucId;
+      cleanHandleMap[h.slice(1)] = ch.ucId;
+    }
+  }
+
+  // Reconcile duplicate channel records and drop system topic/feed curator records
+  const aliasRemap: Record<string, string> = {};
+  const canonicalChannels: Record<string, SubscribedChannel> = {};
+  const purgedSystemIds = new Set<string>();
+
+  for (const [key, ch] of Object.entries(data.channels as Record<string, SubscribedChannel>)) {
+    if (!ch || typeof ch !== 'object') continue;
+
+    if (isSystemChannelOrCurator(ch) || isSystemChannelOrCurator({ ucId: key, title: ch.title, handle: ch.handle, url: ch.url })) {
+      purgedSystemIds.add(key);
+      if (ch.ucId) purgedSystemIds.add(ch.ucId);
+      dirty = true;
+      continue;
+    }
+
+    const h = ch.handle ? normalizeHandleKey(ch.handle) : '';
+    const canonId = (ch.ucId?.startsWith('UC') ? ch.ucId : (cleanHandleMap[h] || cleanHandleMap[key.toLowerCase()] || ch.ucId))?.trim();
+
+    if (canonId && canonId !== key && (canonId.startsWith('UC') || !key.startsWith('UC'))) {
+      aliasRemap[key] = canonId;
+      dirty = true;
+      canonicalChannels[canonId] = canonicalChannels[canonId]
+        ? { ...ch, ...canonicalChannels[canonId], avatarUrl: canonicalChannels[canonId].avatarUrl || ch.avatarUrl }
+        : { ...ch, ucId: canonId };
+    } else {
+      canonicalChannels[key] = ch;
+    }
+  }
+  data.channels = canonicalChannels;
+
+  for (const [h, targetId] of Object.entries(cleanHandleMap)) {
+    if (purgedSystemIds.has(targetId) || isSystemChannelOrCurator({ handle: h, ucId: targetId })) {
+      delete cleanHandleMap[h];
+      dirty = true;
+    }
+  }
+  data.handleToUcId = cleanHandleMap;
+
+  // Guarantee valid CategoryDeck items, remap aliases, remove system channels, dedupe
+  data.categories = data.categories
+    .filter((c: any) => c && typeof c === 'object' && c.id && c.id !== '__uncategorized__')
+    .map((c: any) => {
+      const rawIds: string[] = Array.isArray(c.channelIds) ? c.channelIds.filter((id: any) => typeof id === 'string') : [];
+      const seen = new Set<string>();
+      const ids: string[] = [];
+      for (const rawId of rawIds) {
+        const canonId = aliasRemap[rawId] || cleanHandleMap[rawId.toLowerCase()] || rawId;
+        if (purgedSystemIds.has(canonId) || purgedSystemIds.has(rawId) || isSystemChannelOrCurator({ ucId: canonId })) continue;
+        if (!seen.has(canonId)) {
+          seen.add(canonId);
+          ids.push(canonId);
+        }
+      }
+      if (ids.length !== rawIds.length || ids.some((id, i) => id !== rawIds[i])) dirty = true;
+
+      return {
+        id: String(c.id),
+        name: String(c.name || 'Untitled'),
+        icon: String(c.icon || '📁'),
+        color: typeof c.color === 'string' ? c.color : '#3B82F6',
+        channelIds: ids,
+        isCollapsed: Boolean(c.isCollapsed),
+        sortOrder: typeof c.sortOrder === 'number' ? c.sortOrder : 0,
+        isSystem: Boolean(c.isSystem),
+      };
+    });
+  if (Array.isArray(raw.categories) && data.categories.length !== raw.categories.length) dirty = true;
+
+  for (const sysId of purgedSystemIds) {
+    if (data.manualAssignments[sysId]) {
+      delete data.manualAssignments[sysId];
+      dirty = true;
+    }
+    if (data.channelExclusions[sysId]) {
+      delete data.channelExclusions[sysId];
+      dirty = true;
+    }
+  }
+
+  return { data: data as SubDeckStorageSchema, dirty };
+}
 
 export class SubDeckStorage {
   static isContextValid(): boolean {
@@ -18,188 +160,24 @@ export class SubDeckStorage {
     return typeof window !== 'undefined' && window.location?.protocol !== 'chrome-extension:';
   }
 
+  static isServiceWorker(): boolean {
+    return typeof window === 'undefined' && typeof self !== 'undefined';
+  }
+
+  /**
+   * Returns a normalized view of storage. Read-only: cleanup is persisted separately by the
+   * service worker's 'normalize' mutation so reads can never race with queued writes.
+   */
   static async getAll(): Promise<SubDeckStorageSchema> {
     if (!this.isContextValid()) {
       return structuredClone(DEFAULT_STORAGE);
     }
     try {
-      const data = await chrome.storage.local.get(Object.keys(DEFAULT_STORAGE));
-      if (!data || Object.keys(data).length === 0) {
-        if (!this.isContextValid()) return structuredClone(DEFAULT_STORAGE);
-        const defaults = structuredClone(DEFAULT_STORAGE);
-        await chrome.storage.local.set(defaults);
-        return defaults;
+      const raw = await chrome.storage.local.get(Object.keys(DEFAULT_STORAGE));
+      if (!raw || Object.keys(raw).length === 0) {
+        return structuredClone(DEFAULT_STORAGE);
       }
-      if (typeof data.version !== 'number') {
-        data.version = CURRENT_SCHEMA_VERSION;
-      }
-
-      // Security: Migrate legacy apiKey out of settings into isolated dedicated storage
-      if (data.settings && 'apiKey' in data.settings) {
-        if (typeof data.settings.apiKey === 'string' && data.settings.apiKey.length > 0 && !this.isContentScript()) {
-          const legacyKey = data.settings.apiKey;
-          delete data.settings.apiKey;
-          chrome.storage.local.set({
-            [API_KEY_FIELD]: legacyKey,
-            settings: data.settings,
-          }).catch(() => {});
-        } else {
-          delete data.settings.apiKey;
-        }
-      }
-
-      // Security: Strip internal dedicated keys and any apiKey from the returned state
-      delete (data as any)[API_KEY_FIELD];
-      delete (data as any)['subshelf_gemini_api_key'];
-      if (data.settings) {
-        delete data.settings.apiKey;
-      }
-
-      // Backward compatibility & fresh-install safety: guarantee all fields exist
-      if (!Array.isArray(data.categories)) data.categories = [];
-      if (!data.channels || typeof data.channels !== 'object') data.channels = {};
-      if (!data.handleToUcId || typeof data.handleToUcId !== 'object') data.handleToUcId = {};
-      if (!data.channelExclusions || typeof data.channelExclusions !== 'object') data.channelExclusions = {};
-      if (!data.manualAssignments || typeof data.manualAssignments !== 'object') data.manualAssignments = {};
-      if (!data.settings || typeof data.settings !== 'object') {
-        data.settings = structuredClone(DEFAULT_STORAGE.settings);
-      } else {
-        data.settings = { ...DEFAULT_STORAGE.settings, ...data.settings };
-      }
-      if (typeof data.lastScrapedAt !== 'number') data.lastScrapedAt = 0;
-      if (typeof data.activeCategoryId !== 'string' && data.activeCategoryId !== null) {
-        data.activeCategoryId = null;
-      }
-
-      // Deduplicate and canonicalize channels in storage (merge handle aliases with real UC IDs)
-      let storageDirty = false;
-      const cleanHandleMap: Record<string, string> = { ...(data.handleToUcId || {}) };
-
-      // Index all channels with canonical UC IDs (ignoring system curators)
-      for (const ch of Object.values(data.channels as Record<string, SubscribedChannel>)) {
-        if (ch && typeof ch === 'object' && !isSystemChannelOrCurator(ch) && ch.ucId?.startsWith('UC') && ch.handle) {
-          const hClean = ch.handle.startsWith('@') ? ch.handle.toLowerCase() : '@' + ch.handle.toLowerCase();
-          cleanHandleMap[hClean] = ch.ucId;
-          cleanHandleMap[hClean.replace(/^@/, '')] = ch.ucId;
-        }
-      }
-
-      // Reconcile and purge duplicate channel records AND purge system topic/feed curator records
-      const aliasRemap: Record<string, string> = {};
-      const canonicalChannels: Record<string, SubscribedChannel> = {};
-      const purgedSystemIds = new Set<string>();
-
-      for (const [key, ch] of Object.entries(data.channels as Record<string, SubscribedChannel>)) {
-        if (!ch || typeof ch !== 'object') continue;
-
-        // PURGE SYSTEM CURATORS (Gaming, Music, Sports, etc.)
-        if (isSystemChannelOrCurator(ch) || isSystemChannelOrCurator({ ucId: key, title: ch.title, handle: ch.handle, url: ch.url })) {
-          purgedSystemIds.add(key);
-          if (ch.ucId) purgedSystemIds.add(ch.ucId);
-          storageDirty = true;
-          continue;
-        }
-
-        const hClean = ch.handle ? (ch.handle.startsWith('@') ? ch.handle.toLowerCase() : '@' + ch.handle.toLowerCase()) : '';
-        const canonId = (ch.ucId?.startsWith('UC') ? ch.ucId : (cleanHandleMap[hClean] || cleanHandleMap[key.toLowerCase()] || ch.ucId))?.trim();
-
-        if (canonId && canonId !== key && (canonId.startsWith('UC') || !key.startsWith('UC'))) {
-          aliasRemap[key] = canonId;
-          storageDirty = true;
-          // Merge metadata
-          if (canonicalChannels[canonId]) {
-            canonicalChannels[canonId] = {
-              ...ch,
-              ...canonicalChannels[canonId],
-              avatarUrl: canonicalChannels[canonId].avatarUrl || ch.avatarUrl,
-            };
-          } else {
-            canonicalChannels[canonId] = {
-              ...ch,
-              ucId: canonId,
-            };
-          }
-        } else {
-          canonicalChannels[key] = ch;
-        }
-      }
-      data.channels = canonicalChannels;
-
-      // Clean handleToUcId map from any purged system channels
-      for (const [h, targetId] of Object.entries(cleanHandleMap)) {
-        if (purgedSystemIds.has(targetId) || isSystemChannelOrCurator({ handle: h, ucId: targetId })) {
-          delete cleanHandleMap[h];
-          storageDirty = true;
-        }
-      }
-      data.handleToUcId = cleanHandleMap;
-
-      // Sanitize categories: guarantee valid CategoryDeck items, remap alias channel IDs, remove system channels, and deduplicate
-      data.categories = data.categories
-        .filter((c: any) => c && typeof c === 'object' && c.id && c.id !== '__uncategorized__')
-        .map((c: any) => {
-          const rawIds = Array.isArray(c.channelIds) ? c.channelIds.filter((id: any) => typeof id === 'string') : [];
-          const seenIdsInCat = new Set<string>();
-          const dedupedIds: string[] = [];
-
-          for (const rawId of rawIds) {
-            const canonId = aliasRemap[rawId] || cleanHandleMap[rawId.toLowerCase()] || rawId;
-            if (purgedSystemIds.has(canonId) || purgedSystemIds.has(rawId) || isSystemChannelOrCurator({ ucId: canonId })) {
-              storageDirty = true;
-              continue;
-            }
-            if (!seenIdsInCat.has(canonId)) {
-              seenIdsInCat.add(canonId);
-              dedupedIds.push(canonId);
-            }
-          }
-
-          if (dedupedIds.length !== rawIds.length) {
-            storageDirty = true;
-          }
-
-          return {
-            id: String(c.id),
-            name: String(c.name || 'Untitled'),
-            icon: String(c.icon || '📁'),
-            color: typeof c.color === 'string' ? c.color : '#3B82F6',
-            channelIds: dedupedIds,
-            isCollapsed: Boolean(c.isCollapsed),
-            sortOrder: typeof c.sortOrder === 'number' ? c.sortOrder : 0,
-            isSystem: Boolean(c.isSystem),
-          };
-        });
-
-      // Purge manual assignments and exclusions for removed system topics
-      if (data.manualAssignments) {
-        for (const sysId of purgedSystemIds) {
-          if (data.manualAssignments[sysId]) {
-            delete data.manualAssignments[sysId];
-            storageDirty = true;
-          }
-        }
-      }
-      if (data.channelExclusions) {
-        for (const sysId of purgedSystemIds) {
-          if (data.channelExclusions[sysId]) {
-            delete data.channelExclusions[sysId];
-            storageDirty = true;
-          }
-        }
-      }
-
-      // Automatically persist cleaned storage if duplicates or system channels were removed
-      if (storageDirty && this.isContextValid()) {
-        chrome.storage.local.set({
-          channels: data.channels,
-          categories: data.categories,
-          handleToUcId: data.handleToUcId,
-          manualAssignments: data.manualAssignments || {},
-          channelExclusions: data.channelExclusions || {},
-        }).catch(() => {});
-      }
-
-      return data as SubDeckStorageSchema;
+      return normalizeState(raw).data;
     } catch (err: any) {
       if (err?.message?.includes('Extension context invalidated')) {
         return structuredClone(DEFAULT_STORAGE);
@@ -208,77 +186,43 @@ export class SubDeckStorage {
     }
   }
 
-  static async setAll(data: Partial<SubDeckStorageSchema>): Promise<void> {
-    if (!this.isContextValid()) return;
-    try {
-      await chrome.storage.local.set(data);
-    } catch (err: any) {
-      if (err?.message?.includes('Extension context invalidated')) return;
-      throw err;
-    }
-  }
-
-  private static writeChain: Promise<unknown> = Promise.resolve();
-
-  static update(
-    keys: string[],
-    fn: (cur: Record<string, any>) => Record<string, any> | void | Promise<Record<string, any> | void>
-  ): Promise<void> {
-    const run = this.writeChain.then(async () => {
-      if (!this.isContextValid()) return;
-      const cur = await chrome.storage.local.get(keys.length > 0 ? keys : null);
-      const patch = await fn(cur);
-      if (patch && typeof patch === 'object' && Object.keys(patch).length > 0) {
-        await chrome.storage.local.set(patch);
-      }
-    });
-    this.writeChain = run.catch(() => {});
-    return run;
-  }
-
-  static isServiceWorker(): boolean {
-    return typeof window === 'undefined' && typeof self !== 'undefined';
-  }
-
   /**
-   * Routes storage mutations through the background service worker queue when
-   * invoked from content scripts or popup, eliminating cross-context race conditions.
+   * Routes a storage mutation through the service worker's queue. Callers send intents
+   * (what to change), never snapshots of state they read earlier.
+   * Throws if the worker cannot be reached; there is deliberately no unserialized fallback.
    */
   static async requestMutation(action: string, payload?: unknown): Promise<any> {
     if (this.isServiceWorker()) {
-      return this.executeMutation(action, payload);
+      return enqueueMutation(action, payload);
+    }
+    if (!this.isContextValid()) return null;
+
+    let lastError = 'no response';
+    for (let attempt = 0; attempt < 3; attempt++) {
+      const res = await new Promise<{ success?: boolean; result?: any; error?: string; transport?: boolean }>((resolve) => {
+        try {
+          chrome.runtime.sendMessage({ type: 'subshelf-storage-mutate', action, payload }, (r) => {
+            const err = chrome.runtime?.lastError;
+            resolve(err ? { transport: true, error: err.message } : (r ?? { transport: true, error: 'empty response' }));
+          });
+        } catch (e) {
+          resolve({ transport: true, error: e instanceof Error ? e.message : String(e) });
+        }
+      });
+
+      if (res.success) return res.result;
+      lastError = res.error || lastError;
+      if (!res.transport || !this.isContextValid()) break; // the mutation itself failed: retrying won't help
+      await new Promise(r => setTimeout(r, 150 * 2 ** attempt)); // worker may still be starting
     }
 
-    if (this.isContextValid()) {
-      try {
-        const response = await new Promise<any>((resolve) => {
-          chrome.runtime.sendMessage(
-            { type: 'subshelf-storage-mutate', action, payload },
-            (res) => {
-              if (chrome.runtime?.lastError) {
-                resolve(null);
-              } else {
-                resolve(res);
-              }
-            }
-          );
-        });
-        if (response && response.success) {
-          return response.result;
-        }
-        if (!response?.success) {
-          Logger.warn('[SubShelf] SW mutation failed, writing locally', action, response?.error);
-        }
-      } catch (err) {
-        Logger.warn('[SubShelf] SW mutation failed, writing locally', action, err);
-      }
-    }
-
-    return this.executeMutation(action, payload);
+    Logger.warn('[SubShelf] Storage mutation failed', action, lastError);
+    throw new Error(`Storage update failed (${action}): ${lastError}`);
   }
 
   /**
-   * Executes atomic per-key mutations directly against chrome.storage.local.
+   * Executes one mutation directly against chrome.storage.local.
+   * Must only run inside the queue (via enqueueMutation) and must never call requestMutation.
    */
   static async executeMutation(action: string, payload?: any): Promise<any> {
     if (!this.isContextValid()) return null;
@@ -457,11 +401,33 @@ export class SubDeckStorage {
         return { categories };
       }
 
-      case 'saveCategories': {
-        const { categories } = payload;
-        const cleanCategories = (categories || []).filter((c: CategoryDeck) => c.id !== '__uncategorized__');
-        await chrome.storage.local.set({ categories: cleanCategories });
-        return { categories: cleanCategories };
+
+      case 'updateCategory': {
+        const { categoryId, patch } = payload || {};
+        const raw = await chrome.storage.local.get('categories');
+        const categories: CategoryDeck[] = Array.isArray(raw.categories) ? raw.categories : [];
+        const target = categories.find(c => c.id === categoryId);
+        if (!target || !patch || typeof patch !== 'object') return { categories };
+        if (typeof patch.name === 'string' && patch.name.trim()) target.name = patch.name.trim().slice(0, 100);
+        if (typeof patch.icon === 'string' && patch.icon.trim()) target.icon = patch.icon.trim().slice(0, 10);
+        if (typeof patch.isCollapsed === 'boolean') target.isCollapsed = patch.isCollapsed;
+        if (typeof patch.sortOrder === 'number' && Number.isFinite(patch.sortOrder)) target.sortOrder = patch.sortOrder;
+        await chrome.storage.local.set({ categories });
+        return { categories };
+      }
+
+      case 'applyGeneratedDecks': {
+        const decks: CategoryDeck[] = Array.isArray(payload?.decks) ? payload.decks : [];
+        const raw = await chrome.storage.local.get(['categories', 'manualAssignments', 'channelExclusions', 'channels']);
+        const categories = applyOverrides(
+          decks,
+          Array.isArray(raw.categories) ? raw.categories : [],
+          raw.manualAssignments || {},
+          raw.channelExclusions || {},
+          Object.values((raw.channels || {}) as Record<string, SubscribedChannel>)
+        ).filter(c => c.id !== '__uncategorized__');
+        await chrome.storage.local.set({ categories });
+        return { categories };
       }
 
       case 'clearOverrides': {
@@ -513,18 +479,114 @@ export class SubDeckStorage {
         return { channels, handleToUcId, channelExclusions, manualAssignments, categories };
       }
 
-      case 'syncSubscriptions': {
-        const { channels, handleToUcId, categories, lastScrapedAt } = payload;
-        const updates: any = {
-          channels,
-          handleToUcId,
-          lastScrapedAt,
-        };
-        if (categories) {
-          updates.categories = (categories as CategoryDeck[]).filter((c: CategoryDeck) => c.id !== '__uncategorized__');
+      case 'syncObservation': {
+        const discovered: SubscribedChannel[] = (Array.isArray(payload?.discovered) ? payload.discovered : [])
+          .filter((c: any) => c && typeof c === 'object' && typeof c.ucId === 'string' && c.ucId && typeof c.title === 'string');
+        const raw = await chrome.storage.local.get(['channels', 'categories', 'handleToUcId', SYNC_MISSING_KEY]);
+        const now = Date.now();
+        const result = computeSync(
+          {
+            channels: raw.channels && typeof raw.channels === 'object' ? raw.channels : {},
+            categories: (Array.isArray(raw.categories) ? raw.categories : []).filter((c: any) => c && typeof c === 'object' && c.id),
+            handleToUcId: raw.handleToUcId && typeof raw.handleToUcId === 'object' ? raw.handleToUcId : {},
+            missing: (raw[SYNC_MISSING_KEY] && typeof raw[SYNC_MISSING_KEY] === 'object' ? raw[SYNC_MISSING_KEY] : {}) as Record<string, MissingRecord>,
+          },
+          { discovered, sidebarComplete: payload?.sidebarComplete === true, now }
+        );
+        if (result.removalSkipped) {
+          Logger.warn('[SubShelf] Skipped unsubscribe reconciliation:', result.removalSkipped);
         }
-        await chrome.storage.local.set(updates);
-        return updates;
+        if (result.changed) {
+          await chrome.storage.local.set({
+            channels: result.next.channels,
+            categories: result.next.categories,
+            handleToUcId: result.next.handleToUcId,
+            [SYNC_MISSING_KEY]: result.next.missing,
+            lastScrapedAt: now,
+          });
+        }
+        return { changed: result.changed, added: result.added, removed: result.removed };
+      }
+
+      case 'mergeAvatars': {
+        const avatars = sanitizeAvatarMap(payload?.avatars);
+        if (avatars.size === 0) return { changed: false };
+        const raw = await chrome.storage.local.get(['channels', 'handleToUcId']);
+        const channels: Record<string, SubscribedChannel> = raw.channels || {};
+        const handleToUcId: Record<string, string> = raw.handleToUcId || {};
+        let changed = false;
+        for (const [key, url] of avatars) {
+          const ucId = key.startsWith('UC') ? key : handleToUcId[key] || handleToUcId['@' + key];
+          const ch = ucId ? channels[ucId] : undefined;
+          if (ch && ch.avatarUrl !== url) {
+            channels[ucId] = { ...ch, avatarUrl: url };
+            changed = true;
+          }
+        }
+        if (changed) await chrome.storage.local.set({ channels });
+        return { changed };
+      }
+
+      case 'importMerge': {
+        const inc = payload || {};
+        const incCategories: CategoryDeck[] = Array.isArray(inc.categories) ? inc.categories : [];
+        const raw = await chrome.storage.local.get(['categories', 'channels', 'handleToUcId', 'channelExclusions', 'manualAssignments']);
+
+        const mergeLists = (a: Record<string, string[]> = {}, b: Record<string, string[]> = {}) => {
+          const out: Record<string, string[]> = { ...a };
+          for (const [k, v] of Object.entries(b)) {
+            if (!Array.isArray(v)) continue;
+            out[k] = [...new Set([...(out[k] ?? []), ...v])].slice(0, 100);
+          }
+          return out;
+        };
+
+        const categories: CategoryDeck[] = (Array.isArray(raw.categories) ? raw.categories : []).map((d: CategoryDeck) => {
+          const match = incCategories.find(x => x.id === d.id);
+          return match
+            ? { ...d, channelIds: [...new Set([...d.channelIds, ...match.channelIds])].slice(0, MAX_CHANNELS_PER_CATEGORY) }
+            : d;
+        });
+        const have = new Set(categories.map(d => d.id));
+        for (const d of incCategories) {
+          if (!have.has(d.id)) categories.push(d);
+        }
+
+        const next = {
+          categories,
+          channels: { ...(raw.channels ?? {}), ...(inc.channels ?? {}) },
+          handleToUcId: { ...(raw.handleToUcId ?? {}), ...(inc.handleToUcId ?? {}) },
+          channelExclusions: mergeLists(raw.channelExclusions, inc.channelExclusions),
+          manualAssignments: mergeLists(raw.manualAssignments, inc.manualAssignments),
+        };
+        await chrome.storage.local.set(next);
+        return { categories: next.categories.length, channels: Object.keys(next.channels).length };
+      }
+
+      case 'updateSettings': {
+        const partial = { ...(payload || {}) };
+        delete partial.apiKey;
+        const raw = await chrome.storage.local.get('settings');
+        const settings = { ...DEFAULT_STORAGE.settings, ...(raw.settings || {}), ...partial };
+        delete settings.apiKey;
+        await chrome.storage.local.set({ settings });
+        return { settings };
+      }
+
+      case 'normalize': {
+        const raw = await chrome.storage.local.get(Object.keys(DEFAULT_STORAGE));
+        if (!raw || Object.keys(raw).length === 0) return { dirty: false };
+        const { data, dirty } = normalizeState(raw);
+        if (dirty) {
+          await chrome.storage.local.set({
+            channels: data.channels,
+            categories: data.categories,
+            handleToUcId: data.handleToUcId,
+            manualAssignments: data.manualAssignments,
+            channelExclusions: data.channelExclusions,
+          });
+        }
+        return { dirty };
       }
 
       default:
@@ -546,13 +608,13 @@ export class SubDeckStorage {
     await this.requestMutation('removeChannel', { ucId });
   }
 
-  static async syncSubscriptions(payload: {
-    channels: Record<string, SubscribedChannel>;
-    handleToUcId: Record<string, string>;
-    categories?: CategoryDeck[];
-    lastScrapedAt: number;
-  }): Promise<void> {
-    await this.requestMutation('syncSubscriptions', payload);
+  /** Reports what the page shows; the service worker reconciles it against fresh storage. */
+  static async syncObservation(discovered: SubscribedChannel[], sidebarComplete: boolean): Promise<{ changed: boolean; added: string[]; removed: string[] } | null> {
+    return this.requestMutation('syncObservation', { discovered, sidebarComplete });
+  }
+
+  static async mergeAvatars(avatars: Record<string, string>): Promise<{ changed: boolean } | null> {
+    return this.requestMutation('mergeAvatars', { avatars });
   }
 
   static async getCategories(): Promise<CategoryDeck[]> {
@@ -587,8 +649,18 @@ export class SubDeckStorage {
     await this.requestMutation('createCategory', { category });
   }
 
-  static async saveCategories(categories: CategoryDeck[]): Promise<void> {
-    await this.requestMutation('saveCategories', { categories });
+  /** Patches one folder in place (name, icon, collapsed state, order). */
+  static async updateCategory(
+    categoryId: string,
+    patch: Partial<Pick<CategoryDeck, 'name' | 'icon' | 'isCollapsed' | 'sortOrder'>>
+  ): Promise<void> {
+    await this.requestMutation('updateCategory', { categoryId, patch });
+  }
+
+  /** Merges AI/heuristic output with the user's overrides against fresh storage inside the queue. */
+  static async applyGeneratedDecks(decks: CategoryDeck[]): Promise<CategoryDeck[]> {
+    const res = await this.requestMutation('applyGeneratedDecks', { decks });
+    return res?.categories ?? [];
   }
 
   static async clearOverrides(): Promise<void> {
@@ -613,18 +685,11 @@ export class SubDeckStorage {
   }
 
   static async updateSettings(partial: Partial<SubDeckStorageSchema['settings']>): Promise<void> {
-    if (!this.isContextValid()) return;
-    const data = await chrome.storage.local.get('settings');
-    const current = data.settings || structuredClone(DEFAULT_STORAGE.settings);
-    const sanitizedPartial = { ...partial };
-    delete sanitizedPartial.apiKey;
-    const settings = { ...current, ...sanitizedPartial };
-    await chrome.storage.local.set({ settings });
+    await this.requestMutation('updateSettings', partial);
   }
 
   /**
-   * Securely retrieves the Gemini API key from isolated storage.
-   * Direct access is strictly blocked from YouTube content scripts.
+   * Retrieves the Gemini API key. Only the service worker and extension pages call this.
    */
   static async getApiKey(): Promise<string | undefined> {
     if (!this.isContextValid() || this.isContentScript()) {
@@ -639,8 +704,7 @@ export class SubDeckStorage {
   }
 
   /**
-   * Securely saves or removes the Gemini API key in isolated storage.
-   * Modification is strictly blocked from YouTube content scripts.
+   * Saves or removes the Gemini API key. Only the service worker and extension pages call this.
    */
   static async setApiKey(apiKey: string): Promise<void> {
     if (!this.isContextValid() || this.isContentScript()) {

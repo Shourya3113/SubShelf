@@ -2,207 +2,55 @@ import { ChannelExtractor } from './channelExtractor';
 import { SubDeckStorage } from '@/utils/storage';
 import { SidebarManager } from './sidebarManager';
 import { Logger } from '@/utils/logger';
-import { CategoryDeck, SubscribedChannel } from '@/types';
-import { HeuristicCategorizer } from '@/ai/heuristic';
+import { SubscribedChannel } from '@/types';
 import { isSystemChannelOrCurator } from '@/utils/systemChannels';
 
 export class SubscriptionSync {
   private static isSyncing = false;
+  private static rerunRequested = false;
+  private static pendingChannels: SubscribedChannel[] = [];
 
+  /**
+   * Reports the channels visible on the page to the service worker, which reconciles them against
+   * fresh storage inside its write queue. Calls arriving mid-sync are coalesced into one more pass
+   * so channels broadcast from YouTube's guide payload are never dropped.
+   */
   static async diffAndSync(additionalChannels: SubscribedChannel[] = []): Promise<void> {
     if (!SubDeckStorage.isContextValid()) return;
-    if (this.isSyncing) return;
+    if (additionalChannels.length > 0) this.pendingChannels.push(...additionalChannels);
+    if (this.isSyncing) {
+      this.rerunRequested = true;
+      return;
+    }
     this.isSyncing = true;
 
     try {
-      const state = await SubDeckStorage.getAll();
-      const currentChannels = { ...(state.channels || {}) };
-      const categories: CategoryDeck[] = (state.categories || []).map(c => ({
-        ...c,
-        channelIds: Array.isArray(c?.channelIds) ? [...c.channelIds] : [],
-      }));
-      const handleToUcId = { ...(state.handleToUcId || {}) };
-
-      // Scrape from sidebar passing known handleToUcId map so handles resolve to UC IDs immediately
-      const scraped = ChannelExtractor.scrapeFromSidebar(handleToUcId);
-
-      // Build unified handleToUcId map from both sources and storage
-      for (const ch of [...additionalChannels, ...scraped]) {
-        if (ch.ucId?.startsWith('UC') && ch.handle) {
-          const h = ch.handle.toLowerCase();
-          handleToUcId[h] = ch.ucId;
-          handleToUcId['@' + h.replace(/^@/, '')] = ch.ucId;
-        }
-      }
-
-      // Canonicalize and deduplicate incoming channels
-      const allDiscovered: SubscribedChannel[] = [];
-      const seenCanonicalKeys = new Set<string>();
-
-      for (const ch of [...additionalChannels, ...scraped]) {
-        // STRICT FILTER: Never process YouTube system topics or feed curators
-        if (isSystemChannelOrCurator(ch)) continue;
-
-        const cleanHandle = ch.handle ? (ch.handle.startsWith('@') ? ch.handle.toLowerCase() : '@' + ch.handle.toLowerCase()) : '';
-        const canonicalId = (ch.ucId?.startsWith('UC') ? ch.ucId : (handleToUcId[cleanHandle] || ch.ucId))?.trim();
-        const dedupeKey = canonicalId?.startsWith('UC') ? canonicalId : (cleanHandle || ch.title.toLowerCase().trim());
-
-        if (seenCanonicalKeys.has(dedupeKey)) continue;
-        seenCanonicalKeys.add(dedupeKey);
-
-        allDiscovered.push({
-          ...ch,
-          ucId: canonicalId || ch.ucId,
-          handle: cleanHandle || ch.handle,
-        });
-      }
-
-      let hasChanges = false;
-
-      // Purge any previously stored system curator channels from currentChannels
-      const purgedSystemIds = new Set<string>();
-      for (const [key, ch] of Object.entries(currentChannels)) {
-        if (isSystemChannelOrCurator(ch) || isSystemChannelOrCurator({ ucId: key, title: ch.title, handle: ch.handle, url: ch.url })) {
-          delete currentChannels[key];
-          purgedSystemIds.add(key);
-          if (ch.ucId) purgedSystemIds.add(ch.ucId);
-          hasChanges = true;
-        }
-      }
-      if (purgedSystemIds.size > 0) {
-        categories.forEach(cat => {
-          if (Array.isArray(cat.channelIds)) {
-            const before = cat.channelIds.length;
-            cat.channelIds = cat.channelIds.filter(id => !purgedSystemIds.has(id));
-            if (cat.channelIds.length !== before) hasChanges = true;
-          }
-        });
-      }
-
-      if (allDiscovered.length === 0 && !hasChanges) return;
-
-      const newChannels: SubscribedChannel[] = [];
-
-      // 1. Reconcile new subscriptions & migrate any legacy handle-keyed entries
-      for (const ch of allDiscovered) {
-        const cleanHandle = ch.handle ? ch.handle.toLowerCase() : '';
-        const canonUcId = ch.ucId;
-
-        // Check if a legacy record exists under the handle key (e.g. key is "@apple")
-        if (cleanHandle && currentChannels[cleanHandle] && canonUcId.startsWith('UC') && cleanHandle !== canonUcId) {
-          currentChannels[canonUcId] = {
-            ...currentChannels[cleanHandle],
-            ...ch,
-            ucId: canonUcId,
-          };
-          delete currentChannels[cleanHandle];
-          hasChanges = true;
-          // Remap category references from handle to UC ID
-          categories.forEach(cat => {
-            if (Array.isArray(cat.channelIds)) {
-              cat.channelIds = cat.channelIds.map(id => id.toLowerCase() === cleanHandle ? canonUcId : id);
-            }
-          });
-        }
-
-        if (!currentChannels[canonUcId]) {
-          currentChannels[canonUcId] = ch;
-          if (cleanHandle) {
-            handleToUcId[cleanHandle] = canonUcId;
-            handleToUcId['@' + cleanHandle.replace(/^@/, '')] = canonUcId;
-          }
-          newChannels.push(ch);
-          hasChanges = true;
-          Logger.info(`[SubShelf] Discovered new subscription: ${ch.title} (${canonUcId})`);
-        } else {
-          // Update avatar URL or handle if improved
-          if (ch.avatarUrl && ch.avatarUrl !== currentChannels[canonUcId].avatarUrl) {
-            currentChannels[canonUcId].avatarUrl = ch.avatarUrl;
-            hasChanges = true;
-          }
-          if (cleanHandle && !handleToUcId[cleanHandle]) {
-            handleToUcId[cleanHandle] = canonUcId;
-            handleToUcId['@' + cleanHandle.replace(/^@/, '')] = canonUcId;
-            hasChanges = true;
-          }
-        }
-      }
-
-      // 2. Auto-categorize newly discovered channels if folders already exist
-      if (newChannels.length > 0 && categories.length > 0) {
-        const heuristicResults = HeuristicCategorizer.categorize(newChannels);
-        for (const deck of heuristicResults) {
-          const existingCat = categories.find(c => c.id === deck.id);
-          if (existingCat) {
-            if (!Array.isArray(existingCat.channelIds)) {
-              existingCat.channelIds = [];
-            }
-            for (const id of deck.channelIds || []) {
-              if (!existingCat.channelIds.includes(id)) {
-                existingCat.channelIds.push(id);
-              }
-            }
-          }
-        }
-      }
-
-      // Deduplicate category channel IDs
-      categories.forEach(cat => {
-        if (Array.isArray(cat.channelIds)) {
-          const deduped = Array.from(new Set(cat.channelIds));
-          if (deduped.length !== cat.channelIds.length) {
-            cat.channelIds = deduped;
-            hasChanges = true;
-          }
-        }
-      });
-
-      // 3. Reconcile deleted/unsubscribed channels if sidebar is fully expanded
-      if (ChannelExtractor.isSidebarFullyExpanded()) {
-        const scrapedUcIds = new Set(allDiscovered.map(c => c.ucId));
-        const scrapedHandles = new Set(allDiscovered.map(c => (c.handle || '').toLowerCase()));
-
-        for (const [ucId, ch] of Object.entries(currentChannels)) {
-          const handleLower = (ch.handle || '').toLowerCase();
-          if (!scrapedUcIds.has(ucId) && !scrapedHandles.has(handleLower)) {
-            // Channel was unsubscribed
-            delete currentChannels[ucId];
-            if (ch.handle) delete handleToUcId[ch.handle];
-            categories.forEach(cat => {
-              if (Array.isArray(cat.channelIds)) {
-                cat.channelIds = cat.channelIds.filter(id => id !== ucId);
-              } else {
-                cat.channelIds = [];
-              }
-            });
-            hasChanges = true;
-            Logger.info(`[SubShelf] Removed unsubscribed channel: ${ch.title} (${ucId})`);
-          }
-        }
-      }
-
-      // 4. Purge any legacy __uncategorized__ deck from categories
-      const cleanCategories = categories.filter(c => c.id !== '__uncategorized__');
-      if (cleanCategories.length !== categories.length) {
-        hasChanges = true;
-      }
-
-      if (hasChanges) {
-        // Atomic storage update serialized through write queue
-        await SubDeckStorage.syncSubscriptions({
-          channels: currentChannels,
-          handleToUcId,
-          categories: cleanCategories,
-          lastScrapedAt: Date.now(),
-        });
-
-        await SidebarManager.render();
-      }
+      do {
+        this.rerunRequested = false;
+        await this.runSyncPass(this.pendingChannels.splice(0));
+      } while (this.rerunRequested && SubDeckStorage.isContextValid());
     } catch (err) {
       Logger.error('Error during subscription sync:', err);
     } finally {
       this.isSyncing = false;
     }
+  }
+
+  private static async runSyncPass(additionalChannels: SubscribedChannel[]): Promise<void> {
+    // Resolve handles to UC IDs with the known map so sidebar entries match stored records
+    const handleToUcId = await SubDeckStorage.getHandleToUcIdMap();
+    const scraped = ChannelExtractor.scrapeFromSidebar(handleToUcId);
+
+    const discovered = [...additionalChannels, ...scraped].filter(ch => !isSystemChannelOrCurator(ch));
+    if (discovered.length === 0) return;
+
+    // Only a non-empty scrape of the fully expanded list may count toward unsubscribe detection
+    const sidebarComplete = scraped.length > 0 && ChannelExtractor.isSidebarFullyExpanded();
+
+    const result = await SubDeckStorage.syncObservation(discovered, sidebarComplete);
+    if (result?.added.length) Logger.info(`[SubShelf] Discovered ${result.added.length} new subscription(s)`);
+    if (result?.removed.length) Logger.info(`[SubShelf] Removed ${result.removed.length} unsubscribed channel(s)`);
+    if (result?.changed) await SidebarManager.render();
   }
 
   /**
@@ -261,30 +109,13 @@ export class SubscriptionSync {
   }
 
   /**
-   * Safely merges sanitized avatar maps received via broadcast events into storage.
+   * Sends sanitized avatar maps to the service worker, which applies them to fresh storage.
    */
   static async mergeAvatars(avatarMap: Map<string, string>): Promise<void> {
     if (!SubDeckStorage.isContextValid() || avatarMap.size === 0) return;
     try {
-      const state = await SubDeckStorage.getAll();
-      const currentChannels = { ...(state.channels || {}) };
-      const handleToUcId = state.handleToUcId || {};
-      let hasChanges = false;
-
-      for (const [key, url] of avatarMap.entries()) {
-        const ucId = key.startsWith('UC') ? key : handleToUcId[key] || handleToUcId['@' + key];
-        if (ucId && currentChannels[ucId]) {
-          if (!currentChannels[ucId].avatarUrl || currentChannels[ucId].avatarUrl !== url) {
-            currentChannels[ucId].avatarUrl = url;
-            hasChanges = true;
-          }
-        }
-      }
-
-      if (hasChanges) {
-        await SubDeckStorage.update(['channels'], () => ({ channels: currentChannels }));
-        SidebarManager.render();
-      }
+      const res = await SubDeckStorage.mergeAvatars(Object.fromEntries(avatarMap));
+      if (res?.changed) SidebarManager.render();
     } catch {}
   }
 }

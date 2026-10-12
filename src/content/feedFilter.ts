@@ -4,7 +4,11 @@ import { CategoryDeck } from '@/types';
 import { IdNormalizer } from '@/utils/idNormalizer';
 import { buildFeedTargets, cardMatches } from '@/utils/feedMatch';
 
-const FILTERED_CLASS = 'subshelf-filtered-out';
+// While a folder filter is active the grid carries FILTERING_CLASS and CSS hides every card except
+// those marked MATCH_CLASS, so cards YouTube appends are hidden from the moment they are inserted
+// (hiding non-matches after a debounce made each new batch flash the whole feed).
+const FILTERING_CLASS = 'subshelf-filtering';
+const MATCH_CLASS = 'subshelf-match';
 const SHORTS_CLASS = 'subshelf-shorts-hidden';
 const PAUSED_CLASS = 'subshelf-loading-paused';
 const ACTIVE_KEY = 'subshelf.activeCategoryId';
@@ -115,15 +119,15 @@ export class FeedFilter {
     const root = this.feedRoot();
     if (!root) return;
 
-    // Shelves (Shorts, "Latest" headers) never belong to a single folder
-    root.querySelectorAll<HTMLElement>('ytd-rich-section-renderer').forEach(s => s.classList.add(FILTERED_CLASS));
+    // Shelves (Shorts, "Latest" headers) never belong to a single folder; CSS hides them while filtering
+    root.classList.add(FILTERING_CLASS);
 
     let visible = 0;
     for (const card of this.gridItems()) {
       if (card.closest('ytd-rich-section-renderer')) continue;
       const anchor = card.querySelector<HTMLAnchorElement>('a[href^="/@"], a[href*="/channel/UC"]');
       const match = anchor ? cardMatches(IdNormalizer.extractFromAnchor(anchor), this.targets) : false;
-      card.classList.toggle(FILTERED_CLASS, !match);
+      card.classList.toggle(MATCH_CLASS, match);
       if (match && !card.classList.contains(SHORTS_CLASS)) visible++;
     }
 
@@ -153,7 +157,8 @@ export class FeedFilter {
   }
 
   static clearFilter(): void {
-    document.querySelectorAll(`.${FILTERED_CLASS}`).forEach(el => el.classList.remove(FILTERED_CLASS));
+    document.querySelectorAll(`.${FILTERING_CLASS}`).forEach(el => el.classList.remove(FILTERING_CLASS));
+    document.querySelectorAll(`.${MATCH_CLASS}`).forEach(el => el.classList.remove(MATCH_CLASS));
     document.querySelectorAll(`.${PAUSED_CLASS}`).forEach(el => el.classList.remove(PAUSED_CLASS));
     this.loadingPaused = false;
   }

@@ -599,7 +599,9 @@ html[dark],
 }
 
 /* Feed curation: classes rather than inline styles so the folder filter and Hide Shorts never undo each other */
-.subshelf-filtered-out,
+.subshelf-filtering ytd-rich-item-renderer:not(.subshelf-match),
+.subshelf-filtering ytd-grid-video-renderer:not(.subshelf-match),
+.subshelf-filtering ytd-rich-section-renderer,
 .subshelf-shorts-hidden,
 .subshelf-loading-paused ytd-continuation-item-renderer {
   display: none !important;

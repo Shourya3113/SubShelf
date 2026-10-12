@@ -220,7 +220,7 @@ export class SidebarManager {
       }
     }
 
-    const activeCategory = allState.activeCategoryId;
+    const activeCategory = FeedFilter.getActiveCategoryId();
     const uniqueChannelKeys = new Set<string>();
     for (const ch of Object.values(channelsMap)) {
       if (!ch || isSystemChannelOrCurator(ch)) continue;
@@ -435,8 +435,7 @@ export class SidebarManager {
     showAllBtn.className = 'subdeck-clear-filter';
     showAllBtn.addEventListener('click', async () => {
       document.querySelectorAll('.subdeck-folder-header').forEach(el => el.classList.remove('active-filter'));
-      await SubDeckStorage.setActiveCategoryId(null);
-      FeedFilter.setCategory(null);
+      await FeedFilter.setCategory(null);
       if (!window.location.pathname.startsWith('/feed/subscriptions')) {
         SidebarManager.navigateToSubscriptionsFeed();
       }
@@ -799,7 +798,7 @@ export class SidebarManager {
             header.classList.add('active-filter');
             FeedFilter.setCategory(cat);
           } else {
-            await SubDeckStorage.setActiveCategoryId(cat.id);
+            FeedFilter.setActiveCategoryId(cat.id);
             SidebarManager.navigateToSubscriptionsFeed();
           }
         });

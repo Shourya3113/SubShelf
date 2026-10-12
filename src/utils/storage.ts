@@ -673,11 +673,6 @@ export class SubDeckStorage {
     return (data.handleToUcId && typeof data.handleToUcId === 'object') ? data.handleToUcId : {};
   }
 
-  static async setActiveCategoryId(id: string | null): Promise<void> {
-    if (!this.isContextValid()) return;
-    await chrome.storage.local.set({ activeCategoryId: id });
-  }
-
   static async getSettings(): Promise<SubDeckStorageSchema['settings']> {
     if (!this.isContextValid()) return structuredClone(DEFAULT_STORAGE.settings);
     const data = await chrome.storage.local.get('settings');

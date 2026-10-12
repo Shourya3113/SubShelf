@@ -104,20 +104,25 @@ export function isSystemChannelOrCurator(channel: ChannelIdentityCandidate | nul
     if (cleanId.startsWith('FE') || cleanId.startsWith('VL')) return true;
   }
 
-  // 2. Check Channel Title
-  if (title && typeof title === 'string') {
-    const cleanTitle = title.toLowerCase().trim();
-    if (SYSTEM_TITLES.has(cleanTitle)) return true;
-    if (/^youtube\s+(gaming|music|sports|news|movies|live|kids|tv|premium|studio)/i.test(cleanTitle)) {
-      return true;
+  // 2-3. Generic words ("History", "News", "Help") only identify navigation entries, which have no
+  //      channel ID. A real UC ID means a real creator (e.g. the HISTORY channel, @news).
+  const hasChannelId = typeof ucId === 'string' && ucId.trim().startsWith('UC');
+  if (!hasChannelId) {
+    // 2. Check Channel Title
+    if (title && typeof title === 'string') {
+      const cleanTitle = title.toLowerCase().trim();
+      if (SYSTEM_TITLES.has(cleanTitle)) return true;
+      if (/^youtube\s+(gaming|music|sports|news|movies|live|kids|tv|premium|studio)/i.test(cleanTitle)) {
+        return true;
+      }
     }
-  }
 
-  // 3. Check Channel Handle
-  if (handle && typeof handle === 'string') {
-    const cleanHandle = handle.toLowerCase().replace(/^[\/@]+/, '').trim();
-    if (SYSTEM_HANDLES.has(cleanHandle)) return true;
-    if (SYSTEM_TITLES.has(cleanHandle)) return true;
+    // 3. Check Channel Handle
+    if (handle && typeof handle === 'string') {
+      const cleanHandle = handle.toLowerCase().replace(/^[\/@]+/, '').trim();
+      if (SYSTEM_HANDLES.has(cleanHandle)) return true;
+      if (SYSTEM_TITLES.has(cleanHandle)) return true;
+    }
   }
 
   // 4. Check URL

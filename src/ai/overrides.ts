@@ -20,9 +20,14 @@ export function applyOverrides(
   const systemIds = new Set<string>([...SUBDECK_TAXONOMY.map(t => t.id), '__uncategorized__']);
   const decks = new Map<string, CategoryDeck>();
 
-  // 1) Fresh generated (system) decks
+  // 1) Fresh generated (system) decks; membership is regenerated, but the user's customizations
+  //    of an existing folder (name, icon, color, collapsed state, order) are kept
   for (const d of (generated || [])) {
-    decks.set(d.id, { ...d, isSystem: true, channelIds: [...(d.channelIds || [])] });
+    const prior = (existing || []).find(x => x.id === d.id);
+    const custom = prior
+      ? { name: prior.name, icon: prior.icon, color: prior.color, isCollapsed: prior.isCollapsed, sortOrder: prior.sortOrder }
+      : {};
+    decks.set(d.id, { ...d, ...custom, isSystem: true, channelIds: [...(d.channelIds || [])] });
   }
 
   // 2) Carry over USER-created decks only (never old system decks)

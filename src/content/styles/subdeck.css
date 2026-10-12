@@ -598,6 +598,13 @@ html[dark],
   background: var(--sd-bg-hover);
 }
 
+/* Feed curation: classes rather than inline styles so the folder filter and Hide Shorts never undo each other */
+.subshelf-filtered-out,
+.subshelf-shorts-hidden,
+.subshelf-continuation-parked {
+  display: none !important;
+}
+
 /* --------------------------------------------------------------------------
    RESPONSIVE
    -------------------------------------------------------------------------- */

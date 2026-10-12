@@ -228,12 +228,14 @@ export class AICategorizer {
     const settings = state.settings || structuredClone(DEFAULT_STORAGE.settings);
     const apiKey = apiKeyOverride || (typeof window === 'undefined' ? await SubDeckStorage.getApiKey() : undefined);
     const requested: AIProvider = (settings.aiProvider as AIProvider) ?? 'gemini-nano';
+    // Never escalate to the cloud on the user's behalf: channel names leave the device only when
+    // "gemini-api" is explicitly selected (the privacy policy promises Nano makes no network requests).
     const order: AIProvider[] =
       requested === 'heuristic'
         ? ['heuristic']
         : requested === 'gemini-api'
         ? ['gemini-api', 'heuristic']
-        : ['gemini-nano', 'gemini-api', 'heuristic'];
+        : ['gemini-nano', 'heuristic'];
 
     const failures: string[] = [];
     for (const p of order) {

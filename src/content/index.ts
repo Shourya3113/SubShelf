@@ -83,25 +83,29 @@ class SubShelfCoordinator {
     try {
       chrome.storage.onChanged.addListener((changes, area) => {
         if (!SubDeckStorage.isContextValid()) return;
-        if (area === 'local' && (changes.categories || changes.channels)) {
+        if (area !== 'local') return;
+        if (changes.categories || changes.channels) {
           SidebarManager.render();
+        }
+        if (changes.categories || changes.channels || changes.handleToUcId) {
+          FeedFilter.refreshFromStorage();
+        }
+        if (changes.settings) {
+          FeedFilter.setHideShorts(Boolean(changes.settings.newValue?.hideShortsFromFeed));
         }
       });
     } catch {}
 
-    // Detect unsubscribe confirmation dialog clicks on YouTube pages
+    SubDeckStorage.getSettings()
+      .then(s => FeedFilter.setHideShorts(Boolean(s.hideShortsFromFeed)))
+      .catch(() => {});
+
+    // A confirm dialog can be anything (delete playlist, clear history, ...), so it only triggers a
+    // sync; sync removals are guarded, and explicit unsubscribes are handled via yt-action below.
     document.addEventListener('click', (e) => {
       if (!SubDeckStorage.isContextValid()) return;
       const target = e.target as HTMLElement | null;
-      if (!target) return;
-      const confirmBtn = target.closest('#confirm-button, yt-confirm-dialog-renderer #confirm-button');
-      if (confirmBtn) {
-        // Unsubscribe confirmed — remove channel by current page URL and also run full sync
-        const currentUrl = window.location.href;
-        setTimeout(() => {
-          if (!SubDeckStorage.isContextValid()) return;
-          SubscriptionSync.removeChannelByUrl(currentUrl);
-        }, 800);
+      if (target?.closest('#confirm-button, yt-confirm-dialog-renderer #confirm-button')) {
         setTimeout(() => {
           if (!SubDeckStorage.isContextValid()) return;
           SubscriptionSync.diffAndSync();
@@ -198,21 +202,9 @@ class SubShelfCoordinator {
         }
         await SubscriptionSync.diffAndSync();
 
-        // Manage feed filter state across navigation
-        if (window.location.pathname.startsWith('/feed/subscriptions')) {
-          const state = await SubDeckStorage.getAll();
-          if (state.activeCategoryId) {
-            const cat = (state.categories || []).find(c => c.id === state.activeCategoryId);
-            if (cat) {
-              await FeedFilter.setCategory(cat);
-            }
-          }
-        } else {
-          // Outside subscriptions page, cleanly tear down feed filter, observer, and banner
-          await SubDeckStorage.setActiveCategoryId(null);
-          FeedFilter.clearFilter();
-          FeedFilter.removeBanner();
-          FeedFilter.stopObserving();
+        // Feed filter state is per tab: re-apply it on the subscriptions feed, tear it down elsewhere
+        await FeedFilter.onNavigation(await SubDeckStorage.getCategories());
+        if (!window.location.pathname.startsWith('/feed/subscriptions')) {
           SidebarManager.clearActiveFilterHighlight();
         }
       }

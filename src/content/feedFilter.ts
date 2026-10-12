@@ -1,129 +1,187 @@
-import { YT_SELECTORS } from '@/config/selectors';
 import { SubDeckStorage } from '@/utils/storage';
 import { debounce } from '@/utils/debounce';
 import { CategoryDeck } from '@/types';
 import { IdNormalizer } from '@/utils/idNormalizer';
+import { buildFeedTargets, cardMatches } from '@/utils/feedMatch';
+
+const FILTERED_CLASS = 'subshelf-filtered-out';
+const SHORTS_CLASS = 'subshelf-shorts-hidden';
+const PARKED_CLASS = 'subshelf-continuation-parked';
+const ACTIVE_KEY = 'subshelf.activeCategoryId';
+
+/** Below this many matches YouTube keeps auto-loading (its continuation stays on screen). */
+const MIN_VISIBLE = 12;
+/** Cards YouTube may load per "Load more" step before loading is paused for sparse folders. */
+const LOAD_BUDGET_STEP = 300;
+
+const onSubscriptionsFeed = () => window.location.pathname.startsWith('/feed/subscriptions');
 
 export class FeedFilter {
   private static activeCategory: CategoryDeck | null = null;
+  private static targets = new Set<string>();
+  private static hideShorts = false;
   private static observer: MutationObserver | null = null;
   private static bannerId = 'subdeck-feed-banner';
-  private static isScrolling = false;
-  private static scrollAttempts = 0;
-  private static readonly MAX_SCROLL_ATTEMPTS = 3;
+  private static loadedAtStart = 0;
+  private static loadBudget = LOAD_BUDGET_STEP;
 
-  static async setCategory(category: CategoryDeck | null): Promise<void> {
-    if (!SubDeckStorage.isContextValid()) return;
-    this.activeCategory = category;
-    this.scrollAttempts = 0;
-    await SubDeckStorage.setActiveCategoryId(category ? category.id : null);
+  // ---- Per-tab active folder (sessionStorage is per tab, so tabs no longer clear each other) ----
 
-    if (!category) {
-      this.clearFilter();
-      this.removeBanner();
-      this.stopObserving();
-      return;
+  static getActiveCategoryId(): string | null {
+    try {
+      return window.sessionStorage.getItem(ACTIVE_KEY);
+    } catch {
+      return null;
     }
+  }
 
-    this.renderBanner(category);
-    this.applyFilter();
-    this.startObserving();
+  static setActiveCategoryId(id: string | null): void {
+    try {
+      if (id) window.sessionStorage.setItem(ACTIVE_KEY, id);
+      else window.sessionStorage.removeItem(ACTIVE_KEY);
+    } catch {
+      // Storage blocked: the filter still works for this page view
+    }
   }
 
   static getActiveCategory(): CategoryDeck | null {
     return this.activeCategory;
   }
 
-  static applyFilter(): void {
+  // ---- Folder filter ----
+
+  static async setCategory(category: CategoryDeck | null): Promise<void> {
     if (!SubDeckStorage.isContextValid()) return;
-    if (!window.location.pathname.startsWith('/feed/subscriptions')) return;
-    if (!this.activeCategory) return;
+    this.activeCategory = category;
+    this.setActiveCategoryId(category ? category.id : null);
 
-    const cards = document.querySelectorAll<HTMLElement>(
-      `${YT_SELECTORS.richItemRenderer}, ${YT_SELECTORS.richSectionRenderer}, ytd-grid-video-renderer`
-    );
+    if (!category) {
+      this.clearFilter();
+      this.removeBanner();
+      this.syncObserver();
+      return;
+    }
 
-    if (cards.length === 0) return;
+    this.loadedAtStart = this.gridItems().length;
+    this.loadBudget = LOAD_BUDGET_STEP;
+    await this.refreshTargets();
+    this.renderBanner(category);
+    this.applyFilter();
+    this.syncObserver();
+  }
 
-    const targetChannelIds = new Set(this.activeCategory.channelIds);
-    let visibleCount = 0;
-
-    cards.forEach(card => {
-      // Handle Shorts shelf or rich section
-      if (card.tagName.toLowerCase() === YT_SELECTORS.richSectionRenderer.toLowerCase()) {
-        card.style.display = 'none';
-        return;
-      }
-
-      const anchor = card.querySelector<HTMLAnchorElement>(
-        `${YT_SELECTORS.channelNameLink}, #channel-name a, a[href*="/@"], a[href*="/channel/"]`
-      );
-
-      if (!anchor) {
-        card.style.display = 'none';
-        return;
-      }
-
-      const { ucId, handle } = IdNormalizer.extractFromAnchor(anchor);
-      const isMatch =
-        (ucId && targetChannelIds.has(ucId)) ||
-        (handle && targetChannelIds.has(handle));
-
-      if (isMatch) {
-        card.style.display = '';
-        visibleCount++;
-      } else {
-        card.style.display = 'none';
-      }
-    });
-
-    this.updateBannerStatus(visibleCount);
-
-    // Medium #7: pull more content if few matches in view, without disrupting viewport
-    if (visibleCount < 6 && !this.isScrolling && this.scrollAttempts < this.MAX_SCROLL_ATTEMPTS) {
-      this.scrollAttempts++;
-      this.triggerInfiniteScroll();
+  /** Re-reads the active folder after storage changes (membership edits, rename, deletion). */
+  static async refreshFromStorage(): Promise<void> {
+    if (!this.activeCategory || !SubDeckStorage.isContextValid()) return;
+    const fresh = (await SubDeckStorage.getCategories()).find(c => c.id === this.activeCategory?.id);
+    if (!fresh) {
+      await this.setCategory(null);
+      return;
+    }
+    this.activeCategory = fresh;
+    await this.refreshTargets();
+    if (onSubscriptionsFeed()) {
+      this.renderBanner(fresh);
+      this.applyFilter();
     }
   }
 
+  private static async refreshTargets(): Promise<void> {
+    const cat = this.activeCategory;
+    if (!cat) return;
+    const [channels, handleToUcId] = await Promise.all([
+      SubDeckStorage.getChannels(),
+      SubDeckStorage.getHandleToUcIdMap(),
+    ]);
+    this.targets = buildFeedTargets(cat.channelIds, channels, handleToUcId);
+  }
+
+  private static feedRoot(): Element | null {
+    return document.querySelector('ytd-browse[page-subtype="subscriptions"] ytd-rich-grid-renderer');
+  }
+
+  private static gridItems(): HTMLElement[] {
+    const root = this.feedRoot();
+    return root ? Array.from(root.querySelectorAll<HTMLElement>('ytd-rich-item-renderer, ytd-grid-video-renderer')) : [];
+  }
+
+  static applyFilter(): void {
+    if (!SubDeckStorage.isContextValid() || !onSubscriptionsFeed()) return;
+    this.applyShorts();
+    if (!this.activeCategory) return;
+
+    const root = this.feedRoot();
+    if (!root) return;
+
+    // Shelves (Shorts, "Latest" headers) never belong to a single folder
+    root.querySelectorAll<HTMLElement>('ytd-rich-section-renderer').forEach(s => s.classList.add(FILTERED_CLASS));
+
+    let visible = 0;
+    for (const card of this.gridItems()) {
+      if (card.closest('ytd-rich-section-renderer')) continue;
+      const anchor = card.querySelector<HTMLAnchorElement>('a[href^="/@"], a[href*="/channel/UC"]');
+      const match = anchor ? cardMatches(IdNormalizer.extractFromAnchor(anchor), this.targets) : false;
+      card.classList.toggle(FILTERED_CLASS, !match);
+      if (match && !card.classList.contains(SHORTS_CLASS)) visible++;
+    }
+
+    this.manageLoading(root, visible);
+    this.updateBannerStatus(visible);
+  }
+
+  /**
+   * Hiding cards pulls YouTube's continuation spinner into view, which makes YouTube load more by
+   * itself. For sparse folders that would never stop, so loading pauses after a budget of cards.
+   */
+  private static manageLoading(root: Element, visible: number): void {
+    const loadedSinceStart = this.gridItems().length - this.loadedAtStart;
+    const pause = visible < MIN_VISIBLE && loadedSinceStart >= this.loadBudget;
+    root.querySelectorAll<HTMLElement>('ytd-continuation-item-renderer').forEach(c => c.classList.toggle(PARKED_CLASS, pause));
+    const loadMore = document.getElementById('subdeck-feed-load-more');
+    if (loadMore) loadMore.style.display = pause ? '' : 'none';
+  }
+
+  private static loadMore(): void {
+    this.loadBudget += LOAD_BUDGET_STEP;
+    this.applyFilter();
+  }
+
   static clearFilter(): void {
-    const cards = document.querySelectorAll<HTMLElement>(
-      `${YT_SELECTORS.richItemRenderer}, ${YT_SELECTORS.richSectionRenderer}, ytd-grid-video-renderer`
-    );
-    cards.forEach(card => {
-      card.style.display = '';
+    document.querySelectorAll(`.${FILTERED_CLASS}`).forEach(el => el.classList.remove(FILTERED_CLASS));
+    document.querySelectorAll(`.${PARKED_CLASS}`).forEach(el => el.classList.remove(PARKED_CLASS));
+  }
+
+  // ---- Hide Shorts setting ----
+
+  static setHideShorts(hide: boolean): void {
+    this.hideShorts = hide;
+    this.applyShorts();
+    this.syncObserver();
+  }
+
+  private static applyShorts(): void {
+    if (!this.hideShorts || !onSubscriptionsFeed()) {
+      document.querySelectorAll(`.${SHORTS_CLASS}`).forEach(el => el.classList.remove(SHORTS_CLASS));
+      return;
+    }
+    const root = this.feedRoot();
+    if (!root) return;
+    root.querySelectorAll<HTMLElement>('ytd-rich-section-renderer, ytd-rich-item-renderer').forEach(el => {
+      const isShorts = Boolean(el.querySelector('a[href^="/shorts/"], ytm-shorts-lockup-view-model, ytm-shorts-lockup-view-model-v2'));
+      // Items inside a Shorts shelf are covered by hiding the shelf itself
+      if (el.tagName === 'YTD-RICH-ITEM-RENDERER' && el.closest('ytd-rich-section-renderer')) return;
+      el.classList.toggle(SHORTS_CLASS, isShorts);
     });
   }
 
-  private static triggerInfiniteScroll = debounce(() => {
-    if (document.hidden || !window.location.pathname.startsWith('/feed/subscriptions')) return;
-    this.isScrolling = true;
-    const startY = window.scrollY;
-    const before = document.querySelectorAll(YT_SELECTORS.richItemRenderer).length;
-
-    // Trigger YouTube's infinite-loader by momentarily jumping to bottom
-    window.scrollTo({ top: document.documentElement.scrollHeight, behavior: 'auto' });
-
-    setTimeout(() => {
-      const after = document.querySelectorAll(YT_SELECTORS.richItemRenderer).length;
-      this.isScrolling = false;
-      if (after <= before) {
-        this.scrollAttempts = this.MAX_SCROLL_ATTEMPTS; // Nothing new loaded: stop attempts
-      }
-      // Instantly restore user's original viewport position
-      window.scrollTo({ top: startY, behavior: 'auto' });
-      this.applyFilter();
-    }, 900);
-  }, 300);
+  // ---- Banner ----
 
   private static updateBannerStatus(count: number): void {
     const statusEl = document.getElementById('subdeck-feed-banner-status');
     if (!statusEl) return;
-    if (count === 0) {
-      statusEl.textContent = ' — No matching videos loaded yet (scroll down to load more)';
-    } else {
-      statusEl.textContent = ` — ${count} video${count === 1 ? '' : 's'} shown`;
-    }
+    statusEl.textContent = count === 0
+      ? ' — No matching videos loaded yet'
+      : ` — ${count} video${count === 1 ? '' : 's'} shown`;
   }
 
   private static renderBanner(category: CategoryDeck): void {
@@ -133,7 +191,6 @@ export class FeedFilter {
     banner.id = this.bannerId;
     banner.className = 'subdeck-feed-banner';
 
-    // Safe DOM construction — 0 innerHTML
     const infoDiv = document.createElement('div');
     infoDiv.style.display = 'flex';
     infoDiv.style.alignItems = 'center';
@@ -151,10 +208,8 @@ export class FeedFilter {
     strongEl.style.color = 'var(--sd-brand-blue, #065fd4)';
     strongEl.textContent = category.name;
 
-    const countText = document.createTextNode(` (${category.channelIds.length} channels)`);
-
     labelSpan.appendChild(strongEl);
-    labelSpan.appendChild(countText);
+    labelSpan.appendChild(document.createTextNode(` (${category.channelIds.length} channels)`));
 
     const statusSpan = document.createElement('span');
     statusSpan.id = 'subdeck-feed-banner-status';
@@ -165,6 +220,17 @@ export class FeedFilter {
     infoDiv.appendChild(labelSpan);
     infoDiv.appendChild(statusSpan);
 
+    const actions = document.createElement('div');
+    actions.style.display = 'flex';
+    actions.style.gap = '8px';
+
+    const loadMoreBtn = document.createElement('button');
+    loadMoreBtn.className = 'subdeck-banner-dismiss';
+    loadMoreBtn.id = 'subdeck-feed-load-more';
+    loadMoreBtn.textContent = 'Load more';
+    loadMoreBtn.style.display = 'none';
+    loadMoreBtn.addEventListener('click', () => this.loadMore());
+
     const dismissBtn = document.createElement('button');
     dismissBtn.className = 'subdeck-banner-dismiss';
     dismissBtn.id = 'subdeck-feed-clear-btn';
@@ -174,14 +240,12 @@ export class FeedFilter {
       this.setCategory(null);
     });
 
+    actions.appendChild(loadMoreBtn);
+    actions.appendChild(dismissBtn);
     banner.appendChild(infoDiv);
-    banner.appendChild(dismissBtn);
+    banner.appendChild(actions);
 
-    const grid =
-      document.querySelector('ytd-rich-grid-renderer #contents') ||
-      document.querySelector('ytd-browse[page-subtype="subscriptions"] ytd-rich-grid-renderer') ||
-      document.querySelector('ytd-rich-grid-renderer');
-
+    const grid = this.feedRoot();
     if (grid?.parentNode) {
       grid.parentNode.insertBefore(banner, grid);
     } else {
@@ -193,35 +257,59 @@ export class FeedFilter {
     document.getElementById(this.bannerId)?.remove();
   }
 
+  // ---- Observer: runs only while a folder filter or Hide Shorts needs it ----
+
+  private static syncObserver(): void {
+    if ((this.activeCategory || this.hideShorts) && onSubscriptionsFeed()) this.startObserving();
+    else this.stopObserving();
+  }
+
+  private static observeRetries = 0;
+
   static startObserving(): void {
-    if (this.observer) return;
+    const target = this.feedRoot();
+    if (!target) {
+      // The grid renders after navigation finishes; wait for it briefly
+      if (this.observeRetries++ < 20) setTimeout(() => this.syncObserver(), 500);
+      return;
+    }
+    this.observeRetries = 0;
+    if (this.observer) this.observer.disconnect();
+    this.applyFilter();
 
     const debouncedFilter = debounce(() => this.applyFilter(), 200);
     this.observer = new MutationObserver((mutations) => {
-      let hasAddedNodes = false;
-      for (const m of mutations) {
-        if (m.addedNodes.length > 0) {
-          hasAddedNodes = true;
-          break;
-        }
-      }
-      if (hasAddedNodes) debouncedFilter();
+      if (mutations.some(m => m.addedNodes.length > 0)) debouncedFilter();
     });
-
-    const target =
-      document.querySelector('ytd-rich-grid-renderer') ||
-      document.querySelector('ytd-browse[page-subtype="subscriptions"]') ||
-      document.querySelector('#contents');
-
-    if (target) {
-      this.observer.observe(target, { childList: true, subtree: true });
-    }
+    this.observer.observe(target, { childList: true, subtree: true });
   }
 
   static stopObserving(): void {
     if (this.observer) {
       this.observer.disconnect();
       this.observer = null;
+    }
+  }
+
+  /** Called on every navigation: re-applies or tears down feed state for the current page. */
+  static async onNavigation(categories: CategoryDeck[]): Promise<void> {
+    if (!onSubscriptionsFeed()) {
+      this.activeCategory = null;
+      this.setActiveCategoryId(null);
+      this.clearFilter();
+      this.applyShorts();
+      this.removeBanner();
+      this.stopObserving();
+      return;
+    }
+    const id = this.getActiveCategoryId();
+    const cat = id ? categories.find(c => c.id === id) : undefined;
+    if (cat) {
+      await this.setCategory(cat);
+    } else {
+      if (id) this.setActiveCategoryId(null);
+      this.applyShorts();
+      this.syncObserver();
     }
   }
 }

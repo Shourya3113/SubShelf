@@ -30,7 +30,9 @@ export interface CategorizeOptions {
   nanoFallback?: () => Promise<NanoRunner | null>;
 }
 
-const NANO_CHUNK = 40;          // Nano context window budget
+// ~120 tokens per channel with a 200-char description: 20 channels keep a prompt near 2.4k tokens,
+// well inside Gemini Nano's per-session input quota (40 was ~4.7k and risked overflowing it)
+const NANO_CHUNK = 20;
 const CLOUD_CHUNK = 150;
 const CLOUD_TIMEOUT_MS = 25_000;
 

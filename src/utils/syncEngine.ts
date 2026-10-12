@@ -1,6 +1,7 @@
 import { CategoryDeck, SubscribedChannel } from '@/types';
 import { HeuristicCategorizer } from '@/ai/heuristic';
 import { isSystemChannelOrCurator } from './systemChannels';
+import { channelKey, isChannelId, mapHandle, normalizeHandle } from './channelIdentity';
 
 /** Storage key holding per-channel "not seen in a complete sidebar scrape" bookkeeping. */
 export const SYNC_MISSING_KEY = 'syncMissing';
@@ -44,9 +45,6 @@ export interface SyncResult {
   removalSkipped?: string;
 }
 
-const normHandle = (h: string | undefined | null): string =>
-  !h ? '' : h.startsWith('@') ? h.toLowerCase() : '@' + h.toLowerCase();
-
 /**
  * Reconciles what the content script observed against the stored state.
  * Pure: never touches chrome.* so it can run inside the service worker's write queue and in tests.
@@ -64,20 +62,13 @@ export function computeSync(prev: SyncSnapshot, obs: SyncObservation): SyncResul
   let changed = false;
   let removalSkipped: string | undefined;
 
-  const mapHandle = (handle: string, ucId: string) => {
-    const h = normHandle(handle);
-    if (!h) return;
-    for (const key of [h, h.slice(1)]) {
-      if (handleToUcId[key] !== ucId) {
-        handleToUcId[key] = ucId;
-        changed = true;
-      }
-    }
+  const learnHandle = (handle: string, ucId: string) => {
+    if (mapHandle(handleToUcId, handle, ucId)) changed = true;
   };
 
   // 1. Learn handle -> UC ID mappings from everything observed
   for (const ch of obs.discovered) {
-    if (ch.ucId?.startsWith('UC') && ch.handle) mapHandle(ch.handle, ch.ucId);
+    learnHandle(ch.handle, ch.ucId);
   }
 
   // 2. Canonicalize and deduplicate the observation
@@ -85,9 +76,9 @@ export function computeSync(prev: SyncSnapshot, obs: SyncObservation): SyncResul
   const seenKeys = new Set<string>();
   for (const ch of obs.discovered) {
     if (isSystemChannelOrCurator(ch)) continue;
-    const handle = normHandle(ch.handle);
-    const canonicalId = (ch.ucId?.startsWith('UC') ? ch.ucId : (handleToUcId[handle] || ch.ucId))?.trim();
-    const dedupeKey = canonicalId?.startsWith('UC') ? canonicalId : (handle || ch.title.toLowerCase().trim());
+    const handle = normalizeHandle(ch.handle);
+    const canonicalId = (isChannelId(ch.ucId) ? ch.ucId : (handleToUcId[handle] || ch.ucId))?.trim();
+    const dedupeKey = channelKey({ ucId: canonicalId, handle, title: ch.title });
     if (!dedupeKey || seenKeys.has(dedupeKey)) continue;
     seenKeys.add(dedupeKey);
     discovered.push({ ...ch, ucId: canonicalId || ch.ucId, handle: handle || ch.handle });
@@ -110,7 +101,7 @@ export function computeSync(prev: SyncSnapshot, obs: SyncObservation): SyncResul
     const handle = ch.handle ? ch.handle.toLowerCase() : '';
     const id = ch.ucId;
 
-    if (handle && channels[handle] && id.startsWith('UC') && handle !== id) {
+    if (handle && channels[handle] && isChannelId(id) && handle !== id) {
       channels[id] = { ...channels[handle], ...ch, ucId: id };
       delete channels[handle];
       changed = true;
@@ -122,7 +113,7 @@ export function computeSync(prev: SyncSnapshot, obs: SyncObservation): SyncResul
     const existing = channels[id];
     if (!existing) {
       channels[id] = ch;
-      if (handle) mapHandle(handle, id);
+      if (handle) learnHandle(handle, id);
       newChannels.push(ch);
       added.push(id);
       changed = true;
@@ -131,7 +122,7 @@ export function computeSync(prev: SyncSnapshot, obs: SyncObservation): SyncResul
         channels[id] = { ...existing, avatarUrl: ch.avatarUrl };
         changed = true;
       }
-      if (handle && !handleToUcId[handle]) mapHandle(handle, id);
+      if (handle && !handleToUcId[handle]) learnHandle(handle, id);
     }
   }
 
@@ -191,7 +182,7 @@ export function computeSync(prev: SyncSnapshot, obs: SyncObservation): SyncResul
           delete channels[id];
           delete missing[id];
           if (ch.handle) {
-            const h = normHandle(ch.handle);
+            const h = normalizeHandle(ch.handle);
             if (handleToUcId[h] === id) delete handleToUcId[h];
             if (handleToUcId[h.slice(1)] === id) delete handleToUcId[h.slice(1)];
           }

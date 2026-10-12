@@ -1,6 +1,5 @@
 import { SubscribedChannel } from '@/types';
-
-const normHandle = (h: string): string => (h.startsWith('@') ? h : '@' + h).toLowerCase();
+import { isChannelId, normalizeHandle } from './channelIdentity';
 
 /**
  * Builds the set of identifiers that mark a feed card as belonging to a folder.
@@ -14,12 +13,13 @@ export function buildFeedTargets(
   const members = new Set(channelIds);
   const targets = new Set<string>();
   for (const id of channelIds) {
-    targets.add(id.startsWith('UC') ? id : normHandle(id));
+    targets.add(isChannelId(id) ? id : normalizeHandle(id));
     const handle = channels[id]?.handle;
-    if (handle && !handle.startsWith('@UC')) targets.add(normHandle(handle));
+    // Records without a real handle carry a placeholder "@UC…" built from the ID; it never appears in links
+    if (handle && !isChannelId(handle.replace(/^@/, ''))) targets.add(normalizeHandle(handle));
   }
   for (const [handle, ucId] of Object.entries(handleToUcId)) {
-    if (members.has(ucId)) targets.add(normHandle(handle));
+    if (members.has(ucId)) targets.add(normalizeHandle(handle));
   }
   return targets;
 }

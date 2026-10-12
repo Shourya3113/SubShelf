@@ -4,9 +4,7 @@ import { isSystemChannelOrCurator } from './systemChannels';
 import { computeSync, MissingRecord, SYNC_MISSING_KEY } from './syncEngine';
 import { sanitizeAvatarMap } from './avatarUrl';
 import { applyOverrides } from '@/ai/overrides';
-
-export const SUBSHELF_SECURE_API_KEY = API_KEY_FIELD;
-export { API_KEY_FIELD };
+import { channelAliases, isChannelId, mapHandle, resolveChannelId } from './channelIdentity';
 
 const MAX_CHANNELS_PER_CATEGORY = 5_000;
 
@@ -25,9 +23,6 @@ export function enqueueStorageTask<T>(task: () => Promise<T>): Promise<T> {
 export function enqueueMutation(action: string, payload?: unknown): Promise<any> {
   return enqueueStorageTask(() => SubDeckStorage.executeMutation(action, payload));
 }
-
-const normalizeHandleKey = (h: string): string =>
-  h.startsWith('@') ? h.toLowerCase() : '@' + h.toLowerCase();
 
 /**
  * Pure cleanup of a raw storage snapshot: fills missing fields, merges handle-keyed duplicates into
@@ -58,11 +53,7 @@ export function normalizeState(raw: Record<string, any>): { data: SubDeckStorage
 
   // Index all channels with canonical UC IDs (ignoring system curators)
   for (const ch of Object.values(data.channels as Record<string, SubscribedChannel>)) {
-    if (ch && typeof ch === 'object' && !isSystemChannelOrCurator(ch) && ch.ucId?.startsWith('UC') && ch.handle) {
-      const h = normalizeHandleKey(ch.handle);
-      cleanHandleMap[h] = ch.ucId;
-      cleanHandleMap[h.slice(1)] = ch.ucId;
-    }
+    if (ch && typeof ch === 'object' && !isSystemChannelOrCurator(ch)) mapHandle(cleanHandleMap, ch.handle, ch.ucId);
   }
 
   // Reconcile duplicate channel records and drop system topic/feed curator records
@@ -80,10 +71,10 @@ export function normalizeState(raw: Record<string, any>): { data: SubDeckStorage
       continue;
     }
 
-    const h = ch.handle ? normalizeHandleKey(ch.handle) : '';
-    const canonId = (ch.ucId?.startsWith('UC') ? ch.ucId : (cleanHandleMap[h] || cleanHandleMap[key.toLowerCase()] || ch.ucId))?.trim();
+    const resolved = [ch.ucId, ch.handle, key].map(x => (x ? resolveChannelId(x, cleanHandleMap) : '')).find(isChannelId);
+    const canonId = (resolved || ch.ucId)?.trim();
 
-    if (canonId && canonId !== key && (canonId.startsWith('UC') || !key.startsWith('UC'))) {
+    if (canonId && canonId !== key && (isChannelId(canonId) || !isChannelId(key))) {
       aliasRemap[key] = canonId;
       dirty = true;
       canonicalChannels[canonId] = canonicalChannels[canonId]
@@ -111,7 +102,7 @@ export function normalizeState(raw: Record<string, any>): { data: SubDeckStorage
       const seen = new Set<string>();
       const ids: string[] = [];
       for (const rawId of rawIds) {
-        const canonId = aliasRemap[rawId] || cleanHandleMap[rawId.toLowerCase()] || rawId;
+        const canonId = aliasRemap[rawId] || resolveChannelId(rawId, cleanHandleMap);
         if (purgedSystemIds.has(canonId) || purgedSystemIds.has(rawId) || isSystemChannelOrCurator({ ucId: canonId })) continue;
         if (!seen.has(canonId)) {
           seen.add(canonId);
@@ -235,20 +226,9 @@ export class SubDeckStorage {
         const manualAssignments: Record<string, string[]> = raw.manualAssignments || {};
         const channelExclusions: Record<string, string[]> = raw.channelExclusions || {};
         const handleToUcId: Record<string, string> = raw.handleToUcId || {};
-        const channels: Record<string, any> = raw.channels || {};
+        const channels: Record<string, SubscribedChannel> = raw.channels || {};
 
-        const targetIds = new Set<string>([ucId]);
-        if (channels[ucId]?.handle) {
-          targetIds.add(channels[ucId].handle);
-          targetIds.add(channels[ucId].handle.replace(/^@/, ''));
-          targetIds.add('@' + channels[ucId].handle.replace(/^@/, ''));
-        }
-        for (const [handle, targetUc] of Object.entries(handleToUcId)) {
-          if (targetUc === ucId || handle === ucId) {
-            targetIds.add(handle);
-            targetIds.add(targetUc);
-          }
-        }
+        const targetIds = channelAliases(ucId, channels, handleToUcId);
 
         const prevCategoryIds: string[] = [];
         categories.forEach(cat => {
@@ -301,20 +281,9 @@ export class SubDeckStorage {
         const manualAssignments: Record<string, string[]> = raw.manualAssignments || {};
         const channelExclusions: Record<string, string[]> = raw.channelExclusions || {};
         const handleToUcId: Record<string, string> = raw.handleToUcId || {};
-        const channels: Record<string, any> = raw.channels || {};
+        const channels: Record<string, SubscribedChannel> = raw.channels || {};
 
-        const targetIds = new Set<string>([ucId]);
-        if (channels[ucId]?.handle) {
-          targetIds.add(channels[ucId].handle);
-          targetIds.add(channels[ucId].handle.replace(/^@/, ''));
-          targetIds.add('@' + channels[ucId].handle.replace(/^@/, ''));
-        }
-        for (const [handle, targetUc] of Object.entries(handleToUcId)) {
-          if (targetUc === ucId || handle === ucId) {
-            targetIds.add(handle);
-            targetIds.add(targetUc);
-          }
-        }
+        const targetIds = channelAliases(ucId, channels, handleToUcId);
 
         const category = categories.find(c => c.id === categoryId);
         if (category) {
@@ -343,20 +312,9 @@ export class SubDeckStorage {
         const manualAssignments: Record<string, string[]> = raw.manualAssignments || {};
         const channelExclusions: Record<string, string[]> = raw.channelExclusions || {};
         const handleToUcId: Record<string, string> = raw.handleToUcId || {};
-        const channels: Record<string, any> = raw.channels || {};
+        const channels: Record<string, SubscribedChannel> = raw.channels || {};
 
-        const targetIds = new Set<string>([ucId]);
-        if (channels[ucId]?.handle) {
-          targetIds.add(channels[ucId].handle);
-          targetIds.add(channels[ucId].handle.replace(/^@/, ''));
-          targetIds.add('@' + channels[ucId].handle.replace(/^@/, ''));
-        }
-        for (const [handle, targetUc] of Object.entries(handleToUcId)) {
-          if (targetUc === ucId || handle === ucId) {
-            targetIds.add(handle);
-            targetIds.add(targetUc);
-          }
-        }
+        const targetIds = channelAliases(ucId, channels, handleToUcId);
 
         const category = categories.find(c => c.id === categoryId);
         if (category) {
@@ -433,19 +391,6 @@ export class SubDeckStorage {
       case 'clearOverrides': {
         await chrome.storage.local.set({ channelExclusions: {}, manualAssignments: {} });
         return {};
-      }
-
-      case 'addChannel': {
-        const { channel } = payload;
-        const raw = await chrome.storage.local.get(['channels', 'handleToUcId']);
-        const channels = raw.channels || {};
-        const handleToUcId = raw.handleToUcId || {};
-        channels[channel.ucId] = channel;
-        if (channel.handle) {
-          handleToUcId[channel.handle] = channel.ucId;
-        }
-        await chrome.storage.local.set({ channels, handleToUcId });
-        return { channels, handleToUcId };
       }
 
       case 'removeChannel': {
@@ -552,14 +497,22 @@ export class SubDeckStorage {
           if (!have.has(d.id)) categories.push(d);
         }
 
-        const next = {
+        // Normalize the merged result so imported handle-keyed duplicates or system channels never
+        // reach storage (the same guarantee sync and the startup cleanup give)
+        const { data: next } = normalizeState({
           categories,
           channels: { ...(raw.channels ?? {}), ...(inc.channels ?? {}) },
           handleToUcId: { ...(raw.handleToUcId ?? {}), ...(inc.handleToUcId ?? {}) },
           channelExclusions: mergeLists(raw.channelExclusions, inc.channelExclusions),
           manualAssignments: mergeLists(raw.manualAssignments, inc.manualAssignments),
-        };
-        await chrome.storage.local.set(next);
+        });
+        await chrome.storage.local.set({
+          categories: next.categories,
+          channels: next.channels,
+          handleToUcId: next.handleToUcId,
+          channelExclusions: next.channelExclusions,
+          manualAssignments: next.manualAssignments,
+        });
         return { categories: next.categories.length, channels: Object.keys(next.channels).length };
       }
 
@@ -598,10 +551,6 @@ export class SubDeckStorage {
     if (!this.isContextValid()) return structuredClone(DEFAULT_STORAGE.channels);
     const data = await chrome.storage.local.get('channels');
     return (data.channels && typeof data.channels === 'object') ? data.channels : {};
-  }
-
-  static async addChannel(channel: SubscribedChannel): Promise<void> {
-    await this.requestMutation('addChannel', { channel });
   }
 
   static async removeChannel(ucId: string): Promise<void> {
@@ -719,4 +668,3 @@ export class SubDeckStorage {
   }
 }
 
-export const Storage = SubDeckStorage;

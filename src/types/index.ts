@@ -27,13 +27,11 @@ export interface SubDeckStorageSchema {
   channelExclusions: Record<string, string[]>;
   manualAssignments: Record<string, string[]>;
   settings: {
-    aiProvider: 'gemini-nano' | 'gemini-api' | 'openai' | 'heuristic';
+    aiProvider: 'gemini-nano' | 'gemini-api' | 'heuristic';
     /** @deprecated API key is stored separately in isolated storage and read only in background worker */
     apiKey?: string;
     geminiModel?: string;
-    autoSyncOnSubscribe: boolean;
     hideShortsFromFeed: boolean;
-    themeMode: 'auto' | 'dark' | 'light';
   };
   lastScrapedAt: number;
 }
@@ -64,9 +62,7 @@ export const DEFAULT_STORAGE: SubDeckStorageSchema = {
   settings: {
     aiProvider: 'gemini-nano',
     geminiModel: DEFAULT_GEMINI_CLOUD_MODEL,
-    autoSyncOnSubscribe: true,
     hideShortsFromFeed: false,
-    themeMode: 'auto',
   },
   lastScrapedAt: 0,
 };

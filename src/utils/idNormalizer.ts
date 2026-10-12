@@ -1,3 +1,5 @@
+import { normalizeHandle } from './channelIdentity';
+
 export class IdNormalizer {
   static extractFromAnchor(anchor: HTMLAnchorElement): { ucId: string | null; handle: string | null } {
     let ucId = anchor.getAttribute('data-browse-id') || null;
@@ -11,15 +13,8 @@ export class IdNormalizer {
       }
     }
 
-    let handle: string | null = null;
     const handleMatch = href.match(/\/@([^/?#]+)/);
-    if (handleMatch) {
-      try {
-        handle = '@' + decodeURIComponent(handleMatch[1]).toLowerCase();
-      } catch {
-        handle = '@' + handleMatch[1].toLowerCase();
-      }
-    }
+    const handle = handleMatch ? normalizeHandle(handleMatch[1]) || null : null;
 
     return { ucId, handle };
   }

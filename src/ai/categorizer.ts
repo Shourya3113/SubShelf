@@ -29,7 +29,6 @@ export interface CategorizeOptions {
   nanoFallback?: () => Promise<NanoRunner | null>;
 }
 
-export const DEFAULT_GEMINI_MODEL = DEFAULT_GEMINI_CLOUD_MODEL;
 const NANO_CHUNK = 40;          // Nano context window budget
 const CLOUD_CHUNK = 150;
 const CLOUD_TIMEOUT_MS = 25_000;
@@ -249,7 +248,7 @@ export class AICategorizer {
             failures.push('Cloud: permission to contact the Gemini API was not granted (re-select Cloud in Settings)');
             continue;
           }
-          const model = settings.geminiModel || DEFAULT_GEMINI_MODEL;
+          const model = settings.geminiModel || DEFAULT_GEMINI_CLOUD_MODEL;
           decks = await runChunks(channels, CLOUD_CHUNK, pr => callGemini(pr, apiKey, model));
         } else {
           decks = HeuristicCategorizer.categorize(channels);
@@ -324,4 +323,3 @@ export class AICategorizer {
   static applyOverrides = applyOverrides;
 }
 
-export const AIEngine = AICategorizer;

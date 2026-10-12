@@ -1,4 +1,5 @@
 import { isSystemChannelOrCurator } from '@/utils/systemChannels';
+import { bareHandle, normalizeHandle } from '@/utils/channelIdentity';
 
 (() => {
   const avatars: Record<string, string> = {};
@@ -47,9 +48,7 @@ import { isSystemChannelOrCurator } from '@/utils/systemChannels';
     const isChannel = Boolean(browseId || canon);
     if (!isChannel) return;
 
-    const handle = canon
-      ? (canon.startsWith('@') ? canon.toLowerCase() : `@${canon.replace(/^[\/@]+/, '').toLowerCase()}`)
-      : (browseId ? `@${browseId}` : `@${id}`);
+    const handle = normalizeHandle(canon) || `@${browseId || id}`;
     const key = browseId || handle;
 
     // Exclude YouTube built-in feed curators and system topics (Gaming, Music, Sports, etc.)
@@ -81,7 +80,7 @@ import { isSystemChannelOrCurator } from '@/utils/systemChannels';
     if (!url) return;
     if (id) put(id, url);
     if (canonical) {
-      const h = canonical.replace(/^[\/@]+/, '').toLowerCase();
+      const h = bareHandle(canonical);
       put(h, url);
       put('@' + h, url);
     }

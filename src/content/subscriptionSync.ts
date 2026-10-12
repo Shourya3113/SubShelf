@@ -4,6 +4,7 @@ import { SidebarManager } from './sidebarManager';
 import { Logger } from '@/utils/logger';
 import { SubscribedChannel } from '@/types';
 import { isSystemChannelOrCurator } from '@/utils/systemChannels';
+import { normalizeHandle } from '@/utils/channelIdentity';
 
 export class SubscriptionSync {
   private static isSyncing = false;
@@ -94,10 +95,7 @@ export class SubscriptionSync {
     if (!SubDeckStorage.isContextValid()) return;
     const handleMatch = url.match(/\/@([^/?#]+)/);
     if (!handleMatch) return;
-    let handle = `@${handleMatch[1].toLowerCase()}`;
-    try {
-      handle = `@${decodeURIComponent(handleMatch[1]).toLowerCase()}`;
-    } catch {}
+    const handle = normalizeHandle(handleMatch[1]);
 
     const handleToUcId = await SubDeckStorage.getHandleToUcIdMap();
     const ucId = handleToUcId[handle];

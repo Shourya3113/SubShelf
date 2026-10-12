@@ -3,7 +3,6 @@ import { ExportImport } from '@/utils/exportImport';
 import { debounce } from '@/utils/debounce';
 import { CategoryDeck, SubDeckStorageSchema, SubscribedChannel } from '@/types';
 import { toast } from '@/utils/toast';
-import { isSystemChannelOrCurator } from '@/utils/systemChannels';
 import { hasCloudPermission, requestCloudPermission } from '@/utils/cloudPermission';
 import {
   NanoStatus,
@@ -115,11 +114,10 @@ class PopupManager {
     if (!list) return;
     list.replaceChildren();
 
-    const categories = await SubDeckStorage.getCategories();
-    const channelsMap = await SubDeckStorage.getChannels();
+    // Normalized view: folder IDs are already canonical and deduplicated, system channels removed
+    const { categories, channels: channelsMap } = await SubDeckStorage.getAll();
 
     categories
-      .filter(cat => cat.id !== '__uncategorized__')
       .forEach(cat => {
         // Safe DOM construction: Zero innerHTML
         const card = document.createElement('div');
@@ -136,17 +134,7 @@ class PopupManager {
         titleDiv.className = 'deck-title';
         titleDiv.textContent = cat.name;
 
-        // Accurate unique channels count (excluding system topics/curators)
-        const uniqueCatCount = new Set(
-          (cat.channelIds || [])
-            .filter(id => !isSystemChannelOrCurator({ ucId: id }))
-            .map(id => {
-              const ch = channelsMap[id];
-              if (ch && isSystemChannelOrCurator(ch)) return '';
-              return (ch && ch.ucId) ? ch.ucId : id;
-            })
-            .filter(Boolean)
-        ).size;
+        const uniqueCatCount = cat.channelIds.filter(id => channelsMap[id]).length;
 
         const subsCountDiv = document.createElement('div');
         subsCountDiv.className = 'deck-subs-count';
@@ -224,22 +212,9 @@ class PopupManager {
     if (!container) return;
     container.replaceChildren();
 
-    const channelsMap = await SubDeckStorage.getChannels();
-    const categories = await SubDeckStorage.getCategories();
-
-    // Deduplicate channels by canonical UC ID / handle / title
-    const seenChan = new Set<string>();
-    const channels: SubscribedChannel[] = [];
-    for (const ch of Object.values(channelsMap)) {
-      if (!ch || isSystemChannelOrCurator(ch)) continue;
-      const key = (ch.ucId && ch.ucId.startsWith('UC'))
-        ? ch.ucId
-        : (ch.handle ? ch.handle.toLowerCase() : ch.title.toLowerCase().trim());
-      if (!seenChan.has(key)) {
-        seenChan.add(key);
-        channels.push(ch);
-      }
-    }
+    // Normalized view: one record per channel, system channels already removed
+    const { categories, channels: channelsMap } = await SubDeckStorage.getAll();
+    const channels: SubscribedChannel[] = Object.values(channelsMap);
 
     const sorted = (filter
       ? channels.filter(c => c.title.toLowerCase().includes(filter) || c.handle.toLowerCase().includes(filter))
@@ -262,10 +237,7 @@ class PopupManager {
       const card = document.createElement('div');
       card.className = 'channel-card';
 
-      const currentDeck = categories.find(c =>
-        c.id !== '__uncategorized__' &&
-        c.channelIds.some(id => id === ch.ucId || (channelsMap[id] && channelsMap[id].ucId === ch.ucId))
-      );
+      const currentDeck = categories.find(c => c.channelIds.includes(ch.ucId));
 
       const metaDiv = document.createElement('div');
       metaDiv.className = 'channel-meta';
@@ -302,7 +274,7 @@ class PopupManager {
 
       // Category options
       categories
-        .filter(cat => cat.id !== '__uncategorized__')
+        .slice()
         .sort((a, b) => a.sortOrder - b.sortOrder)
         .forEach(cat => {
           const option = document.createElement('option');
@@ -389,7 +361,7 @@ class PopupManager {
     });
 
     aiProvider.addEventListener('change', async () => {
-      const val = aiProvider.value as 'gemini-nano' | 'gemini-api' | 'openai' | 'heuristic';
+      const val = aiProvider.value as 'gemini-nano' | 'gemini-api' | 'heuristic';
       if (val === 'gemini-api' && !cloudGranted) {
         // Chrome's permission prompt usually closes this popup, so the service worker records the
         // opt-in and switches the provider itself once the permission is granted (onAdded).

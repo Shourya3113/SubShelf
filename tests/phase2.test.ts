@@ -103,3 +103,15 @@ describe('optional Gemini host permission', () => {
     expect(result.providerUsed).toBe('gemini-api');
   });
 });
+
+describe('feed matching edge cases', () => {
+  it('keeps real handles that start with "uc" and skips placeholder handles', () => {
+    const channels = {
+      [UC1]: ch(UC1, '@ucla'),
+      [UC2]: ch(UC2, `@${UC2}`),
+    };
+    const targets = buildFeedTargets([UC1, UC2], channels, {});
+    expect(cardMatches({ ucId: null, handle: '@ucla' }, targets)).toBe(true);
+    expect(targets.has(`@${UC2}`.toLowerCase())).toBe(false);
+  });
+});

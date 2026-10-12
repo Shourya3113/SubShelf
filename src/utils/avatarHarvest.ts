@@ -1,3 +1,4 @@
+import { bareHandle } from './channelIdentity';
 import { safeAvatarUrl } from './avatarUrl';
 
 /** Reads avatars straight from YouTube's native sidebar entries (visible or expanded). */
@@ -15,7 +16,7 @@ export function harvestAvatarsFromDom(): Map<string, string> {
     if (!safe) return;
     const url = safe.replace(/=s\d+(-c-k)?/, '=s88$1');
     if (m[1]) {
-      const h = m[1].toLowerCase();
+      const h = bareHandle(m[1]);
       out.set('@' + h, url);
       out.set(h, url);
     }
@@ -48,7 +49,7 @@ export async function harvestFromChannelsPage(): Promise<Map<string, string>> {
           if (r.channelId) out.set(r.channelId, clean);
           const base = r.navigationEndpoint?.browseEndpoint?.canonicalBaseUrl as string | undefined;
           if (base) {
-            const h = base.replace(/^[/@]+/, '').toLowerCase();
+            const h = bareHandle(base);
             out.set(h, clean);
             out.set('@' + h, clean);
           }

@@ -1,6 +1,6 @@
 import { SubDeckExportPayload, SubDeckStorageSchema, CategoryDeck, SubscribedChannel } from '@/types';
 import { SubDeckStorage } from './storage';
-import { isValidYouTubeAvatarUrl } from './validators';
+import { safeAvatarUrl } from './avatarUrl';
 import { SUBDECK_TAXONOMY } from '@/ai/heuristic';
 
 const MAX_FILE_SIZE = 5 * 1024 * 1024; // 5 MB
@@ -151,7 +151,7 @@ export class ExportImport {
           title: ch.title.slice(0, 200).trim(),
           handle,
           url,
-          avatarUrl: isValidYouTubeAvatarUrl(ch.avatarUrl) ? (ch.avatarUrl as string).slice(0, 500) : '',
+          avatarUrl: safeAvatarUrl(ch.avatarUrl),
           discoveredAt: typeof ch.discoveredAt === 'number' && Number.isFinite(ch.discoveredAt) ? ch.discoveredAt : Date.now(),
         };
 

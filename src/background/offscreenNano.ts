@@ -43,7 +43,8 @@ export async function acquireOffscreenNano(): Promise<NanoRunner | null> {
   }
   return {
     availability: async () => (await send<{ status: NanoStatus }>({ op: 'availability' })).status,
-    prompt: async (text: string) => (await send<{ text: string }>({ op: 'prompt', text })).text,
+    prompt: async (text: string, constraint?: Record<string, unknown>) =>
+      (await send<{ text: string }>({ op: 'prompt', text, constraint })).text,
   };
 }
 

@@ -1,6 +1,7 @@
 import { SubscribedChannel, CategoryDeck, DEFAULT_GEMINI_CLOUD_MODEL, DEFAULT_STORAGE } from '@/types';
 import { HeuristicCategorizer, SUBDECK_TAXONOMY } from './heuristic';
 import { buildCategorizationPrompt } from './prompt';
+import { categorizationGeminiSchema, categorizationJsonSchema } from './responseSchema';
 import { applyOverrides } from './overrides';
 import { hasCloudPermission } from '@/utils/cloudPermission';
 import { SubDeckStorage } from '@/utils/storage';
@@ -110,11 +111,16 @@ function completeAssignments(decks: CategoryDeck[], channels: SubscribedChannel[
   return mergeDecks(decks, HeuristicCategorizer.categorize(missing));
 }
 
-/** Run batches across channel chunks. Partial success merges results; total failure throws. */
+const TAXONOMY_IDS = SUBDECK_TAXONOMY.map(t => t.id);
+
+/**
+ * Run batches across channel chunks. Partial success merges results; total failure throws.
+ * `call` receives the batch's channel references ("c0", "c1", ...) to build its output schema.
+ */
 async function runChunks(
   channels: SubscribedChannel[],
   size: number,
-  call: (prompt: string) => Promise<string>
+  call: (prompt: string, refs: string[]) => Promise<string>
 ): Promise<CategoryDeck[]> {
   let merged: CategoryDeck[] = [];
   let ok = 0;
@@ -122,7 +128,8 @@ async function runChunks(
 
   for (const part of chunk(channels, size)) {
     try {
-      const out = await call(buildCategorizationPrompt(part));
+      const refs = part.map((_, i) => `c${i}`);
+      const out = await call(buildCategorizationPrompt(part), refs);
       const decks = parseAIResponse(out, part);
       if (decks) {
         merged = mergeDecks(merged, decks);
@@ -144,7 +151,9 @@ async function runNano(channels: SubscribedChannel[], runner: NanoRunner): Promi
   const status = await runner.availability();
   // Never start a download from here: that needs a user gesture in the popup
   if (status !== 'available') throw new NanoNotReadyError(nanoUnavailableReason(status));
-  return runChunks(channels, NANO_CHUNK, prompt => runner.prompt(prompt));
+  return runChunks(channels, NANO_CHUNK, (prompt, refs) =>
+    runner.prompt(prompt, categorizationJsonSchema(TAXONOMY_IDS, refs))
+  );
 }
 
 async function tryGeminiNano(
@@ -168,7 +177,19 @@ async function tryGeminiNano(
 }
 
 // ---------- Gemini Cloud API ----------
-async function callGemini(prompt: string, apiKey: string, model: string): Promise<string> {
+async function callGemini(prompt: string, refs: string[], apiKey: string, model: string): Promise<string> {
+  try {
+    return await requestGemini(prompt, refs, apiKey, model);
+  } catch (err) {
+    // Some models reject large enum schemas; the response parser still validates every ID
+    if (err instanceof SchemaRejectedError) return requestGemini(prompt, null, apiKey, model);
+    throw err;
+  }
+}
+
+class SchemaRejectedError extends Error {}
+
+async function requestGemini(prompt: string, refs: string[] | null, apiKey: string, model: string): Promise<string> {
   const ctrl = new AbortController();
   const timer = setTimeout(() => ctrl.abort(), CLOUD_TIMEOUT_MS);
 
@@ -184,13 +205,18 @@ async function callGemini(prompt: string, apiKey: string, model: string): Promis
         },
         body: JSON.stringify({
           contents: [{ parts: [{ text: prompt }] }],
-          generationConfig: { responseMimeType: 'application/json', temperature: 0 },
+          generationConfig: {
+            responseMimeType: 'application/json',
+            ...(refs ? { responseSchema: categorizationGeminiSchema(TAXONOMY_IDS, refs) } : {}),
+            temperature: 0,
+          },
         }),
       }
     );
 
     if (!res.ok) {
       const body = (await res.text()).slice(0, 200);
+      if (refs && res.status === 400 && /schema/i.test(body)) throw new SchemaRejectedError(body);
       throw new Error(`Gemini API ${res.status}${res.status === 404 ? ' (model not found, update model name)' : ''}: ${body}`);
     }
 
@@ -249,7 +275,7 @@ export class AICategorizer {
             continue;
           }
           const model = settings.geminiModel || DEFAULT_GEMINI_CLOUD_MODEL;
-          decks = await runChunks(channels, CLOUD_CHUNK, pr => callGemini(pr, apiKey, model));
+          decks = await runChunks(channels, CLOUD_CHUNK, (pr, refs) => callGemini(pr, refs, apiKey, model));
         } else {
           decks = HeuristicCategorizer.categorize(channels);
         }

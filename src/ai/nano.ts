@@ -14,7 +14,8 @@ export type NanoStatus = 'available' | 'downloadable' | 'downloading' | 'unavail
 
 export interface NanoRunner {
   availability(): Promise<NanoStatus>;
-  prompt(text: string): Promise<string>;
+  /** `constraint` is a JSON Schema the response must follow (Prompt API `responseConstraint`). */
+  prompt(text: string, constraint?: Record<string, unknown>): Promise<string>;
 }
 
 export function resolveLanguageModelAPI(): any {
@@ -116,10 +117,19 @@ export async function downloadNanoModel(LM: any, onProgress: (percent: number) =
 export function localNanoRunner(LM: any): NanoRunner {
   return {
     availability: () => getNanoStatus(LM),
-    async prompt(text: string) {
+    async prompt(text: string, constraint?: Record<string, unknown>) {
       const session = await LM.create(NANO_OPTS);
       try {
-        return await session.prompt(text);
+        if (!constraint) return await session.prompt(text);
+        try {
+          return await session.prompt(text, { responseConstraint: constraint });
+        } catch (err) {
+          // Chrome builds without structured output reject the option; the parser still validates
+          if (err instanceof Error && /constraint|not ?supported/i.test(`${err.name} ${err.message}`)) {
+            return await session.prompt(text);
+          }
+          throw err;
+        }
       } finally {
         session?.destroy?.();
       }

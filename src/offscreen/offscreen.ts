@@ -16,7 +16,8 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         sendResponse({ ok: true, status: await getNanoStatus(LM) });
       } else if (message.op === 'prompt' && typeof message.text === 'string') {
         if (!LM) throw new Error('LanguageModel API is not exposed in the offscreen document');
-        sendResponse({ ok: true, text: await localNanoRunner(LM).prompt(message.text) });
+        const constraint = message.constraint && typeof message.constraint === 'object' ? message.constraint : undefined;
+        sendResponse({ ok: true, text: await localNanoRunner(LM).prompt(message.text, constraint) });
       } else {
         sendResponse({ ok: false, error: 'Unknown request' });
       }

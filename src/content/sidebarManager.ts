@@ -309,6 +309,12 @@ export class SidebarManager {
     // Auto-AI Click Handler: Auto-expands all channels and syncs before clustering
     aiBtn.addEventListener('click', async () => {
       if (aiBtn.disabled) return;
+      // After the extension is reloaded or updated, scripts already on this page lose access to it
+      // until the page reloads; every read comes back empty, so say that instead of "not signed in".
+      if (!SubDeckStorage.isContextValid()) {
+        SidebarManager.showToast('SubShelf was updated or reloaded. Refresh this page to keep using it.', 6000);
+        return;
+      }
       aiBtn.disabled = true;
       aiBtn.textContent = '⏳ Discovering...';
 

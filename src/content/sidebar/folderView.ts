@@ -1,6 +1,6 @@
 import { CategoryDeck, SubscribedChannel } from '@/types';
 import { safeAvatarUrl } from '@/utils/avatarUrl';
-import { icon, iconButton } from './icons';
+import { icon, iconButton } from '@/ui/icons';
 import { openMenu } from './menu';
 
 /** A channel as shown in the sidebar, with the storage key it is filed under. */

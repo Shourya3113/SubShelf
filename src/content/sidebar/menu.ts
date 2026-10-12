@@ -1,4 +1,4 @@
-import { icon, IconName } from './icons';
+import { icon, IconName } from '@/ui/icons';
 
 export interface MenuItem {
   label: string;

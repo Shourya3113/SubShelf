@@ -8,115 +8,117 @@
 <body>
   <header class="header">
     <div class="brand">
-      <span class="logo-icon">📁</span>
+      <img class="logo-icon" src="../../assets/icons/icon48.png" alt="" width="24" height="24" />
       <h1 class="logo-title">SubShelf</h1>
     </div>
     <span id="version" class="version-badge">v1.1.1</span>
   </header>
 
-  <nav class="tabs">
-    <button class="tab-btn active" data-tab="decks">📁 Folders</button>
-    <button class="tab-btn" data-tab="channels">📺 Channels</button>
-    <button class="tab-btn" data-tab="settings">⚙️ Settings</button>
+  <nav class="tabs" role="tablist">
+    <button class="tab-btn active" data-tab="decks" role="tab"><span data-icon="folder"></span>Folders</button>
+    <button class="tab-btn" data-tab="channels" role="tab"><span data-icon="channels"></span>Channels</button>
+    <button class="tab-btn" data-tab="settings" role="tab"><span data-icon="settings"></span>Settings</button>
   </nav>
 
   <main class="content">
-    <!-- TAB 1: DECKS -->
+    <!-- FOLDERS -->
     <section id="tab-decks" class="tab-panel active">
-      <div class="deck-actions">
-        <button id="add-deck-btn" class="btn btn-primary">+ New folder</button>
+      <div id="folders-empty" class="empty-state" hidden>
+        <h2 class="empty-title">No folders yet</h2>
+        <p id="folders-empty-text" class="empty-text"></p>
+        <button id="open-youtube-btn" class="btn btn-primary"><span data-icon="openInNew" data-size="16"></span>Open YouTube</button>
       </div>
 
-      <!-- Create/Edit folder form (hidden by default) -->
-      <div id="deck-form" class="deck-form" style="display: none;">
+      <div id="deck-form" class="deck-form" hidden>
         <input type="hidden" id="deck-edit-id" value="" />
         <div class="form-row">
-          <input type="text" id="deck-icon-input" class="icon-input" placeholder="📁" maxlength="8" />
-          <input type="text" id="deck-name-input" class="text-input" placeholder="Folder name (e.g. Coding)" />
+          <input type="text" id="deck-icon-input" class="icon-input" placeholder="📁" maxlength="8" aria-label="Folder icon (emoji)" />
+          <input type="text" id="deck-name-input" class="text-input" placeholder="Folder name" aria-label="Folder name" />
         </div>
         <div class="form-buttons">
-          <button id="deck-save-btn" class="btn btn-sm btn-primary">Save folder</button>
-          <button id="deck-cancel-btn" class="btn btn-sm btn-secondary">Cancel</button>
+          <button id="deck-cancel-btn" class="btn btn-text">Cancel</button>
+          <button id="deck-save-btn" class="btn btn-primary">Save</button>
         </div>
       </div>
 
-      <div id="decks-list" class="decks-list"></div>
+      <div id="decks-list" class="list"></div>
+
+      <button id="add-deck-btn" class="btn btn-tonal btn-block"><span data-icon="newFolder" data-size="18"></span>New folder</button>
     </section>
 
-    <!-- TAB 2: CHANNELS MANAGER -->
+    <!-- CHANNELS -->
     <section id="tab-channels" class="tab-panel">
       <div class="search-bar">
-        <input type="text" id="channel-search" class="search-input" placeholder="🔍 Search channels..." />
+        <span class="search-icon" data-icon="search"></span>
+        <input type="search" id="channel-search" class="search-input" placeholder="Search channels" aria-label="Search channels" />
       </div>
-      <div id="channels-list" class="channels-list"></div>
+      <div id="channels-list" class="list"></div>
     </section>
 
-    <!-- TAB 3: SETTINGS -->
+    <!-- SETTINGS -->
     <section id="tab-settings" class="tab-panel">
+      <h2 class="section-title">Sorting</h2>
       <div class="settings-group">
-        <label class="settings-label">AI Categorization Model</label>
+        <label class="settings-label" for="setting-ai-provider">Auto-sort engine</label>
         <select id="setting-ai-provider" class="select-input">
           <option value="heuristic">Offline (fast, private, recommended)</option>
-          <option value="gemini-nano">Offline + on-device AI for unclear channels (slower)</option>
-          <option value="gemini-api">Google Gemini (Cloud API, your key)</option>
+          <option value="gemini-nano">Offline + on-device AI for unclear channels</option>
+          <option value="gemini-api">Google Gemini Cloud (your API key)</option>
         </select>
+        <span class="settings-help">Auto-sort also learns from every channel you move by hand.</span>
       </div>
 
       <div class="settings-group nano-group" id="nano-group">
         <div class="nano-header">
-          <span class="settings-label">On-device AI model</span>
+          <span class="settings-label">On-device AI</span>
           <span id="nano-status-badge" class="nano-badge" data-status="checking">Checking…</span>
         </div>
         <span id="nano-status-text" class="settings-help"></span>
       </div>
 
-      <div class="settings-group" id="api-key-group">
-        <label class="settings-label" for="setting-api-key">Gemini API Key (optional)</label>
-        <input type="password" id="setting-api-key" class="text-input" placeholder="AIzaSy..."
+      <div class="settings-group cloud-group" id="cloud-group" hidden>
+        <label class="settings-label" for="setting-api-key">Gemini API key</label>
+        <input type="password" id="setting-api-key" class="text-input" placeholder="AIzaSy…"
                autocomplete="off" spellcheck="false" />
+        <label class="settings-label settings-label-spaced" for="setting-gemini-model">Model</label>
+        <input type="text" id="setting-gemini-model" class="text-input" placeholder="gemini-2.5-flash" />
         <span class="settings-help">
-          <strong>Privacy:</strong> if you use the Cloud option, your channel names, handles and short channel descriptions are sent to Google's
-          Gemini API using your key. Nothing is sent to SubShelf servers. Leave this empty to stay fully on-device.
-          Your key is stored only in this browser and is never included in backups.
+          Channel names, handles and short descriptions are sent to Google with your key. Your key stays in this
+          browser and is never included in backups.
         </span>
       </div>
 
-      <div class="settings-group" id="model-group">
-        <label class="settings-label">Gemini Cloud Model ID</label>
-        <input type="text" id="setting-gemini-model" class="text-input" placeholder="gemini-2.5-flash" />
-        <span class="settings-help">Default: gemini-2.5-flash (e.g. gemini-2.5-flash, gemini-2.5-pro)</span>
-      </div>
-
+      <h2 class="section-title">Feed</h2>
       <div class="settings-group toggle-group">
         <label class="toggle-label" for="setting-hide-shorts">
-          <span>Hide Shorts from Subscriptions Feed</span>
-          <span class="settings-help">Automatically remove Shorts shelves</span>
+          <span>Hide Shorts</span>
+          <span class="settings-help">Removes the Shorts shelf and Shorts from your Subscriptions feed</span>
         </label>
         <input type="checkbox" id="setting-hide-shorts" class="toggle-switch" />
       </div>
 
-      <div class="settings-group">
-        <label class="settings-label">AI Preferences & Overrides</label>
-        <button id="reset-overrides-btn" class="btn btn-secondary" style="width: 100%;">🔄 Reset AI Exclusions</button>
-        <span class="settings-help">Clears manual channel removals and custom category assignments, so Auto-sort re-sorts everything from scratch (it also stops learning from those corrections).</span>
+      <h2 class="section-title">Backup</h2>
+      <div class="settings-group backup-buttons">
+        <button id="export-backup-btn" class="btn btn-tonal"><span data-icon="download" data-size="18"></span>Export</button>
+        <label class="btn btn-tonal upload-btn">
+          <span data-icon="upload" data-size="18"></span>Import
+          <input type="file" id="import-backup-file" accept=".json" hidden />
+        </label>
       </div>
 
-      <div class="settings-group">
-        <label class="settings-label">Backup & Restore</label>
-        <div class="backup-buttons">
-          <button id="export-backup-btn" class="btn btn-secondary">📥 Export JSON</button>
-          <label class="btn btn-secondary upload-btn">
-            📤 Import JSON
-            <input type="file" id="import-backup-file" accept=".json" style="display: none;" />
-          </label>
+      <details class="advanced">
+        <summary class="section-title">Advanced</summary>
+        <div class="settings-group">
+          <button id="reset-overrides-btn" class="btn btn-tonal btn-block"><span data-icon="reset" data-size="18"></span>Forget my corrections</button>
+          <span class="settings-help">Clears every channel you placed or removed by hand, so Auto-sort starts from scratch and stops learning from them.</span>
         </div>
-      </div>
+      </details>
     </section>
   </main>
 
   <footer class="footer">
     <span class="footer-tagline">Free &amp; source-available</span>
-    <a href="https://github.com/Shourya3113/SubShelf" id="footer-github-link" class="footer-link" target="_blank" rel="noopener noreferrer">⭐ GitHub</a>
+    <a href="https://github.com/Shourya3113/SubShelf" id="footer-github-link" class="footer-link" target="_blank" rel="noopener noreferrer"><span data-icon="star" data-size="16"></span>GitHub</a>
   </footer>
 
   <script type="module" src="popup.ts"></script>

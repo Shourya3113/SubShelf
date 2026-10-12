@@ -1,4 +1,4 @@
-import { icon, iconButton } from './icons';
+import { icon, iconButton } from '@/ui/icons';
 
 export interface ActionCardHandlers {
   /** Runs the full Auto-sort flow; the button is passed so the flow can show progress on it. */
@@ -100,4 +100,47 @@ export function buildActionCard(channelCount: number, handlers: ActionCardHandle
 
   fragment.append(header, form);
   return fragment;
+}
+
+/**
+ * First-run card, shown while the user has no folders yet: explains the product in one sentence and
+ * offers the one-click start. The button reuses the Auto-sort flow (and its progress labels).
+ */
+export function buildFirstRunCard(channelCount: number, onAutoSort: (button: HTMLButtonElement) => Promise<void>): HTMLElement {
+  const card = document.createElement('div');
+  card.className = 'subdeck-firstrun';
+
+  const title = document.createElement('div');
+  title.className = 'subdeck-firstrun-title';
+  const text = document.createElement('p');
+  text.className = 'subdeck-firstrun-text';
+
+  if (channelCount === 0) {
+    title.textContent = 'Finding your subscriptions…';
+    text.textContent = 'SubShelf reads them from this sidebar. If nothing appears, make sure you\'re signed in, then click "Show more" under Subscriptions.';
+    card.append(title, text);
+    return card;
+  }
+
+  title.textContent = `Sort your ${channelCount} subscriptions`;
+  text.textContent = 'Put every channel into a folder in one click. It runs on your device and learns from any channel you move afterwards.';
+
+  const start = document.createElement('button');
+  start.type = 'button';
+  start.className = 'subdeck-firstrun-btn';
+  start.appendChild(icon('sparkle', 18));
+  const label = document.createElement('span');
+  label.className = 'subdeck-autosort-label';
+  label.textContent = `Auto-sort ${channelCount} channels`;
+  start.appendChild(label);
+  start.addEventListener('click', () => {
+    if (!start.disabled) onAutoSort(start);
+  });
+
+  const hint = document.createElement('p');
+  hint.className = 'subdeck-firstrun-hint';
+  hint.textContent = 'Prefer to do it yourself? Use the folder button above.';
+
+  card.append(title, text, start, hint);
+  return card;
 }

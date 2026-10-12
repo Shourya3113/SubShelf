@@ -8,7 +8,7 @@ import { debounce } from '@/utils/debounce';
 import { SubscriptionSync } from './subscriptionSync';
 import { Logger } from '@/utils/logger';
 import { DETAILS_RECHECK_ON_DEMAND_MS } from '@/utils/channelDetails';
-import { buildActionCard, setAutoSortLabel } from './sidebar/actionCard';
+import { buildActionCard, buildFirstRunCard, setAutoSortLabel } from './sidebar/actionCard';
 import { buildFolder, DroppedChannel, FolderHandlers, FolderMember } from './sidebar/folderView';
 import { IdNormalizer } from '@/utils/idNormalizer';
 import { resolveChannelId } from '@/utils/channelIdentity';
@@ -212,6 +212,9 @@ export class SidebarManager {
       onAutoSort: (button) => this.runAutoAI(button),
       onCreateFolder: (name, icon) => this.createFolder(name, icon),
     }));
+    if (state.categories.length === 0) {
+      fragment.appendChild(buildFirstRunCard(entries.length, (button) => this.runAutoAI(button)));
+    }
 
     const activeId = window.location.pathname.startsWith('/feed/subscriptions') ? FeedFilter.getActiveCategoryId() : null;
     const handlers = this.folderHandlers();

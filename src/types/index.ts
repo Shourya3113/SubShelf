@@ -65,7 +65,7 @@ export const DEFAULT_STORAGE: SubDeckStorageSchema = {
   channelExclusions: {},
   manualAssignments: {},
   settings: {
-    aiProvider: 'gemini-nano',
+    aiProvider: 'heuristic',
     geminiModel: DEFAULT_GEMINI_CLOUD_MODEL,
     hideShortsFromFeed: false,
   },

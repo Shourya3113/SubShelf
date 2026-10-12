@@ -23,6 +23,33 @@ export interface CategorizeAllResult {
   decks: CategoryDeck[];
   providerUsed: AIProvider;
   fallbackNotice?: string;
+  /** With Gemini Nano: how many channels the offline engine couldn't place and were sent to Nano. */
+  aiReviewed?: number;
+}
+
+/**
+ * Moves channels the model placed into a specific folder out of "General & Others" in `base`.
+ * Channels the model also left in General (or skipped) stay where the offline engine put them.
+ */
+export function placeUnclearChannels(base: CategoryDeck[], ai: CategoryDeck[]): CategoryDeck[] {
+  const decks = base.map(d => ({ ...d, channelIds: [...d.channelIds] }));
+  const general = decks.find(d => d.id === 'general-other');
+  for (const aiDeck of ai) {
+    if (aiDeck.id === 'general-other') continue;
+    let target = decks.find(d => d.id === aiDeck.id);
+    if (!target) {
+      target = { ...aiDeck, channelIds: [] };
+      decks.push(target);
+    }
+    for (const id of aiDeck.channelIds) {
+      if (!general?.channelIds.includes(id)) continue; // only channels that were unclear
+      general.channelIds = general.channelIds.filter(x => x !== id);
+      if (!target.channelIds.includes(id)) target.channelIds.push(id);
+    }
+  }
+  return decks
+    .filter(d => d.channelIds.length > 0 || !d.isSystem)
+    .sort((x, y) => (x.sortOrder ?? 0) - (y.sortOrder ?? 0));
 }
 
 export interface CategorizeOptions {
@@ -251,7 +278,7 @@ export class AICategorizer {
     const state = await SubDeckStorage.getAll();
     const settings = state.settings || structuredClone(DEFAULT_STORAGE.settings);
     const apiKey = apiKeyOverride || (typeof window === 'undefined' ? await SubDeckStorage.getApiKey() : undefined);
-    const requested: AIProvider = (settings.aiProvider as AIProvider) ?? 'gemini-nano';
+    const requested: AIProvider = (settings.aiProvider as AIProvider) ?? 'heuristic';
     // Never escalate to the cloud on the user's behalf: channel names leave the device only when
     // "gemini-api" is explicitly selected (the privacy policy promises Nano makes no network requests).
     const order: AIProvider[] =
@@ -262,11 +289,21 @@ export class AICategorizer {
         : ['gemini-nano', 'heuristic'];
 
     const failures: string[] = [];
+    let aiReviewed: number | undefined;
     for (const p of order) {
       try {
         let decks: CategoryDeck[];
         if (p === 'gemini-nano') {
-          decks = await tryGeminiNano(channels, options.nanoFallback);
+          // Hybrid: the offline engine sorts everything instantly; the (slow, small) on-device model
+          // only reviews the channels it couldn't place, so confident matches can't get worse and
+          // large subscription lists don't turn into dozens of model calls.
+          const base = HeuristicCategorizer.categorize(channels);
+          const unclearIds = new Set(base.find(d => d.id === 'general-other')?.channelIds ?? []);
+          const unclear = channels.filter(c => unclearIds.has(c.ucId));
+          decks = unclear.length > 0
+            ? placeUnclearChannels(base, await tryGeminiNano(unclear, options.nanoFallback))
+            : base;
+          aiReviewed = unclear.length;
         } else if (p === 'gemini-api') {
           if (!apiKey) {
             failures.push('Cloud: no API key configured');
@@ -289,7 +326,7 @@ export class AICategorizer {
           ? `Used ${p === 'heuristic' ? 'offline engine' : p}. ${failures.join(' | ')}`
           : undefined;
 
-        return { decks, providerUsed: p, fallbackNotice: notice };
+        return { decks, providerUsed: p, fallbackNotice: notice, aiReviewed: p === 'gemini-nano' ? aiReviewed : undefined };
       } catch (e) {
         const msg = e instanceof Error ? e.message : String(e);
         Logger.warn(`[SubShelf AI] ${p} failed:`, msg);

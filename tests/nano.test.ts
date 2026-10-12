@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, afterEach } from 'vitest';
+import { describe, it, expect, vi, afterEach, beforeEach } from 'vitest';
 import {
   NANO_OPTS,
   NanoRunner,
@@ -93,7 +93,15 @@ describe('downloadNanoModel', () => {
 
 describe('Auto-AI with Gemini Nano', () => {
   afterEach(() => vi.unstubAllGlobals());
-  const channels = [ch(UC1, '@fireship', 'Fireship')];
+  // A name the offline engine can't place, so the hybrid mode hands it to Nano
+  const channels = [ch(UC1, '@zxqvplorb', 'Zxqv Plorb')];
+  beforeEach(() => {
+    vi.stubGlobal('chrome', {
+      runtime: { id: 'test-extension' },
+      storage: { local: { get: async () => ({ settings: { aiProvider: 'gemini-nano' } }) } },
+      permissions: { contains: async () => true },
+    });
+  });
 
   it('never starts a download: a downloadable model falls back to the offline engine', async () => {
     const LM = fakeLM('downloadable');
@@ -144,5 +152,32 @@ describe('Auto-AI with Gemini Nano', () => {
     const result = await AICategorizer.categorizeAll(channels, undefined, { nanoFallback: async () => null });
     expect(result.providerUsed).toBe('heuristic');
     expect(result.fallbackNotice).toMatch(/does not offer on-device AI/);
+  });
+});
+
+describe('hybrid Auto-AI (offline first, Nano only for unclear channels)', () => {
+  afterEach(() => vi.unstubAllGlobals());
+
+  it('sends only the channels the offline engine could not place to Nano', async () => {
+    vi.stubGlobal('chrome', {
+      runtime: { id: 'test-extension' },
+      storage: { local: { get: async () => ({ settings: { aiProvider: 'gemini-nano' } }) } },
+      permissions: { contains: async () => true },
+    });
+    const prompts: string[] = [];
+    const runner = {
+      availability: async () => 'available' as const,
+      prompt: vi.fn(async (text: string) => { prompts.push(text); return JSON.stringify({ [TARGET]: ['c0'] }); }),
+    };
+    const confident = ch('UC0000000000000000000002', '@fireship', 'Fireship');
+    const unclear = ch(UC1, '@zxqvplorb', 'Zxqv Plorb');
+
+    const result = await AICategorizer.categorizeAll([confident, unclear], undefined, { nanoFallback: async () => runner });
+    expect(runner.prompt).toHaveBeenCalledTimes(1);
+    expect(prompts[0]).toContain('Zxqv Plorb');
+    expect(prompts[0]).not.toContain('Fireship"'); // the confident channel never reaches the model
+    expect(result.aiReviewed).toBe(1);
+    expect(result.decks.find(d => d.id === TARGET)?.channelIds).toEqual(expect.arrayContaining([UC1]));
+    expect(result.decks.find(d => d.id === 'general-other')).toBeUndefined();
   });
 });

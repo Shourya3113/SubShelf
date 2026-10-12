@@ -44,7 +44,7 @@ describe('normalizeState', () => {
     const { data } = normalizeState({ [API_KEY_FIELD]: 'secret', settings: { apiKey: 'legacy' } });
     expect((data as any)[API_KEY_FIELD]).toBeUndefined();
     expect(data.settings.apiKey).toBeUndefined();
-    expect(data.settings.aiProvider).toBe('gemini-nano');
+    expect(data.settings.aiProvider).toBe('heuristic');
     expect(data.categories).toEqual([]);
   });
 

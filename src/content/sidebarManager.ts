@@ -322,11 +322,12 @@ export class SidebarManager {
       keepScrollLevel();
 
       // 4. Categorize in the service worker; fall back to this page if it can't
-      aiBtn.textContent = '⏳ Clustering...';
+      aiBtn.textContent = '⏳ Sorting...';
+      const startedAt = performance.now();
       await new Promise<void>((resolve) => {
         chrome.runtime.sendMessage({ type: 'subshelf-auto-organize' }, async (res) => {
           if (res?.success) {
-            if (res.fallbackNotice) this.showToast(res.fallbackNotice);
+            this.showAutoAISummary(res, performance.now() - startedAt);
             await this.render();
           } else {
             Logger.info('[SubShelf Sidebar] Background worker did not complete categorization; running in page');
@@ -352,11 +353,30 @@ export class SidebarManager {
     if (channels.length === 0) return;
 
     Logger.info('[SubShelf Sidebar] Running AICategorizer in YouTube Window context...');
-    const { decks: rawDecks, fallbackNotice } = await AICategorizer.categorizeAll(channels);
-    if (fallbackNotice) this.showToast(fallbackNotice);
+    const startedAt = performance.now();
+    const result = await AICategorizer.categorizeAll(channels);
+    const rawDecks = result.decks;
+    this.showAutoAISummary(
+      { count: channels.length, decks: rawDecks.length, provider: result.providerUsed, aiReviewed: result.aiReviewed, fallbackNotice: result.fallbackNotice },
+      performance.now() - startedAt
+    );
     // Overrides are applied against fresh storage inside the service worker's write queue
     await SubDeckStorage.applyGeneratedDecks(rawDecks);
     await this.render();
+  }
+
+  /** Always tells the user what Auto-AI did: how many channels, which engine, how long. */
+  private static showAutoAISummary(
+    res: { count?: number; decks?: number; provider?: string; aiReviewed?: number; fallbackNotice?: string },
+    elapsedMs: number
+  ): void {
+    const engine =
+      res.provider === 'gemini-api' ? 'Gemini Cloud'
+      : res.provider === 'gemini-nano' ? `offline engine + on-device AI for ${res.aiReviewed ?? 0} unclear channel${res.aiReviewed === 1 ? '' : 's'}`
+      : 'offline engine';
+    const secs = elapsedMs < 10_000 ? (elapsedMs / 1000).toFixed(1) : Math.round(elapsedMs / 1000).toString();
+    const summary = `Sorted ${res.count ?? 0} channels into ${res.decks ?? 0} folders · ${engine} · ${secs}s`;
+    this.showToast(res.fallbackNotice ? `${summary}. ${res.fallbackNotice}` : summary, res.fallbackNotice ? 8000 : 5000);
   }
 
   static showToast(message: string, duration = 4000): void {

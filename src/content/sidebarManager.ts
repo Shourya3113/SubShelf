@@ -357,7 +357,7 @@ export class SidebarManager {
     const result = await AICategorizer.categorizeAll(channels);
     const rawDecks = result.decks;
     this.showAutoAISummary(
-      { count: channels.length, decks: rawDecks.length, provider: result.providerUsed, aiReviewed: result.aiReviewed, fallbackNotice: result.fallbackNotice },
+      { count: channels.length, decks: rawDecks.length, provider: result.providerUsed, aiReviewed: result.aiReviewed, learnedMoves: result.learnedMoves, fallbackNotice: result.fallbackNotice },
       performance.now() - startedAt
     );
     // Overrides are applied against fresh storage inside the service worker's write queue
@@ -367,7 +367,7 @@ export class SidebarManager {
 
   /** Always tells the user what Auto-AI did: how many channels, which engine, how long. */
   private static showAutoAISummary(
-    res: { count?: number; decks?: number; provider?: string; aiReviewed?: number; fallbackNotice?: string },
+    res: { count?: number; decks?: number; provider?: string; aiReviewed?: number; learnedMoves?: number; fallbackNotice?: string },
     elapsedMs: number
   ): void {
     const engine =
@@ -375,7 +375,8 @@ export class SidebarManager {
       : res.provider === 'gemini-nano' ? `offline engine + on-device AI for ${res.aiReviewed ?? 0} unclear channel${res.aiReviewed === 1 ? '' : 's'}`
       : 'offline engine';
     const secs = elapsedMs < 10_000 ? (elapsedMs / 1000).toFixed(1) : Math.round(elapsedMs / 1000).toString();
-    const summary = `Sorted ${res.count ?? 0} channels into ${res.decks ?? 0} folders · ${engine} · ${secs}s`;
+    const learned = res.learnedMoves ? ` · ${res.learnedMoves} placed using your corrections` : '';
+    const summary = `Sorted ${res.count ?? 0} channels into ${res.decks ?? 0} folders · ${engine}${learned} · ${secs}s`;
     this.showToast(res.fallbackNotice ? `${summary}. ${res.fallbackNotice}` : summary, res.fallbackNotice ? 8000 : 5000);
   }
 

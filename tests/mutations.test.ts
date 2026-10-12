@@ -106,3 +106,28 @@ describe('storage mutations', () => {
     expect(JSON.stringify(read())).toBe(before);        // ...but storage is untouched
   });
 });
+
+describe('new subscriptions follow the user\'s corrections', () => {
+  afterEach(() => vi.unstubAllGlobals());
+
+  it('a new Apple channel joins the user\'s own Apple folder instead of Tech', async () => {
+    const A = 'UC0000000000000000000011', B = 'UC0000000000000000000012', C = 'UC0000000000000000000013';
+    const withDesc = (c: SubscribedChannel, description: string) => ({ ...c, description });
+    const read = installFakeChrome({
+      channels: {
+        [A]: withDesc(ch(A, '@apple', 'Apple'), 'Apple product launches, keynotes and iPhone, Mac and iPad features.'),
+        [B]: withDesc(ch(B, '@appleindia', 'Apple India'), 'Official Apple channel for India: iPhone, Mac and iPad.'),
+        [UC2]: withDesc(ch(UC2, '@google', 'Google'), 'Search, Android, Pixel and AI from Google.'),
+      },
+      categories: [deck('tech-coding', [UC2], { isSystem: true }), deck('my-apple', [A, B], { isSystem: false })],
+      handleToUcId: {},
+      manualAssignments: { [A]: ['my-apple'], [B]: ['my-apple'] },
+      channelExclusions: {},
+    });
+    const newcomer = withDesc(ch(C, '@appleexplained', 'Apple Explained'), 'Explaining the history of Apple, iPhone and Mac.');
+    await enqueueMutation('syncObservation', { discovered: [newcomer], sidebarComplete: false });
+    const s = read() as Record<string, any>;
+    expect(s.categories.find((c: CategoryDeck) => c.id === 'my-apple').channelIds).toContain(C);
+    expect(s.categories.find((c: CategoryDeck) => c.id === 'tech-coding').channelIds).not.toContain(C);
+  });
+});

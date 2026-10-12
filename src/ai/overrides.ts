@@ -27,7 +27,7 @@ export function applyOverrides(
     const custom = prior
       ? { name: prior.name, icon: prior.icon, color: prior.color, isCollapsed: prior.isCollapsed, sortOrder: prior.sortOrder }
       : {};
-    decks.set(d.id, { ...d, ...custom, isSystem: true, channelIds: [...(d.channelIds || [])] });
+    decks.set(d.id, { ...d, ...custom, isSystem: systemIds.has(d.id), channelIds: [...(d.channelIds || [])] });
   }
 
   // 2) Carry over USER-created decks only (never old system decks)

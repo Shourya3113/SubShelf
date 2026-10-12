@@ -2,6 +2,7 @@ import { SubscribedChannel, CategoryDeck, DEFAULT_GEMINI_CLOUD_MODEL, DEFAULT_ST
 import { HeuristicCategorizer, SUBDECK_TAXONOMY } from './heuristic';
 import { buildCategorizationPrompt } from './prompt';
 import { categorizationGeminiSchema, categorizationJsonSchema } from './responseSchema';
+import { applyLearnedCorrections } from './learning';
 import { applyOverrides } from './overrides';
 import { hasCloudPermission } from '@/utils/cloudPermission';
 import { SubDeckStorage } from '@/utils/storage';
@@ -25,6 +26,8 @@ export interface CategorizeAllResult {
   fallbackNotice?: string;
   /** With Gemini Nano: how many channels the offline engine couldn't place and were sent to Nano. */
   aiReviewed?: number;
+  /** Channels moved because they closely match the user's own manual corrections. */
+  learnedMoves?: number;
 }
 
 /**
@@ -322,11 +325,28 @@ export class AICategorizer {
         decks = completeAssignments(decks, channels).map(d => ({ ...d, isSystem: true }));
         decks = this.rescueGeneralOther(decks, channels);
 
+        // Learn from the user's corrections: channels resembling ones they filed by hand follow them,
+        // including into the user's own folders. Channels the user placed themselves are never moved.
+        const learned = applyLearnedCorrections(
+          decks,
+          state.channels,
+          state.manualAssignments || {},
+          state.channelExclusions || {},
+          state.categories || []
+        );
+        decks = learned.decks;
+
         const notice = p !== requested && failures.length
           ? `Used ${p === 'heuristic' ? 'offline engine' : p}. ${failures.join(' | ')}`
           : undefined;
 
-        return { decks, providerUsed: p, fallbackNotice: notice, aiReviewed: p === 'gemini-nano' ? aiReviewed : undefined };
+        return {
+          decks,
+          providerUsed: p,
+          fallbackNotice: notice,
+          aiReviewed: p === 'gemini-nano' ? aiReviewed : undefined,
+          learnedMoves: learned.moved,
+        };
       } catch (e) {
         const msg = e instanceof Error ? e.message : String(e);
         Logger.warn(`[SubShelf AI] ${p} failed:`, msg);

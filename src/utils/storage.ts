@@ -4,6 +4,7 @@ import { isSystemChannelOrCurator } from './systemChannels';
 import { computeSync, MissingRecord, SYNC_MISSING_KEY } from './syncEngine';
 import { sanitizeAvatarMap } from './avatarUrl';
 import { applyOverrides } from '@/ai/overrides';
+import { isConfident, LearnedModel, predictFolder, trainFromCorrections } from '@/ai/learning';
 import { channelAliases, isChannelId, mapHandle, resolveChannelId } from './channelIdentity';
 import { CHANNEL_DETAILS_CHECKED_KEY, cleanDescription, sanitizeDescriptionMap } from './channelDetails';
 
@@ -149,6 +150,20 @@ export function normalizeState(raw: Record<string, any>): { data: SubDeckStorage
   }
 
   return { data: data as SubDeckStorageSchema, dirty };
+}
+
+/** Places newly subscribed channels by the user's corrections; trains lazily, only if one is needed. */
+function learnedPlacer(raw: Record<string, any>): (ch: SubscribedChannel, engineFolderId: string | null) => string | null {
+  let model: LearnedModel | null | undefined;
+  const exclusions: Record<string, string[]> = raw.channelExclusions || {};
+  return (ch, engineFolderId) => {
+    if (model === undefined) {
+      model = trainFromCorrections(raw.channels || {}, raw.manualAssignments || {}, Array.isArray(raw.categories) ? raw.categories : []);
+    }
+    if (!model) return null;
+    const p = predictFolder(model, ch, exclusions[ch.ucId] ?? []);
+    return isConfident(p, engineFolderId) ? p.folderId : null;
+  };
 }
 
 export class SubDeckStorage {
@@ -440,7 +455,7 @@ export class SubDeckStorage {
       case 'syncObservation': {
         const discovered: SubscribedChannel[] = (Array.isArray(payload?.discovered) ? payload.discovered : [])
           .filter((c: any) => c && typeof c === 'object' && typeof c.ucId === 'string' && c.ucId && typeof c.title === 'string');
-        const raw = await chrome.storage.local.get(['channels', 'categories', 'handleToUcId', SYNC_MISSING_KEY]);
+        const raw = await chrome.storage.local.get(['channels', 'categories', 'handleToUcId', 'manualAssignments', 'channelExclusions', SYNC_MISSING_KEY]);
         const now = Date.now();
         const result = computeSync(
           {
@@ -449,7 +464,7 @@ export class SubDeckStorage {
             handleToUcId: raw.handleToUcId && typeof raw.handleToUcId === 'object' ? raw.handleToUcId : {},
             missing: (raw[SYNC_MISSING_KEY] && typeof raw[SYNC_MISSING_KEY] === 'object' ? raw[SYNC_MISSING_KEY] : {}) as Record<string, MissingRecord>,
           },
-          { discovered, sidebarComplete: payload?.sidebarComplete === true, now }
+          { discovered, sidebarComplete: payload?.sidebarComplete === true, now, placeNew: learnedPlacer(raw) }
         );
         if (result.removalSkipped) {
           Logger.warn('[SubShelf] Skipped unsubscribe reconciliation:', result.removalSkipped);

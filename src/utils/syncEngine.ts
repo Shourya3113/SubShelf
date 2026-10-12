@@ -33,6 +33,11 @@ export interface SyncObservation {
   /** True only when the sidebar scrape covered the user's whole subscription list. */
   sidebarComplete: boolean;
   now: number;
+  /**
+   * Optional learned placement for a newly subscribed channel, given the folder the keyword engine
+   * picked (or null). Returns a folder ID to use instead, or null to keep the engine's choice.
+   */
+  placeNew?: (ch: SubscribedChannel, engineFolderId: string | null) => string | null;
 }
 
 export interface SyncResult {
@@ -128,12 +133,16 @@ export function computeSync(prev: SyncSnapshot, obs: SyncObservation): SyncResul
 
   // 5. Auto-categorize newcomers into existing folders
   if (newChannels.length > 0 && categories.length > 0) {
+    const engineFolder = new Map<string, string>();
     for (const deck of HeuristicCategorizer.categorize(newChannels)) {
-      const target = categories.find(c => c.id === deck.id);
-      if (!target) continue;
-      for (const id of deck.channelIds) {
-        if (!target.channelIds.includes(id)) target.channelIds.push(id);
-      }
+      for (const id of deck.channelIds) engineFolder.set(id, deck.id);
+    }
+    for (const ch of newChannels) {
+      const engineId = engineFolder.get(ch.ucId) ?? null;
+      // The user's own corrections win over the keyword engine when they clearly apply
+      const learnedId = obs.placeNew?.(ch, engineId) ?? null;
+      const target = categories.find(c => c.id === (learnedId ?? engineId));
+      if (target && !target.channelIds.includes(ch.ucId)) target.channelIds.push(ch.ucId);
     }
   }
 

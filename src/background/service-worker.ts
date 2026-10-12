@@ -144,6 +144,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
           decks: finalDecks.length,
           provider: result.providerUsed,
           aiReviewed: result.aiReviewed,
+          learnedMoves: result.learnedMoves,
           notice: result.fallbackNotice,
           fallbackNotice: result.fallbackNotice,
         });

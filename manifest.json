@@ -4,7 +4,7 @@
   "version": "1.1.1",
   "minimum_chrome_version": "111",
   "description": "Smart Subscription Category Folders & Feed Curator for YouTube™",
-  "permissions": ["storage"],
+  "permissions": ["storage", "offscreen"],
   "host_permissions": [
     "https://*.youtube.com/*",
     "https://generativelanguage.googleapis.com/*"

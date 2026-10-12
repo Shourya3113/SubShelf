@@ -4,6 +4,13 @@ import { debounce } from '@/utils/debounce';
 import { CategoryDeck, SubDeckStorageSchema, SubscribedChannel } from '@/types';
 import { toast } from '@/utils/toast';
 import { isSystemChannelOrCurator } from '@/utils/systemChannels';
+import {
+  NanoStatus,
+  describeNanoStatus,
+  downloadNanoModel,
+  getNanoStatus,
+  resolveLanguageModelAPI,
+} from '@/ai/nano';
 
 class PopupManager {
   private static state: SubDeckStorageSchema | null = null;
@@ -374,8 +381,12 @@ class PopupManager {
       if (this.state) {
         this.state.settings.aiProvider = val;
       }
+      this.toggleNanoGroup(val);
       await SubDeckStorage.updateSettings({ aiProvider: val });
     });
+
+    this.toggleNanoGroup(aiProvider.value);
+    this.setupNanoModel();
 
     let keyTimer: number | undefined;
     const saveKey = () => {
@@ -440,6 +451,62 @@ class PopupManager {
         window.open(url, '_blank');
       }
     });
+  }
+
+  // --- ON-DEVICE AI MODEL (GEMINI NANO) ---
+  private static toggleNanoGroup(provider: string): void {
+    const group = document.getElementById('nano-group');
+    if (group) group.hidden = provider !== 'gemini-nano';
+  }
+
+  private static async setupNanoModel(): Promise<void> {
+    const badge = document.getElementById('nano-status-badge');
+    const text = document.getElementById('nano-status-text');
+    const warning = document.getElementById('nano-download-warning');
+    const btn = document.getElementById('nano-download-btn') as HTMLButtonElement | null;
+    const progress = document.getElementById('nano-progress') as HTMLProgressElement | null;
+    if (!badge || !text || !warning || !btn || !progress) return;
+
+    const LM = resolveLanguageModelAPI();
+
+    const render = (status: NanoStatus) => {
+      const view = describeNanoStatus(status);
+      badge.dataset.status = status;
+      badge.textContent = view.badge;
+      text.textContent = view.text;
+      warning.hidden = status !== 'downloadable';
+      btn.hidden = !view.action;
+      btn.textContent = view.action ?? '';
+      progress.hidden = true;
+    };
+
+    // Chrome only lets create() start a download with user activation, so this must stay a click handler
+    btn.addEventListener('click', async () => {
+      btn.disabled = true;
+      progress.hidden = false;
+      progress.removeAttribute('value'); // indeterminate until Chrome reports progress
+      badge.dataset.status = 'downloading';
+      badge.textContent = 'Downloading';
+      text.textContent = 'Starting download… You can close this popup; Chrome keeps downloading in the background.';
+      try {
+        await downloadNanoModel(LM, percent => {
+          progress.value = percent;
+          text.textContent = percent >= 100
+            ? 'Download complete. Preparing the model…'
+            : `Downloading… ${percent}%. You can close this popup; Chrome keeps downloading in the background.`;
+        });
+        render(await getNanoStatus(LM));
+        toast('On-device AI model is ready. Auto-AI will now use it.');
+      } catch (err) {
+        render(await getNanoStatus(LM));
+        const reason = err instanceof Error ? err.message : String(err);
+        text.textContent = `Chrome did not finish the download: ${reason}`;
+      } finally {
+        btn.disabled = false;
+      }
+    });
+
+    render(await getNanoStatus(LM));
   }
 }
 

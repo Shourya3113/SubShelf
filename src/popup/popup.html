@@ -62,6 +62,20 @@
         </select>
       </div>
 
+      <div class="settings-group nano-group" id="nano-group">
+        <div class="nano-header">
+          <span class="settings-label">On-device AI model</span>
+          <span id="nano-status-badge" class="nano-badge" data-status="checking">Checking…</span>
+        </div>
+        <span id="nano-status-text" class="settings-help"></span>
+        <span id="nano-download-warning" class="nano-warning" hidden>
+          This downloads Google's Gemini Nano model (several GB). Chrome handles the download and storage,
+          and needs about 22 GB of free disk space. SubShelf never starts it without your click.
+        </span>
+        <button id="nano-download-btn" class="btn btn-primary nano-download-btn" hidden>Download on-device AI model</button>
+        <progress id="nano-progress" class="nano-progress" max="100" value="0" hidden></progress>
+      </div>
+
       <div class="settings-group" id="api-key-group">
         <label class="settings-label" for="setting-api-key">Gemini API Key (optional)</label>
         <input type="password" id="setting-api-key" class="text-input" placeholder="AIzaSy..."

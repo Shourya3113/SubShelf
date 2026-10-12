@@ -45,17 +45,6 @@ export const DEFAULT_GEMINI_CLOUD_MODEL = 'gemini-2.5-flash';
 export const CURRENT_SCHEMA_VERSION = 2;
 export const API_KEY_FIELD = 'geminiApiKey';
 
-export const UNCATEGORIZED_DECK: CategoryDeck = {
-  id: '__uncategorized__',
-  name: 'Uncategorized',
-  icon: '📂',
-  color: '#6B7280',
-  channelIds: [],
-  isCollapsed: true,
-  sortOrder: 999,
-  isSystem: true,
-};
-
 export const DEFAULT_STORAGE: SubDeckStorageSchema = {
   version: CURRENT_SCHEMA_VERSION,
   categories: [],

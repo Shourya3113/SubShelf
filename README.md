@@ -36,7 +36,7 @@ Channels are sorted by a fast offline engine that learns from your own correctio
 SubShelf was built from the ground up to adhere strictly to Google Chrome Web Store Developer Program Policies and YouTube Brand Guidelines:
 
 * **No Untrusted HTML Interpolation:** UI is built with `textContent` / `createElement`; `npm run audit:dom` enforces this in CI.
-* **Minimal Permissions:** `storage` and `www.youtube.com`. Access to `generativelanguage.googleapis.com` is an *optional* permission that Chrome asks for only when you select the Gemini Cloud option.
+* **Minimal Permissions:** `storage`, `www.youtube.com`, and `offscreen` (runs Chrome's on-device AI in a hidden extension page when you opt in; SubShelf never downloads models). Access to `generativelanguage.googleapis.com` is an *optional* permission that Chrome asks for only when you select the Gemini Cloud option.
 * **Zero Remote Code Execution:** 100% locally compiled and bundled via Vite/CRXJS. Zero `eval()`, zero `new Function()`, and zero external CDN script tags.
 * **Local Privacy:** SubShelf has no servers, no analytics, and no tracking. Everything stays in your browser. If you choose the optional Gemini Cloud mode, your channel names, handles and short channel descriptions are sent to Google using your own API key.
 * **API Key Handling:** Your Gemini API key is sent only in the `x-goog-api-key` header (never in URLs), is read only by the background service worker, is never handed to the code running on YouTube pages, and is excluded from JSON backups.
@@ -114,7 +114,7 @@ npm run package
 ```
 This compiles the production bundle in `dist/` and generates a Chrome Web Store-ready archive:
 ```
-subshelf-v1.1.1.zip (manifest.json at archive root)
+subshelf-v1.2.0.zip (manifest.json at archive root)
 ```
 
 ### 5. Load into Chrome
@@ -137,38 +137,39 @@ SubShelf/
 │   └── package.sh          # Packaging shell script
 ├── src/
 │   ├── ai/
-│   │   ├── categorizer.ts  # 3-tier AI fallback engine
-│   │   ├── heuristic.ts    # Offline keyword scoring & creator list
-│   │   ├── overrides.ts    # Merges AI output with your manual assignments
-│   │   └── prompt.ts       # Structured prompt generator with XML envelopes
+│   │   ├── categorizer.ts     # Orchestrates the engines (offline-first; Nano only for unclear channels)
+│   │   ├── heuristic.ts       # Offline keyword scoring & creator list (names, handles, descriptions)
+│   │   ├── learning.ts        # Learns folder profiles from your manual corrections
+│   │   ├── nano.ts            # Chrome on-device AI helpers (status only; never downloads)
+│   │   ├── overrides.ts       # Merges engine output with your manual assignments
+│   │   ├── prompt.ts          # Prompt builder with injection-safe channel list
+│   │   └── responseSchema.ts  # Constrains AI output to valid folder IDs
 │   ├── background/
-│   │   ├── migrations.ts   # Schema migration handler
-│   │   └── service-worker.ts # Background bus & origin-validated messaging
-│   ├── config/
-│   │   └── selectors.ts    # Resilient & multi-lingual YouTube DOM selectors
+│   │   ├── migrations.ts      # Schema migrations
+│   │   ├── offscreenNano.ts   # Runs on-device AI via an offscreen page when needed
+│   │   └── service-worker.ts  # Storage write queue, Auto-sort, permissions
+│   ├── config/selectors.ts    # YouTube DOM selectors
 │   ├── content/
-│   │   ├── channelExtractor.ts # Sidebar channel parser
-│   │   ├── feedFilter.ts       # Subscription feed curator & live filter
-│   │   ├── healthMonitor.ts    # YouTube DOM layout degradation monitor
-│   │   ├── index.ts            # Content script entry point & coordinator
-│   │   ├── sidebarManager.ts   # Sidebar accordion folders & in-DOM controls
+│   │   ├── sidebar/           # Sidebar UI: header row, folders, ⋯ menu
+│   │   ├── channelExtractor.ts # Reads subscriptions from YouTube's sidebar
+│   │   ├── feedFilter.ts      # Folder chips & feed filtering, Hide Shorts
+│   │   ├── healthMonitor.ts   # Detects YouTube layout changes
+│   │   ├── index.ts           # Content script entry point
+│   │   ├── injectedMain.ts    # Reads YouTube's own subscription data (page context)
+│   │   ├── sidebarManager.ts  # Renders the sidebar; drag & drop; Auto-sort flow
 │   │   ├── subscriptionSync.ts # Reports observed subscriptions to the service worker
-│   │   └── styles/subdeck.css  # Scoped YouTube-adaptive styling
-│   ├── popup/
-│   │   ├── popup.html      # 3-tab popup interface shell
-│   │   ├── popup.css       # Theme-adaptive popup styling
-│   │   └── popup.ts        # Folders, channel search & settings controller
-│   ├── types/index.ts      # Domain models & storage schema contracts
+│   │   └── styles/subdeck.css # Styles built on YouTube's theme tokens
+│   ├── offscreen/             # Hidden page that hosts on-device AI
+│   ├── popup/                 # Popup: folders, channels, settings
+│   ├── types/index.ts         # Data model & storage schema
+│   ├── ui/icons.ts            # Shared SVG icon set
 │   └── utils/
-│       ├── avatarHarvest.ts # Sidebar DOM and channels page avatar harvester
-│       ├── cloudPermission.ts # Optional Gemini host permission helpers
-│       ├── debounce.ts     # Generic debouncer utility
-│       ├── exportImport.ts # Sanitized JSON backup export/import
-│       ├── feedMatch.ts    # Matches feed cards (UC ID or @handle) to folders
-│       ├── idNormalizer.ts # Canonical UC-ID & handle extractor
-│       ├── logger.ts       # Dev-guarded logger
-│       ├── storage.ts      # Typed storage layer; all writes serialized in the service worker
-│       └── syncEngine.ts   # Pure subscription reconciliation with removal safeguards
+│       ├── channelIdentity.ts # The one definition of channel IDs, handles and aliases
+│       ├── channelDetails.ts  # Channel descriptions from YouTube's subscriptions page
+│       ├── feedMatch.ts       # Matches feed cards (UC ID or @handle) to folders
+│       ├── storage.ts         # Storage layer; every write serialized in the service worker
+│       ├── syncEngine.ts      # Subscription reconciliation with removal safeguards
+│       └── …                  # Avatars, backups, permissions, system-channel list, logging
 ├── tests/                  # Vitest unit tests
 ├── manifest.json           # Manifest V3 configuration
 ├── PRIVACY_POLICY.md       # Privacy policy compliance document

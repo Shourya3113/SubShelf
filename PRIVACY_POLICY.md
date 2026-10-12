@@ -1,6 +1,6 @@
 # Privacy Policy for SubShelf — Smart YouTube™ Subscription Folders
 
-**Last Updated:** October 12, 2026  
+**Last Updated:** October 13, 2026  
 **Extension Name:** SubShelf — Smart YouTube™ Subscription Folders  
 **Repository:** [https://github.com/Shourya3113/SubShelf](https://github.com/Shourya3113/SubShelf)
 
@@ -37,7 +37,7 @@ SubShelf is designed from the ground up on a **strict local-first, zero-telemetr
   > [!WARNING]
   > Under Google's API Terms of Service for free-of-charge API usage (Google AI Studio and Gemini API Free Tier), prompts and responses may be processed and reviewed by human reviewers and used by Google to improve and train Google products, services, and machine learning models.
   > If you utilize a paid (pay-as-you-go) Gemini API key, Google's enterprise terms apply, under which customer data is not used for model training.
-- **100% Private Alternatives:** If you do not want your subscribed channel names, handles and descriptions transmitted to Google or processed under Google's free-tier terms, you should use **Gemini Nano (Chrome Built-in AI)** or **Offline Regex & Keywords**. Both options operate entirely on your device with **zero network requests**.
+- **100% Private Alternatives:** If you do not want your subscribed channel names, handles and descriptions transmitted to Google or processed under Google's free-tier terms, use **Offline** (the default) or **Offline + on-device AI**. Both run entirely on your device with **zero network requests**.
 
 ---
 
@@ -58,6 +58,7 @@ SubShelf requests only the minimal permissions required to provide its features:
 | Permission | Purpose & Justification |
 |---|---|
 | `storage` | Storing subscription folders, channel-to-deck mappings, manual overrides, and preferences locally on your machine. |
+| `offscreen` | Lets the extension open a hidden extension page to run Chrome's on-device AI (Gemini Nano) when you choose "Offline + on-device AI" and Chrome already has the model. It only runs on your device, makes no network requests, and never downloads a model. |
 | `https://www.youtube.com/*` | Interacting with YouTube web pages to render the native folder accordion in the left sidebar and filter the subscriptions feed according to the active folder. The extension does not run on other YouTube sites (YouTube Music, Studio, mobile). |
 | `https://generativelanguage.googleapis.com/*` | **Optional permission**, not granted at install. Chrome asks for it only when you select the Cloud provider; it lets the extension call Google's Gemini API with your own key. You can revoke it at any time from the extension's details page. |
 

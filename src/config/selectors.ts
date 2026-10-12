@@ -15,8 +15,6 @@ export const YT_SELECTORS = {
   continuationItem: 'ytd-continuation-item-renderer',
 } as const;
 
-export type SelectorKey = keyof typeof YT_SELECTORS;
-
 /**
  * Accurately finds the channel Subscriptions section in YouTube's active, visible guide sidebar.
  * Uses robust structural and multi-lingual checks, avoiding off-screen/drawer duplicates.
@@ -74,18 +72,4 @@ export function getSubscriptionSection(): Element | null {
   }
 
   return null;
-}
-
-/**
- * Finds the native "Show more" expander button within the YouTube subscriptions section.
- */
-export function getNativeExpander(subSection?: Element | null): HTMLElement | null {
-  const section = subSection || getSubscriptionSection();
-  if (!section) return null;
-
-  const expander = section.querySelector<HTMLElement>(
-    'ytd-guide-collapsible-entry-renderer, #expander-item, #expander-button, #expand-button, ytd-guide-entry-renderer#collapsible-expander, ytd-guide-collapsible-section-entry-renderer, yt-guide-entry-view-model#expander-item'
-  );
-
-  return expander;
 }

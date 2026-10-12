@@ -5,6 +5,7 @@ import { computeSync, MissingRecord, SYNC_MISSING_KEY } from './syncEngine';
 import { sanitizeAvatarMap } from './avatarUrl';
 import { applyOverrides } from '@/ai/overrides';
 import { channelAliases, isChannelId, mapHandle, resolveChannelId } from './channelIdentity';
+import { CHANNEL_DETAILS_CHECKED_KEY, cleanDescription, sanitizeDescriptionMap } from './channelDetails';
 
 const MAX_CHANNELS_PER_CATEGORY = 5_000;
 
@@ -61,14 +62,25 @@ export function normalizeState(raw: Record<string, any>): { data: SubDeckStorage
   const canonicalChannels: Record<string, SubscribedChannel> = {};
   const purgedSystemIds = new Set<string>();
 
-  for (const [key, ch] of Object.entries(data.channels as Record<string, SubscribedChannel>)) {
-    if (!ch || typeof ch !== 'object') continue;
+  for (const [key, stored] of Object.entries(data.channels as Record<string, SubscribedChannel>)) {
+    if (!stored || typeof stored !== 'object') continue;
 
-    if (isSystemChannelOrCurator(ch) || isSystemChannelOrCurator({ ucId: key, title: ch.title, handle: ch.handle, url: ch.url })) {
+    if (isSystemChannelOrCurator(stored) || isSystemChannelOrCurator({ ucId: key, title: stored.title, handle: stored.handle, url: stored.url })) {
       purgedSystemIds.add(key);
-      if (ch.ucId) purgedSystemIds.add(ch.ucId);
+      if (stored.ucId) purgedSystemIds.add(stored.ucId);
       dirty = true;
       continue;
+    }
+
+    // Descriptions reach the AI prompt, so storage only ever holds clean, capped strings
+    let ch = stored;
+    if ('description' in stored) {
+      const description = cleanDescription(stored.description);
+      if (description !== stored.description) {
+        ch = { ...stored, description };
+        if (description === undefined) delete ch.description;
+        dirty = true;
+      }
     }
 
     const resolved = [ch.ucId, ch.handle, key].map(x => (x ? resolveChannelId(x, cleanHandleMap) : '')).find(isChannelId);
@@ -77,8 +89,9 @@ export function normalizeState(raw: Record<string, any>): { data: SubDeckStorage
     if (canonId && canonId !== key && (isChannelId(canonId) || !isChannelId(key))) {
       aliasRemap[key] = canonId;
       dirty = true;
-      canonicalChannels[canonId] = canonicalChannels[canonId]
-        ? { ...ch, ...canonicalChannels[canonId], avatarUrl: canonicalChannels[canonId].avatarUrl || ch.avatarUrl }
+      const prev = canonicalChannels[canonId];
+      canonicalChannels[canonId] = prev
+        ? { ...ch, ...prev, avatarUrl: prev.avatarUrl || ch.avatarUrl, description: prev.description ?? ch.description }
         : { ...ch, ucId: canonId };
     } else {
       canonicalChannels[key] = ch;
@@ -472,6 +485,29 @@ export class SubDeckStorage {
         return { changed };
       }
 
+      case 'mergeChannelDetails': {
+        const descriptions = sanitizeDescriptionMap(payload?.descriptions);
+        const raw = await chrome.storage.local.get(['channels', 'handleToUcId']);
+        const channels: Record<string, SubscribedChannel> = raw.channels || {};
+        const handleToUcId: Record<string, string> = raw.handleToUcId || {};
+        let updated = 0;
+        for (const [key, description] of descriptions) {
+          const ucId = resolveChannelId(key, handleToUcId);
+          const ch = isChannelId(ucId) ? channels[ucId] : undefined;
+          if (ch && ch.description !== description) {
+            channels[ucId] = { ...ch, description };
+            updated++;
+          }
+        }
+        // The check time is recorded even when nothing changed, so channels the page doesn't
+        // list aren't looked up again on every YouTube visit
+        await chrome.storage.local.set({
+          ...(updated > 0 ? { channels } : {}),
+          [CHANNEL_DETAILS_CHECKED_KEY]: Date.now(),
+        });
+        return { changed: updated > 0, updated };
+      }
+
       case 'importMerge': {
         const inc = payload || {};
         const incCategories: CategoryDeck[] = Array.isArray(inc.categories) ? inc.categories : [];
@@ -564,6 +600,19 @@ export class SubDeckStorage {
 
   static async mergeAvatars(avatars: Record<string, string>): Promise<{ changed: boolean } | null> {
     return this.requestMutation('mergeAvatars', { avatars });
+  }
+
+  /** Stores channel descriptions read from YouTube's All subscriptions page, keyed by UC ID or handle. */
+  static async mergeChannelDetails(descriptions: Record<string, string>): Promise<{ changed: boolean; updated: number } | null> {
+    return this.requestMutation('mergeChannelDetails', { descriptions });
+  }
+
+  /** When channel details were last read from YouTube (0 if never). */
+  static async getChannelDetailsCheckedAt(): Promise<number> {
+    if (!this.isContextValid()) return 0;
+    const data = await chrome.storage.local.get(CHANNEL_DETAILS_CHECKED_KEY);
+    const at = data[CHANNEL_DETAILS_CHECKED_KEY];
+    return typeof at === 'number' && Number.isFinite(at) ? at : 0;
   }
 
   static async getCategories(): Promise<CategoryDeck[]> {

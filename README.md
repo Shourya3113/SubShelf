@@ -36,7 +36,7 @@ SubShelf was built from the ground up to adhere strictly to Google Chrome Web St
 * **No Untrusted HTML Interpolation:** UI is built with `textContent` / `createElement`; `npm run audit:dom` enforces this in CI.
 * **Minimal Permissions:** `storage` and `www.youtube.com`. Access to `generativelanguage.googleapis.com` is an *optional* permission that Chrome asks for only when you select the Gemini Cloud option.
 * **Zero Remote Code Execution:** 100% locally compiled and bundled via Vite/CRXJS. Zero `eval()`, zero `new Function()`, and zero external CDN script tags.
-* **Local Privacy:** SubShelf has no servers, no analytics, and no tracking. Everything stays in your browser. If you choose the optional Gemini Cloud mode, your channel names and handles are sent to Google using your own API key.
+* **Local Privacy:** SubShelf has no servers, no analytics, and no tracking. Everything stays in your browser. If you choose the optional Gemini Cloud mode, your channel names, handles and short channel descriptions are sent to Google using your own API key.
 * **API Key Handling:** Your Gemini API key is sent only in the `x-goog-api-key` header (never in URLs), is read only by the background service worker, is never handed to the code running on YouTube pages, and is excluded from JSON backups.
 
 ---
@@ -53,7 +53,7 @@ Offline keyword engine ───────────────────
 
 * **Gemini Nano:** Chrome's built-in model; nothing leaves your device.
 * **Offline keyword engine:** word-boundary keyword matching plus a built-in list of well-known creators, with weighted scoring.
-* **Gemini Cloud API:** sends channel titles and handles to Google with your own API key (model configurable, default `gemini-2.5-flash`).
+* **Gemini Cloud API:** sends channel titles, handles and short descriptions to Google with your own API key (model configurable, default `gemini-2.5-flash`).
 
 ### Pre-Configured Taxonomies
 1. 💻 **Tech & Coding** (*Programming, Apple, Linux, AI, Hardware, Gadgets*)

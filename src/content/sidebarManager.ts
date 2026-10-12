@@ -7,6 +7,7 @@ import { CategoryDeck } from '@/types';
 import { debounce } from '@/utils/debounce';
 import { SubscriptionSync } from './subscriptionSync';
 import { Logger } from '@/utils/logger';
+import { DETAILS_RECHECK_ON_DEMAND_MS } from '@/utils/channelDetails';
 import { buildActionCard } from './sidebar/actionCard';
 import { buildFolder, FolderHandlers, FolderMember } from './sidebar/folderView';
 
@@ -315,7 +316,12 @@ export class SidebarManager {
         return;
       }
 
-      // 3. Categorize in the service worker; fall back to this page if it can't
+      // 3. Descriptions give every engine more to go on than the channel name
+      aiBtn.textContent = '⏳ Reading channels...';
+      await SubscriptionSync.refreshChannelDescriptions(DETAILS_RECHECK_ON_DEMAND_MS);
+      keepScrollLevel();
+
+      // 4. Categorize in the service worker; fall back to this page if it can't
       aiBtn.textContent = '⏳ Clustering...';
       await new Promise<void>((resolve) => {
         chrome.runtime.sendMessage({ type: 'subshelf-auto-organize' }, async (res) => {

@@ -8,6 +8,7 @@ import { debounce } from '@/utils/debounce';
 import { Logger } from '@/utils/logger';
 import { sanitizeAvatarMap } from '@/utils/avatarUrl';
 import { harvestAvatarsFromDom, harvestFromChannelsPage } from '@/utils/avatarHarvest';
+import { DETAILS_RECHECK_MS, needsDetailsLookup } from '@/utils/channelDetails';
 
 class SubShelfCoordinator {
   static init(): void {
@@ -62,11 +63,16 @@ class SubShelfCoordinator {
     [1500, 3500, 7000, 12000].forEach(ms => setTimeout(harvest, ms));
     document.addEventListener('yt-navigate-finish', () => setTimeout(harvest, 1200));
 
-    // One-time catch-up for channels still without a logo, after the first harvests had a chance:
+    // One-time catch-up, after the first harvests had a chance: YouTube's All subscriptions page
+    // fills in channels still without a logo, and descriptions for channels never looked up
+    // (those are re-checked at most daily, as some channels are never listed there).
     setTimeout(async () => {
       if (!SubDeckStorage.isContextValid()) return;
       const all = Object.values((await SubDeckStorage.getAll()).channels ?? {});
-      if (all.some(c => !c.avatarUrl)) applyHarvest(await harvestFromChannelsPage());
+      const checkedAt = await SubDeckStorage.getChannelDetailsCheckedAt();
+      if (!all.some(c => !c.avatarUrl) && !needsDetailsLookup(all, checkedAt, Date.now(), DETAILS_RECHECK_MS)) return;
+      const page = await harvestFromChannelsPage();
+      if (page) await SubscriptionSync.applyChannelsPage(page);
     }, 15000);
 
     window.addEventListener('yt-navigate-start', (e: any) => {

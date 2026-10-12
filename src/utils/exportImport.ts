@@ -1,6 +1,7 @@
 import { SubDeckExportPayload, SubDeckStorageSchema, CategoryDeck, SubscribedChannel } from '@/types';
 import { SubDeckStorage } from './storage';
 import { safeAvatarUrl } from './avatarUrl';
+import { cleanDescription } from './channelDetails';
 import { SUBDECK_TAXONOMY } from '@/ai/heuristic';
 
 const MAX_FILE_SIZE = 5 * 1024 * 1024; // 5 MB
@@ -154,6 +155,8 @@ export class ExportImport {
           avatarUrl: safeAvatarUrl(ch.avatarUrl),
           discoveredAt: typeof ch.discoveredAt === 'number' && Number.isFinite(ch.discoveredAt) ? ch.discoveredAt : Date.now(),
         };
+        const description = cleanDescription(ch.description);
+        if (description !== undefined) validatedChannels[ch.ucId].description = description;
 
         if (handle && !FORBIDDEN_KEYS.has(handle)) {
           validatedHandles[handle] = ch.ucId;

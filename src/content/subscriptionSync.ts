@@ -5,6 +5,8 @@ import { Logger } from '@/utils/logger';
 import { SubscribedChannel } from '@/types';
 import { isSystemChannelOrCurator } from '@/utils/systemChannels';
 import { normalizeHandle } from '@/utils/channelIdentity';
+import { ChannelsPageData, harvestFromChannelsPage } from '@/utils/avatarHarvest';
+import { needsDetailsLookup } from '@/utils/channelDetails';
 
 export class SubscriptionSync {
   private static isSyncing = false;
@@ -115,5 +117,31 @@ export class SubscriptionSync {
       const res = await SubDeckStorage.mergeAvatars(Object.fromEntries(avatarMap));
       if (res?.changed) SidebarManager.render();
     } catch {}
+  }
+
+  /** Sends what YouTube's All subscriptions page listed (avatars and descriptions) to the service worker. */
+  static async applyChannelsPage(page: ChannelsPageData): Promise<void> {
+    if (!SubDeckStorage.isContextValid()) return;
+    ChannelExtractor.mergeAvatars(page.avatars);
+    await this.mergeAvatars(page.avatars);
+    try {
+      await SubDeckStorage.mergeChannelDetails(Object.fromEntries(page.descriptions));
+    } catch {}
+  }
+
+  /**
+   * Reads the All subscriptions page when some stored channel has never had its description looked
+   * up (and the last lookup is at least `minIntervalMs` old). Gives up quietly after `timeoutMs`,
+   * since Auto-AI waits for it.
+   */
+  static async refreshChannelDescriptions(minIntervalMs: number, timeoutMs = 10_000): Promise<void> {
+    if (!SubDeckStorage.isContextValid()) return;
+    const channels = Object.values(await SubDeckStorage.getChannels());
+    if (!needsDetailsLookup(channels, await SubDeckStorage.getChannelDetailsCheckedAt(), Date.now(), minIntervalMs)) return;
+    const page = await Promise.race([
+      harvestFromChannelsPage(),
+      new Promise<null>(resolve => setTimeout(() => resolve(null), timeoutMs)),
+    ]);
+    if (page) await this.applyChannelsPage(page);
   }
 }

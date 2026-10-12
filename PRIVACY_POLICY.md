@@ -21,7 +21,7 @@ SubShelf is designed from the ground up on a **strict local-first, zero-telemetr
 ## 2. Information Handled by the Extension
 
 ### A. YouTube™ Subscription Data
-- **What is accessed:** Channel titles, handles, channel IDs (`ucId`), and avatar URLs of the channels you subscribe to, read from the YouTube pages you visit (the left sidebar and the subscription data YouTube already loads for that sidebar). To fill in missing channel avatars, the extension may also load YouTube's own "All subscriptions" page (`youtube.com/feed/channels`) in the background, using your existing YouTube session. This request goes only to YouTube.
+- **What is accessed:** Channel titles, handles, channel IDs (`ucId`), avatar URLs and short channel descriptions of the channels you subscribe to, read from the YouTube pages you visit (the left sidebar and the subscription data YouTube already loads for that sidebar). To fill in missing channel avatars and descriptions, the extension may also load YouTube's own "All subscriptions" page (`youtube.com/feed/channels`) in the background, using your existing YouTube session. This request goes only to YouTube.
 - **Why it is accessed:** To organize your subscribed channels into custom folder decks, filter your subscriptions feed by topic, and render collapsible shelves.
 - **Where it is stored:** Exclusively inside your browser's local storage (`chrome.storage.local`). This data is never sent to any server operated by SubShelf.
 
@@ -32,12 +32,12 @@ SubShelf is designed from the ground up on a **strict local-first, zero-telemetr
 ### C. Optional Gemini Cloud API & Key Handling
 - **Optional Feature:** Categorization via Google's Gemini Cloud API is strictly optional and disabled by default. It is only activated if you explicitly select the "Google Gemini (Cloud API)" provider, grant the extension permission to contact `generativelanguage.googleapis.com` (Chrome asks you at that moment), and enter your personal Gemini API key in Settings.
 - **No automatic escalation:** If Gemini Nano is selected but unavailable on your device, SubShelf falls back to the offline engine. It never switches to the Cloud API on its own.
-- **Data Transmitted:** If you enable the Cloud API tier, the extension sends your subscribed channel titles and handles over HTTPS to Google's official Generative Language API endpoint (`https://generativelanguage.googleapis.com/*`) in order to categorize them into relevant topics.
+- **Data Transmitted:** If you enable the Cloud API tier, the extension sends your subscribed channel titles, handles and short channel descriptions (the "About" text YouTube shows on your All subscriptions page, truncated to about 200 characters each) over HTTPS to Google's official Generative Language API endpoint (`https://generativelanguage.googleapis.com/*`) in order to categorize them into relevant topics.
 - **Google Gemini API Free-Tier Data Terms:**
   > [!WARNING]
   > Under Google's API Terms of Service for free-of-charge API usage (Google AI Studio and Gemini API Free Tier), prompts and responses may be processed and reviewed by human reviewers and used by Google to improve and train Google products, services, and machine learning models.
   > If you utilize a paid (pay-as-you-go) Gemini API key, Google's enterprise terms apply, under which customer data is not used for model training.
-- **100% Private Alternatives:** If you do not want your subscribed channel names and handles transmitted to Google or processed under Google's free-tier terms, you should use **Gemini Nano (Chrome Built-in AI)** or **Offline Regex & Keywords**. Both options operate entirely on your device with **zero network requests**.
+- **100% Private Alternatives:** If you do not want your subscribed channel names, handles and descriptions transmitted to Google or processed under Google's free-tier terms, you should use **Gemini Nano (Chrome Built-in AI)** or **Offline Regex & Keywords**. Both options operate entirely on your device with **zero network requests**.
 
 ---
 
@@ -80,7 +80,7 @@ SubShelf provides three distinct categorization engines:
 3. **Optional Google Gemini Cloud API:**
    - Utilizes Google's cloud-hosted Gemini models (e.g., `gemini-2.5-flash`).
    - Requires a personal API key provided by the user.
-   - **Privacy:** Network transmission of channel titles and handles to Google. Governed by Google's Generative AI Terms of Service and data use policies.
+   - **Privacy:** Network transmission of channel titles, handles and short channel descriptions to Google. Governed by Google's Generative AI Terms of Service and data use policies.
 
 ---
 

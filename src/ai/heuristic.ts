@@ -610,6 +610,8 @@ interface CompiledKeyword {
   clean: string;
   isMultiWord: boolean;
   regex: RegExp;
+  /** Word-boundary match that also accepts a plural ("engines", "workouts"), for prose. */
+  descriptionRegex: RegExp;
 }
 
 interface CompiledTaxonomy extends TaxonomyEntry {
@@ -624,13 +626,53 @@ const COMPILED_TAXONOMY: CompiledTaxonomy[] = SUBDECK_TAXONOMY.map(tax => ({
     clean: sig.toLowerCase().replace(/[^a-z0-9]/g, ''),
     regex: new RegExp(`\\b${sig.toLowerCase().trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`, 'i'),
   })),
-  compiledKeywords: tax.keywords.map(kw => ({
-    original: kw.toLowerCase().trim(),
-    clean: kw.toLowerCase().replace(/[^a-z0-9]/g, ''),
-    isMultiWord: kw.includes(' '),
-    regex: new RegExp(`\\b${kw.toLowerCase().trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`, 'i'),
-  })),
+  compiledKeywords: tax.keywords.map(kw => {
+    const escaped = kw.toLowerCase().trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    return {
+      original: kw.toLowerCase().trim(),
+      clean: kw.toLowerCase().replace(/[^a-z0-9]/g, ''),
+      isMultiWord: kw.includes(' '),
+      regex: new RegExp(`\\b${escaped}\\b`, 'i'),
+      descriptionRegex: new RegExp(`\\b${escaped}(?:s|es)?\\b`, 'i'),
+    };
+  }),
 }));
+
+/**
+ * Description words are weaker evidence than the channel's name: one hit scores below the assignment
+ * threshold (so a stray word never decides), two distinct hits pass it, and the total is capped below
+ * a single handle (20) or title (25) keyword hit, so a long description can't outvote the name.
+ */
+export const DESCRIPTION_HIT_SCORE = 8;
+export const DESCRIPTION_MAX_SCORE = 18;
+const ASSIGN_THRESHOLD = 15;
+
+/**
+ * Keywords that are too common in YouTube "About" text to say anything about a channel's topic
+ * there ("business inquiries", "new episodes every week", "welcome to my home"). They still count
+ * in titles and handles.
+ */
+const DESCRIPTION_STOPWORDS = new Set([
+  'business', 'market', 'markets', 'capital', 'options', 'shares', 'fire', 'profit', 'revenue',
+  'show', 'fun', 'funny', 'episode', 'season', 'shorts', 'clips', 'challenge', 'reaction', 'reactions',
+  'commentary', 'interview', 'ranking', 'scene', 'home', 'house', 'style', 'lifestyle', 'diy',
+  'setup', 'server', 'shell', 'cloud', 'api', 'terminal', 'engineering', 'records', 'track', 'tracks',
+  'single', 'score', 'ep', 'studio', 'studios', 'radio', 'playlist', 'sound', 'pop', 'harmony',
+  'journey', 'trip', 'adventure', 'explore', 'tour', 'destination', 'drive', 'driving', 'motor',
+  'motors', 'goal', 'training', 'health', 'healthy', 'strength', 'report', 'war', 'conflict',
+  'debate', 'policy', 'anchor', 'dispatch', 'mod', 'mods', 'quest', 'loot', 'console', 'lol',
+  'curious', 'curiosity', 'discovery', 'learn', 'learning', 'study', 'lesson', 'craft', 'canvas',
+]);
+
+/** Lowercased description without links, e-mail addresses and @mentions, which carry no topic words. */
+function descriptionText(description: string | undefined): string {
+  if (!description) return '';
+  return description
+    .toLowerCase()
+    .replace(/\bhttps?:\/\/\S+|\bwww\.\S+/g, ' ')
+    .replace(/\S+@\S+\.\S+/g, ' ')
+    .replace(/(^|\s)@\S+/g, ' ');
+}
 
 export class HeuristicCategorizer {
   static categorize(channels: SubscribedChannel[]): CategoryDeck[] {
@@ -657,6 +699,7 @@ export class HeuristicCategorizer {
       const titleTokens = tokenizeWords(ch.title).join(' ');
       const handleTokens = tokenizeWords(ch.handle || '').join(' ');
       const combinedTokens = `${titleTokens} ${handleTokens} ${titleLower} ${handleLower}`;
+      const descText = descriptionText(ch.description);
 
       let bestCatId: string | null = null;
       let highestScore = 0;
@@ -719,14 +762,23 @@ export class HeuristicCategorizer {
           }
         }
 
+        // 3. Description keywords (word-boundary, plural allowed, capped; see DESCRIPTION_MAX_SCORE)
+        if (descText) {
+          let hits = 0;
+          for (const kw of tax.compiledKeywords) {
+            if (!DESCRIPTION_STOPWORDS.has(kw.original) && kw.descriptionRegex.test(descText)) hits++;
+          }
+          score += Math.min(DESCRIPTION_MAX_SCORE, hits * DESCRIPTION_HIT_SCORE);
+        }
+
         if (score > highestScore) {
           highestScore = score;
           bestCatId = tax.id;
         }
       }
 
-      // Assign to winner if threshold met (>= 15 points)
-      if (bestCatId && highestScore >= 15) {
+      // Assign to winner if threshold met
+      if (bestCatId && highestScore >= ASSIGN_THRESHOLD) {
         const deck = decks.find(d => d.id === bestCatId);
         deck?.channelIds.push(ch.ucId);
         assigned.add(ch.ucId);

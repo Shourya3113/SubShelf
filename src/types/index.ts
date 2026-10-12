@@ -5,6 +5,11 @@ export interface SubscribedChannel {
   url: string;
   avatarUrl: string;
   discoveredAt: number;
+  /**
+   * The channel's short "About" text from YouTube's All subscriptions page, cleaned and capped at
+   * MAX_DESCRIPTION_LENGTH. Undefined: never looked up. Empty string: looked up, the channel has none.
+   */
+  description?: string;
 }
 
 export interface CategoryDeck {

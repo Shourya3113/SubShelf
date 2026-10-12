@@ -1,5 +1,6 @@
-import { bareHandle } from './channelIdentity';
+import { bareHandle, isChannelId, normalizeHandle } from './channelIdentity';
 import { safeAvatarUrl } from './avatarUrl';
+import { cleanDescription } from './channelDetails';
 
 /** Reads avatars straight from YouTube's native sidebar entries (visible or expanded). */
 export function harvestAvatarsFromDom(): Map<string, string> {
@@ -27,41 +28,71 @@ export function harvestAvatarsFromDom(): Map<string, string> {
   return out;
 }
 
-/** Same-origin fetch of /feed/channels as an independent source (covers the first batch of subscriptions). */
-export async function harvestFromChannelsPage(): Promise<Map<string, string>> {
-  const out = new Map<string, string>();
+export interface ChannelsPageData {
+  /** Avatar URLs keyed by UC ID, handle ("name" and "@name") and lowercase title. */
+  avatars: Map<string, string>;
+  /** Cleaned descriptions keyed by UC ID (or "@handle" when YouTube gave no ID); "" when the channel has none. */
+  descriptions: Map<string, string>;
+}
+
+/** Plain text of a YouTube text node ({ simpleText } or { runs: [{ text }] }). */
+const textOf = (node: any): string =>
+  typeof node?.simpleText === 'string'
+    ? node.simpleText
+    : Array.isArray(node?.runs) ? node.runs.map((r: any) => (typeof r?.text === 'string' ? r.text : '')).join('') : '';
+
+/** Pulls avatars and descriptions out of the All subscriptions page's ytInitialData. Pure. */
+export function parseChannelsPage(data: unknown): ChannelsPageData {
+  const avatars = new Map<string, string>();
+  const descriptions = new Map<string, string>();
+  const walk = (n: any, depth = 0) => {
+    if (!n || typeof n !== 'object' || depth > 40) return;
+    const r = n.channelRenderer || n.gridChannelRenderer || n.compactChannelRenderer;
+    if (r) {
+      const base = r.navigationEndpoint?.browseEndpoint?.canonicalBaseUrl as string | undefined;
+      const handle = typeof base === 'string' && base.startsWith('/@') ? normalizeHandle(base) : '';
+
+      const thumbs = r.thumbnail?.thumbnails;
+      const raw = Array.isArray(thumbs) && thumbs.length ? thumbs[thumbs.length - 1].url : '';
+      const url = safeAvatarUrl(raw?.startsWith('//') ? 'https:' + raw : raw);
+      if (url) {
+        const clean = url.replace(/=s\d+(-c-k)?/, '=s88$1');
+        if (r.channelId) avatars.set(r.channelId, clean);
+        if (base) {
+          const h = bareHandle(base);
+          avatars.set(h, clean);
+          avatars.set('@' + h, clean);
+        }
+        const t = (r.title?.simpleText || r.title?.runs?.[0]?.text || '').toLowerCase().trim();
+        if (t) avatars.set(t, clean);
+      }
+
+      const key = isChannelId(r.channelId) ? r.channelId : handle;
+      const desc = cleanDescription(textOf(r.descriptionSnippet));
+      if (key && desc !== undefined) descriptions.set(key, desc);
+    }
+    for (const k in n) {
+      if (Object.prototype.hasOwnProperty.call(n, k)) walk(n[k], depth + 1);
+    }
+  };
+  walk(data);
+  return { avatars, descriptions };
+}
+
+/**
+ * Same-origin fetch of /feed/channels (YouTube's All subscriptions page), which lists the user's
+ * subscriptions with avatars and short descriptions. Later pages would need YouTube's signed API
+ * headers, so only this first page is read. Returns null when the page can't be read.
+ */
+export async function harvestFromChannelsPage(): Promise<ChannelsPageData | null> {
   try {
     const res = await fetch('/feed/channels', { credentials: 'same-origin' });
-    if (!res.ok) return out;
+    if (!res.ok) return null;
     const html = await res.text();
     const m = html.match(/var ytInitialData = (\{[\s\S]*?\});<\/script>/);
-    if (!m) return out;
-    const data = JSON.parse(m[1]);
-    const walk = (n: any, depth = 0) => {
-      if (!n || typeof n !== 'object' || depth > 40) return;
-      const r = n.channelRenderer || n.gridChannelRenderer || n.compactChannelRenderer;
-      if (r) {
-        const thumbs = r.thumbnail?.thumbnails;
-        const raw = Array.isArray(thumbs) && thumbs.length ? thumbs[thumbs.length - 1].url : '';
-        const url = safeAvatarUrl(raw?.startsWith('//') ? 'https:' + raw : raw);
-        if (url) {
-          const clean = url.replace(/=s\d+(-c-k)?/, '=s88$1');
-          if (r.channelId) out.set(r.channelId, clean);
-          const base = r.navigationEndpoint?.browseEndpoint?.canonicalBaseUrl as string | undefined;
-          if (base) {
-            const h = bareHandle(base);
-            out.set(h, clean);
-            out.set('@' + h, clean);
-          }
-          const t = (r.title?.simpleText || r.title?.runs?.[0]?.text || '').toLowerCase().trim();
-          if (t) out.set(t, clean);
-        }
-      }
-      for (const k in n) {
-        if (Object.prototype.hasOwnProperty.call(n, k)) walk(n[k], depth + 1);
-      }
-    };
-    walk(data);
-  } catch { /* offline or layout change: ignore */ }
-  return out;
+    if (!m) return null;
+    return parseChannelsPage(JSON.parse(m[1]));
+  } catch {
+    return null; // offline or layout change
+  }
 }

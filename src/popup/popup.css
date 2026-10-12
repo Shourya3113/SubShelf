@@ -362,6 +362,69 @@ body {
   margin-top: 4px;
 }
 
+/* On-device AI (Gemini Nano) status */
+.nano-group [hidden] {
+  display: none;
+}
+
+.nano-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 6px;
+}
+
+.nano-header .settings-label {
+  margin-bottom: 0;
+}
+
+.nano-badge {
+  font-size: 10.5px;
+  font-weight: 600;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: var(--border-color);
+  color: var(--text-secondary);
+  white-space: nowrap;
+}
+
+.nano-badge[data-status="available"] {
+  background: rgba(34, 197, 94, 0.15);
+  color: #16a34a;
+}
+
+.nano-badge[data-status="downloadable"],
+.nano-badge[data-status="downloading"] {
+  background: rgba(245, 158, 11, 0.15);
+  color: #d97706;
+}
+
+.nano-warning {
+  display: block;
+  margin-top: 8px;
+  padding: 8px 10px;
+  border-radius: 6px;
+  border: 1px solid rgba(245, 158, 11, 0.4);
+  background: rgba(245, 158, 11, 0.08);
+  font-size: 11px;
+  line-height: 1.4;
+  color: var(--text-primary);
+}
+
+.nano-download-btn {
+  width: 100%;
+  margin-top: 8px;
+}
+
+.nano-progress {
+  display: block;
+  width: 100%;
+  height: 8px;
+  margin-top: 8px;
+  accent-color: var(--accent-color);
+}
+
 /* Privacy Disclosure Callout */
 .privacy-notice-box {
   margin-top: 8px;

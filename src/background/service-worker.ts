@@ -2,6 +2,7 @@ import { SubDeckStorage, enqueueMutation, enqueueStorageTask } from '@/utils/sto
 import { AICategorizer } from '@/ai/categorizer';
 import { Logger } from '@/utils/logger';
 import { runMigrations } from './migrations';
+import { acquireOffscreenNano, releaseOffscreenNano } from './offscreenNano';
 import { CURRENT_SCHEMA_VERSION, DEFAULT_STORAGE } from '@/types';
 import { GEMINI_ORIGIN } from '@/utils/cloudPermission';
 
@@ -122,7 +123,16 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
           return;
         }
 
-        const result = await AICategorizer.categorizeAll(channels);
+        // Some Chrome builds don't expose the Prompt API to service workers; Nano then runs in an
+        // offscreen document. The heuristic fallback still applies if neither context can use it.
+        let usedOffscreen = false;
+        const result = await AICategorizer.categorizeAll(channels, undefined, {
+          nanoFallback: async () => {
+            const runner = await acquireOffscreenNano();
+            usedOffscreen = Boolean(runner);
+            return runner;
+          },
+        }).finally(() => (usedOffscreen ? releaseOffscreenNano() : undefined));
 
         // Overrides are applied against fresh storage inside the write queue
         const finalDecks = await SubDeckStorage.applyGeneratedDecks(result.decks);

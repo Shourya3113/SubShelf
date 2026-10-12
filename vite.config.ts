@@ -18,5 +18,11 @@ export default defineConfig({
     emptyOutDir: true,
     sourcemap: false,
     target: 'chrome120',
+    rollupOptions: {
+      // Not referenced by the manifest, so it must be listed for the build to emit it
+      input: {
+        offscreen: resolve(__dirname, 'src/offscreen/offscreen.html'),
+      },
+    },
   },
 });

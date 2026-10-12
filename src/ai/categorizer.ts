@@ -6,6 +6,15 @@ import { hasCloudPermission } from '@/utils/cloudPermission';
 import { SubDeckStorage } from '@/utils/storage';
 import { Logger } from '@/utils/logger';
 import { isSystemChannelOrCurator } from '@/utils/systemChannels';
+import {
+  NANO_OPTS,
+  NanoRunner,
+  localNanoRunner,
+  nanoUnavailableReason,
+  resolveLanguageModelAPI,
+} from './nano';
+
+export { NANO_OPTS, resolveLanguageModelAPI };
 
 export type AIProvider = 'gemini-nano' | 'gemini-api' | 'heuristic';
 
@@ -13,6 +22,11 @@ export interface CategorizeAllResult {
   decks: CategoryDeck[];
   providerUsed: AIProvider;
   fallbackNotice?: string;
+}
+
+export interface CategorizeOptions {
+  /** Runs Gemini Nano in another context (an offscreen document) when this one can't. */
+  nanoFallback?: () => Promise<NanoRunner | null>;
 }
 
 export const DEFAULT_GEMINI_MODEL = DEFAULT_GEMINI_CLOUD_MODEL;
@@ -125,52 +139,33 @@ async function runChunks(
 }
 
 // ---------- Gemini Nano (Chrome Built-in Prompt API) ----------
-const NANO_OPTS = {
-  expectedInputs: [{ type: 'text', languages: ['en'] }],
-  expectedOutputs: [{ type: 'text', languages: ['en'] }],
-};
+class NanoNotReadyError extends Error {}
 
-function resolveLanguageModelAPI(): any {
-  const g = globalThis as any;
-  const s = typeof self !== 'undefined' ? (self as any) : null;
-  const w = typeof window !== 'undefined' ? (window as any) : null;
-
-  if (typeof g?.LanguageModel?.create === 'function') return g.LanguageModel;
-  if (typeof s?.LanguageModel?.create === 'function') return s.LanguageModel;
-  if (typeof w?.LanguageModel?.create === 'function') return w.LanguageModel;
-
-  if (typeof g?.ai?.languageModel?.create === 'function') return g.ai.languageModel;
-  if (typeof s?.ai?.languageModel?.create === 'function') return s.ai.languageModel;
-  if (typeof w?.ai?.languageModel?.create === 'function') return w.ai.languageModel;
-
-  return null;
+async function runNano(channels: SubscribedChannel[], runner: NanoRunner): Promise<CategoryDeck[]> {
+  const status = await runner.availability();
+  // Never start a download from here: that needs a user gesture in the popup
+  if (status !== 'available') throw new NanoNotReadyError(nanoUnavailableReason(status));
+  return runChunks(channels, NANO_CHUNK, prompt => runner.prompt(prompt));
 }
 
-async function tryGeminiNano(channels: SubscribedChannel[]): Promise<CategoryDeck[]> {
+async function tryGeminiNano(
+  channels: SubscribedChannel[],
+  fallback?: () => Promise<NanoRunner | null>
+): Promise<CategoryDeck[]> {
   const LM = resolveLanguageModelAPI();
-  if (!LM) throw new Error('LanguageModel API is not exposed in this context');
-
-  let availability = 'available';
-  if (typeof LM.availability === 'function') {
-    availability = await LM.availability(NANO_OPTS);
-  } else if (typeof LM.capabilities === 'function') {
-    const caps = await LM.capabilities();
-    availability = caps?.available || 'unavailable';
-  }
-
-  if (availability !== 'available' && availability !== 'readily') {
-    throw new Error(`Gemini Nano status: ${availability}`);
-  }
-
-  return runChunks(channels, NANO_CHUNK, async (prompt) => {
-    // Fresh session per chunk to avoid context-window saturation
-    const session = await LM.create(NANO_OPTS);
+  if (LM) {
     try {
-      return await session.prompt(prompt);
-    } finally {
-      session?.destroy?.();
+      return await runNano(channels, localNanoRunner(LM));
+    } catch (e) {
+      // A model that isn't ready won't be ready elsewhere either; other failures (e.g. this
+      // context refusing to create sessions) get one retry in the fallback context.
+      if (!fallback || e instanceof NanoNotReadyError) throw e;
+      Logger.warn('[SubShelf AI] Gemini Nano failed in this context, retrying via fallback:', e);
     }
-  });
+  }
+  const remote = fallback ? await fallback() : null;
+  if (!remote) throw new Error(nanoUnavailableReason('no-api'));
+  return runNano(channels, remote);
 }
 
 // ---------- Gemini Cloud API ----------
@@ -220,7 +215,8 @@ async function callGemini(prompt: string, apiKey: string, model: string): Promis
 export class AICategorizer {
   static async categorizeAll(
     channels: SubscribedChannel[],
-    apiKeyOverride?: string
+    apiKeyOverride?: string,
+    options: CategorizeOptions = {}
   ): Promise<CategorizeAllResult> {
     channels = channels.filter(ch => !isSystemChannelOrCurator(ch));
     if (channels.length === 0) return { decks: [], providerUsed: 'heuristic' };
@@ -243,7 +239,7 @@ export class AICategorizer {
       try {
         let decks: CategoryDeck[];
         if (p === 'gemini-nano') {
-          decks = await tryGeminiNano(channels);
+          decks = await tryGeminiNano(channels, options.nanoFallback);
         } else if (p === 'gemini-api') {
           if (!apiKey) {
             failures.push('Cloud: no API key configured');

@@ -38,6 +38,21 @@ describe('storage mutations', () => {
   let read: () => Record<string, any>;
   afterEach(() => vi.unstubAllGlobals());
 
+  describe('ratePromptEvent', () => {
+    it('stores only the folders date and the answer, and keeps them out of the folder data', async () => {
+      read = installFakeChrome({ channels: {}, categories: [] });
+      await enqueueMutation('ratePromptEvent', { event: 'foldersSeen' });
+      const first = read().ratePrompt;
+      expect(Object.keys(first).sort()).toEqual(['foldersSince', 'snoozedUntil', 'status']);
+      expect(await enqueueMutation('ratePromptEvent', { event: 'foldersSeen' })).toEqual({ changed: false });
+      expect(read().ratePrompt.foldersSince).toBe(first.foldersSince);
+
+      await enqueueMutation('ratePromptEvent', { event: 'rated' });
+      expect((await SubDeckStorage.getRatePrompt()).status).toBe('done');
+      expect(Object.keys(await SubDeckStorage.getAll())).not.toContain('ratePrompt');
+    });
+  });
+
   describe('importMerge', () => {
     beforeEach(() => {
       read = installFakeChrome({

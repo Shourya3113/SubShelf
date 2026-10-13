@@ -13,6 +13,8 @@ import { buildFolder, DroppedChannel, FolderHandlers, FolderMember } from './sid
 import { IdNormalizer } from '@/utils/idNormalizer';
 import { resolveChannelId } from '@/utils/channelIdentity';
 import { FILTER_CHANGED_EVENT } from './feedFilter';
+import { buildRateCard } from './sidebar/rateCard';
+import { shouldShowRatePrompt, storeReviewUrl } from '@/utils/ratePrompt';
 
 const byTitle = (a: FolderMember, b: FolderMember) =>
   a.channel.title.localeCompare(b.channel.title, undefined, { sensitivity: 'base' });
@@ -214,6 +216,9 @@ export class SidebarManager {
     }));
     if (state.categories.length === 0) {
       fragment.appendChild(buildFirstRunCard(entries.length, (button) => this.runAutoAI(button)));
+    } else {
+      const rateCard = await this.maybeBuildRateCard();
+      if (rateCard) fragment.appendChild(rateCard);
     }
 
     const activeId = window.location.pathname.startsWith('/feed/subscriptions') ? FeedFilter.getActiveCategoryId() : null;
@@ -238,6 +243,30 @@ export class SidebarManager {
         guideInner.scrollTop = savedGuideScroll;
       }
     });
+  }
+
+  /** The one-time rating request, once the user has had folders for a week (see utils/ratePrompt). */
+  private static async maybeBuildRateCard(): Promise<HTMLElement | null> {
+    try {
+      const prompt = await SubDeckStorage.getRatePrompt();
+      if (prompt.foldersSince === null) {
+        SubDeckStorage.ratePromptEvent('foldersSeen').catch(() => {});
+        return null;
+      }
+      const url = storeReviewUrl();
+      if (!url || !shouldShowRatePrompt(prompt, Date.now(), url)) return null;
+      return buildRateCard({
+        onRate: () => {
+          window.open(url, '_blank', 'noopener');
+          SubDeckStorage.ratePromptEvent('rated').catch(() => {});
+        },
+        onNotNow: () => {
+          SubDeckStorage.ratePromptEvent('notNow').catch(() => {});
+        },
+      });
+    } catch {
+      return null;
+    }
   }
 
   private static folderHandlers(): FolderHandlers {

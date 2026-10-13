@@ -6,6 +6,7 @@ import { toast } from '@/utils/toast';
 import { hasCloudPermission, requestCloudPermission } from '@/utils/cloudPermission';
 import { safeAvatarUrl } from '@/utils/avatarUrl';
 import { hydrateIcons, iconButton } from '@/ui/icons';
+import { storeReviewUrl } from '@/utils/ratePrompt';
 import {
   describeNanoStatus,
   getNanoStatus,
@@ -409,6 +410,14 @@ class PopupManager {
         }
       }
     });
+
+    // Points at the store this browser installs from; hidden where SubShelf isn't listed yet
+    const rateLink = document.getElementById('footer-rate-link') as HTMLAnchorElement | null;
+    const reviewUrl = storeReviewUrl();
+    if (rateLink) {
+      if (reviewUrl) rateLink.href = reviewUrl;
+      else rateLink.hidden = true;
+    }
 
     document.querySelectorAll<HTMLAnchorElement>('.footer-link').forEach((link) => {
       link.addEventListener('click', (e: Event) => {

@@ -29,7 +29,11 @@ SubShelf is designed from the ground up on a **strict local-first, zero-telemetr
 - **What is stored:** Custom folder names, selected folder emojis/icons, manual channel assignments, and category exclusions.
 - **Where it is stored:** Exclusively in local storage on your device.
 
-### C. Optional Gemini Cloud API & Key Handling
+### C. One-Time Rating Request
+- **What is stored:** The date you first had folders, and whether you answered SubShelf's one-time "Enjoying SubShelf?" request (rated, or chose "Not now" and until when). SubShelf does not count clicks, visits or any other usage to decide when to ask.
+- **Where it is stored:** In local storage on your device. It is never sent anywhere and is not included in backups.
+
+### D. Optional Gemini Cloud API & Key Handling
 - **Optional Feature:** Categorization via Google's Gemini Cloud API is strictly optional and disabled by default. It is only activated if you explicitly select the "Google Gemini Cloud (your API key)" engine in Settings, grant the extension permission to contact `generativelanguage.googleapis.com` (Chrome asks you at that moment), and enter your personal Gemini API key in Settings.
 - **No automatic escalation:** If you choose "Offline + on-device AI" and Chrome doesn't have its on-device model, SubShelf uses the offline engine. It never switches to the Cloud API on its own.
 - **Data Transmitted:** If you enable the Cloud API tier, the extension sends your subscribed channel titles, handles and short channel descriptions (the "About" text YouTube shows on your All subscriptions page, truncated to about 200 characters each) over HTTPS to Google's official Generative Language API endpoint (`https://generativelanguage.googleapis.com/*`) in order to categorize them into relevant topics.
@@ -109,7 +113,7 @@ SubShelf strictly complies with the **Chrome Web Store User Data Policy**, inclu
 - The extension does not transfer user data to third parties, except as strictly necessary to execute the user-facing features described above (specifically, optional direct API calls to Google if configured by the user).
 - The extension does not use or transfer user data for personalized advertising, credit assessment, or data broker distribution.
 - The extension requests only the minimum set of permissions necessary to deliver its core folder organization and feed filtering functions.
-- In the Chrome Web Store's data categories, SubShelf handles **website content** (channel names, handles, avatars and descriptions read from YouTube) and, only if you enter one, **authentication information** (your own Gemini API key). Both stay on your device, except as described in section 2C.
+- In the Chrome Web Store's data categories, SubShelf handles **website content** (channel names, handles, avatars and descriptions read from YouTube) and, only if you enter one, **authentication information** (your own Gemini API key). Both stay on your device, except as described in section 2D.
 
 ---
 

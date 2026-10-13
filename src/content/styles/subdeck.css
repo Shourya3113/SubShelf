@@ -199,6 +199,66 @@ html[dark],
   text-align: center;
 }
 
+/* One-time rating request */
+.subdeck-rate-card {
+  margin: 4px 4px 8px;
+  padding: 12px;
+  border-radius: 12px;
+  background: var(--sd-subtle);
+}
+
+.subdeck-rate-title {
+  font-size: 14px;
+  font-weight: 500;
+  line-height: 20px;
+}
+
+.subdeck-rate-text {
+  margin: 2px 0 0;
+  color: var(--sd-text-secondary);
+  font-size: 12px;
+  line-height: 16px;
+}
+
+.subdeck-rate-actions {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin-top: 10px;
+}
+
+.subdeck-rate-btn,
+.subdeck-rate-later {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  height: 32px;
+  padding: 0 12px;
+  border: none;
+  border-radius: 16px;
+  font: 500 13px "Roboto", "Arial", sans-serif;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.subdeck-rate-btn {
+  background: var(--sd-chip-active-bg);
+  color: var(--sd-chip-active-text);
+}
+
+.subdeck-rate-btn:hover {
+  opacity: 0.88;
+}
+
+.subdeck-rate-later {
+  background: transparent;
+  color: var(--sd-text-primary);
+}
+
+.subdeck-rate-later:hover {
+  background: var(--sd-hover);
+}
+
 /* --------------------------------------------------------------------------
    SIDEBAR: folders
    -------------------------------------------------------------------------- */

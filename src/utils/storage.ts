@@ -7,6 +7,7 @@ import { applyOverrides } from '@/ai/overrides';
 import { isConfident, LearnedModel, predictFolder, trainFromCorrections } from '@/ai/learning';
 import { channelAliases, isChannelId, mapHandle, resolveChannelId } from './channelIdentity';
 import { CHANNEL_DETAILS_CHECKED_KEY, cleanDescription, sanitizeDescriptionMap } from './channelDetails';
+import { applyRatePromptEvent, normalizeRatePrompt, RATE_PROMPT_KEY, RatePromptEvent, RatePromptState } from './ratePrompt';
 
 const MAX_CHANNELS_PER_CATEGORY = 5_000;
 
@@ -577,6 +578,13 @@ export class SubDeckStorage {
         return { settings };
       }
 
+      case 'ratePromptEvent': {
+        const raw = await chrome.storage.local.get(RATE_PROMPT_KEY);
+        const next = applyRatePromptEvent(normalizeRatePrompt(raw[RATE_PROMPT_KEY]), payload?.event as RatePromptEvent, Date.now());
+        if (next) await chrome.storage.local.set({ [RATE_PROMPT_KEY]: next });
+        return { changed: Boolean(next) };
+      }
+
       case 'normalize': {
         const raw = await chrome.storage.local.get(Object.keys(DEFAULT_STORAGE));
         if (!raw || Object.keys(raw).length === 0) return { dirty: false };
@@ -596,6 +604,16 @@ export class SubDeckStorage {
       default:
         return null;
     }
+  }
+
+  static async getRatePrompt(): Promise<RatePromptState> {
+    if (!this.isContextValid()) return normalizeRatePrompt(null);
+    const raw = await chrome.storage.local.get(RATE_PROMPT_KEY);
+    return normalizeRatePrompt(raw[RATE_PROMPT_KEY]);
+  }
+
+  static async ratePromptEvent(event: RatePromptEvent): Promise<void> {
+    await this.requestMutation('ratePromptEvent', { event });
   }
 
   static async getChannels(): Promise<Record<string, SubscribedChannel>> {

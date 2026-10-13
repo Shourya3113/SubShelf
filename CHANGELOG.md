@@ -2,7 +2,9 @@
 
 ## Unreleased
 
-- The popup footer has a "Rate SubShelf" link to the Chrome Web Store reviews.
+- The popup footer has a "Rate SubShelf" link to the store's reviews page.
+- A one-time "Enjoying SubShelf?" card appears in the sidebar a week after you first have folders. "Not now" hides it for a month; a second "Not now" or rating hides it for good. It tracks no usage.
+- On Microsoft Edge, rating links are hidden until SubShelf is listed on Edge Add-ons.
 
 ## 1.2.1 — 2026-10-13
 

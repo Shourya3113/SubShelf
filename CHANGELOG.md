@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased
+
+- The popup footer has a "Rate SubShelf" link to the Chrome Web Store reviews.
+
 ## 1.2.1 — 2026-10-13
 
 ### A new icon

@@ -410,9 +410,11 @@ class PopupManager {
       }
     });
 
-    document.getElementById('footer-github-link')?.addEventListener('click', (e: Event) => {
-      e.preventDefault();
-      openTab((e.currentTarget as HTMLAnchorElement)?.href || 'https://github.com/Shourya3113/SubShelf');
+    document.querySelectorAll<HTMLAnchorElement>('.footer-link').forEach((link) => {
+      link.addEventListener('click', (e: Event) => {
+        e.preventDefault();
+        openTab(link.href);
+      });
     });
   }
 

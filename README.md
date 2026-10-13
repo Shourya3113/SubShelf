@@ -1,16 +1,22 @@
 # SubShelf ⚡
 > **Smart Subscription Category Folders & Feed Curator for YouTube™**
 
-[![Chrome Web Store](https://img.shields.io/badge/Chrome%20Web%20Store-Available%20Now-brightgreen.svg?logo=googlechrome)](https://chromewebstore.google.com/detail/subdeck-smart-subscripti/elmeglemgjhfadeahmlbcgkjkfkfkfgd)
+[![Chrome Web Store](https://img.shields.io/chrome-web-store/v/elmeglemgjhfadeahmlbcgkjkfkfkfgd?label=Chrome%20Web%20Store&logo=googlechrome&logoColor=white)](https://chromewebstore.google.com/detail/elmeglemgjhfadeahmlbcgkjkfkfkfgd)
+[![Users](https://img.shields.io/chrome-web-store/users/elmeglemgjhfadeahmlbcgkjkfkfkfgd?label=users)](https://chromewebstore.google.com/detail/elmeglemgjhfadeahmlbcgkjkfkfkfgd)
+[![Rating](https://img.shields.io/chrome-web-store/rating/elmeglemgjhfadeahmlbcgkjkfkfkfgd?label=rating)](https://chromewebstore.google.com/detail/elmeglemgjhfadeahmlbcgkjkfkfkfgd/reviews)
 [![Manifest V3](https://img.shields.io/badge/Chrome%20Extension-Manifest%20V3-blue.svg)](https://developer.chrome.com/docs/extensions/mv3/intro/)
 [![TypeScript](https://img.shields.io/badge/TypeScript-5.4-blue.svg?logo=typescript)](https://www.typescriptlang.org/)
-[![Vite](https://img.shields.io/badge/Bundled%20with-Vite%205-purple.svg?logo=vite)](https://vitejs.dev/)
+[![Vite](https://img.shields.io/badge/Bundled%20with-Vite%207-purple.svg?logo=vite)](https://vitejs.dev/)
 [![CI](https://github.com/Shourya3113/SubShelf/actions/workflows/ci.yml/badge.svg)](https://github.com/Shourya3113/SubShelf/actions/workflows/ci.yml)
 [![License](https://img.shields.io/badge/License-Source--Available-yellow.svg)](./LICENSE)
 
 **SubShelf** is a lightweight, privacy-first Chrome Extension that transforms your cluttered YouTube subscriptions into organized, themed category folders directly inside YouTube's native left sidebar and subscription feed.
 
 Channels are sorted by a fast offline engine that learns from your own corrections, optionally helped by Chrome's on-device AI (if Chrome already has it) or, opt-in, the cloud **Google Gemini API** with your own key. SubShelf never downloads AI models.
+
+### [➜ Install SubShelf from the Chrome Web Store](https://chromewebstore.google.com/detail/elmeglemgjhfadeahmlbcgkjkfkfkfgd)
+
+Free, no account needed. If SubShelf helps you, a [rating or review](https://chromewebstore.google.com/detail/elmeglemgjhfadeahmlbcgkjkfkfkfgd/reviews) helps other people find it. The Getting Started section below is only for building it from source.
 
 ---
 

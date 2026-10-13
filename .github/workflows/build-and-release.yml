@@ -45,10 +45,24 @@ jobs:
       - name: Package Chrome Web Store Zip
         run: python3 scripts/package.py
 
+      - name: Write release notes
+        if: startsWith(github.ref, 'refs/tags/')
+        run: |
+          VERSION="${GITHUB_REF_NAME#v}"
+          {
+            echo "**Install SubShelf from the [Chrome Web Store](https://chromewebstore.google.com/detail/elmeglemgjhfadeahmlbcgkjkfkfkfgd).** It works in Chrome and Edge and updates automatically."
+            echo
+            awk -v v="$VERSION" 'index($0, "## " v " ") == 1 {f=1; next} /^## / && f {exit} f' CHANGELOG.md
+            echo
+            echo "The zip below is for developers and manual installs (Load unpacked in chrome://extensions). It does not update automatically."
+          } > release-notes.md
+          cat release-notes.md
+
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         if: startsWith(github.ref, 'refs/tags/')
         with:
           files: subshelf-v*.zip
+          body_path: release-notes.md
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

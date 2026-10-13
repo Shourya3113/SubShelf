@@ -411,7 +411,7 @@ class PopupManager {
       }
     });
 
-    // Points at the store this browser installs from; hidden where SubShelf isn't listed yet
+    // Chrome Web Store reviews; hidden for copies that didn't come from the store
     const rateLink = document.getElementById('footer-rate-link') as HTMLAnchorElement | null;
     const reviewUrl = storeReviewUrl();
     if (rateLink) {

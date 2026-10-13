@@ -7,12 +7,10 @@ export const RATE_PROMPT_KEY = 'ratePrompt';
 export const RATE_PROMPT_DELAY_MS = 7 * 24 * 60 * 60 * 1000;
 export const RATE_PROMPT_SNOOZE_MS = 30 * 24 * 60 * 60 * 1000;
 
-// Each store gives the extension its own ID, so the ID says where this copy was installed from.
-// (Edge users can also install from the Chrome Web Store, so the browser alone doesn't tell.)
+// SubShelf is published only on the Chrome Web Store (Chrome and Edge both install from there).
+// The store gives it this ID, so the ID tells a store copy apart from any other build.
 const CHROME_STORE_ID = 'elmeglemgjhfadeahmlbcgkjkfkfkfgd';
 const CHROME_REVIEWS_URL = `https://chromewebstore.google.com/detail/${CHROME_STORE_ID}/reviews`;
-// Fill in once SubShelf is listed on Microsoft Edge Add-ons: { id: '<edge id>', url: '<reviews URL>' }
-const EDGE_STORE: { id: string; url: string } | null = null;
 
 export type RatePromptStatus = 'pending' | 'snoozed' | 'done';
 export type RatePromptEvent = 'foldersSeen' | 'rated' | 'notNow';
@@ -56,14 +54,11 @@ export function shouldShowRatePrompt(state: RatePromptState, now: number, review
 }
 
 /**
- * Reviews page of the store this copy came from. Unpacked builds (no update_url) use the Chrome Web
- * Store so the prompt can be tested; a store copy with an unknown ID (Edge Add-ons before EDGE_STORE
- * is filled in) gets null, so nobody is sent to the wrong store.
+ * The Chrome Web Store reviews page, for the store copy and for unpacked builds (so the prompt can be
+ * tested). Any other copy, such as a re-upload under a different ID, gets null and is never asked.
  */
 export function storeReviewUrl(install: { id?: string; unpacked: boolean } = currentInstall()): string | null {
-  if (install.id === CHROME_STORE_ID) return CHROME_REVIEWS_URL;
-  if (EDGE_STORE && install.id === EDGE_STORE.id) return EDGE_STORE.url;
-  return install.unpacked ? CHROME_REVIEWS_URL : null;
+  return install.id === CHROME_STORE_ID || install.unpacked ? CHROME_REVIEWS_URL : null;
 }
 
 function currentInstall(): { id?: string; unpacked: boolean } {

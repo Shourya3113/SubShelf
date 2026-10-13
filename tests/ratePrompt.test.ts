@@ -54,9 +54,11 @@ describe('rating prompt', () => {
     expect(applyRatePromptEvent(rated, 'notNow', T0)).toBeNull();
   });
 
-  it('links to the Chrome Web Store on Chrome and asks nothing on Edge until it is listed there', () => {
-    const chrome = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Safari/537.36';
-    expect(storeReviewUrl(chrome)).toContain('chromewebstore.google.com/detail/elmeglemgjhfadeahmlbcgkjkfkfkfgd/reviews');
-    expect(storeReviewUrl(chrome + ' Edg/141.0.0.0')).toBeNull();
+  it('links to the store this copy was installed from, by extension ID, in any browser', () => {
+    const cws = 'https://chromewebstore.google.com/detail/elmeglemgjhfadeahmlbcgkjkfkfkfgd/reviews';
+    expect(storeReviewUrl({ id: 'elmeglemgjhfadeahmlbcgkjkfkfkfgd', unpacked: false })).toBe(cws);
+    expect(storeReviewUrl({ id: 'abcdefghijklmnopabcdefghijklmnop', unpacked: false })).toBeNull(); // another store
+    expect(storeReviewUrl({ id: 'abcdefghijklmnopabcdefghijklmnop', unpacked: true })).toBe(cws); // local build
+    expect(storeReviewUrl({ unpacked: false })).toBeNull();
   });
 });

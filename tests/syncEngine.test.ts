@@ -1,9 +1,12 @@
 import { describe, it, expect } from 'vitest';
 import {
+  applyResubscribe,
+  applyUnsubscribe,
   computeSync,
   SyncSnapshot,
   REMOVAL_MIN_STRIKES,
   REMOVAL_STRIKE_INTERVAL_MS,
+  REMOVED_KEEP_MS,
 } from '@/utils/syncEngine';
 import { CategoryDeck, SubscribedChannel } from '@/types';
 
@@ -167,5 +170,73 @@ describe('computeSync: unsubscribe reconciliation safety', () => {
     const res = computeSync(snapshotWith(stored, folders), { discovered: handleOnly, sidebarComplete: true, now: 0 });
     expect(res.removed).toEqual([]);
     expect(res.next.missing).toEqual({});
+  });
+});
+
+describe('unsubscribes: instant, remembered, and caught from YouTube\'s full list', () => {
+  const stored = range(20).map(n => ch(n));
+  const folders = () => [deck('music', stored.slice(0, 10).map(c => c.ucId)), deck('tech', stored.slice(10).map(c => c.ucId))];
+
+  it('removes a channel the moment YouTube confirms the unsubscribe, and remembers its folder', () => {
+    const next = applyUnsubscribe(snapshotWith(stored, folders()), uc(3), 1000)!;
+    expect(next.channels[uc(3)]).toBeUndefined();
+    expect(next.categories[0].channelIds).not.toContain(uc(3));
+    expect(next.handleToUcId['@channel3']).toBeUndefined();
+    expect(next.removed![uc(3)]).toMatchObject({ folderIds: ['music'], removedAt: 1000 });
+    expect(applyUnsubscribe(next, uc(3), 2000)).toBeNull(); // nothing left to remove
+  });
+
+  it('puts a resubscribed channel (or YouTube\'s Undo) back into the same folder', () => {
+    const gone = applyUnsubscribe(snapshotWith(stored, folders()), uc(3), 1000)!;
+    const back = applyResubscribe(gone, uc(3), 5000)!;
+    expect(back.channels[uc(3)].title).toBe('Channel 3');
+    expect(back.categories.find(c => c.id === 'music')!.channelIds).toContain(uc(3));
+    expect(back.categories.find(c => c.id === 'tech')!.channelIds).not.toContain(uc(3));
+    expect(back.removed![uc(3)]).toBeUndefined();
+    expect(applyResubscribe(snapshotWith(stored, folders()), uc(99), 0)).toBeNull(); // never seen: normal sync sorts it
+  });
+
+  it('forgets removed channels after REMOVED_KEEP_MS', () => {
+    const gone = applyUnsubscribe(snapshotWith(stored, folders()), uc(3), 0)!;
+    expect(applyResubscribe(gone, uc(3), REMOVED_KEEP_MS)).toBeNull();
+    const res = computeSync(gone, { discovered: stored.filter(c => c.ucId !== uc(3)), sidebarComplete: false, now: REMOVED_KEEP_MS });
+    expect(res.next.removed).toEqual({});
+  });
+
+  it('restores the folder when a removed channel shows up again in a sync (resubscribed elsewhere)', () => {
+    const gone = applyUnsubscribe(snapshotWith(stored, folders()), uc(15), 0)!;
+    const res = computeSync(gone, { discovered: stored, sidebarComplete: false, now: 60_000 });
+    expect(res.added).toEqual([uc(15)]);
+    expect(res.restored).toEqual([uc(15)]);
+    expect(res.next.categories.find(c => c.id === 'tech')!.channelIds).toContain(uc(15));
+    expect(res.next.removed![uc(15)]).toBeUndefined();
+  });
+
+  it('YouTube\'s full list removes several channels unsubscribed elsewhere after two spaced checks', () => {
+    // 5 of 20 is beyond the sidebar's limit (max(3, 10%) = 3), but the full list is trusted for it
+    const kept = stored.slice(0, 15);
+    let state = snapshotWith(stored, folders());
+    const first = computeSync(state, { discovered: kept, sidebarComplete: false, fullList: true, now: 0 });
+    expect(first.removed).toEqual([]);
+    state = first.next;
+    const tooSoon = computeSync(state, { discovered: kept, sidebarComplete: false, fullList: true, now: REMOVAL_STRIKE_INTERVAL_MS - 1 });
+    expect(tooSoon.removed).toEqual([]);
+    const second = computeSync(tooSoon.next, { discovered: kept, sidebarComplete: false, fullList: true, now: REMOVAL_STRIKE_INTERVAL_MS });
+    expect(second.removed.sort()).toEqual(stored.slice(15).map(c => c.ucId).sort());
+    expect(Object.keys(second.next.removed!)).toHaveLength(5);
+    expect(second.next.categories.find(c => c.id === 'tech')!.channelIds).toHaveLength(5);
+
+    // The same 5 missing from a sidebar scrape alone would be treated as a broken scrape
+    const sidebar = computeSync(snapshotWith(stored, folders()), { discovered: kept, sidebarComplete: true, now: 0 });
+    expect(sidebar.removalSkipped).toMatch(/sidebar scrape would remove 5\/20/);
+  });
+
+  it('never trusts a full list that would remove more than half the channels, or an empty one', () => {
+    const half = computeSync(snapshotWith(stored, folders()), { discovered: stored.slice(0, 9), sidebarComplete: false, fullList: true, now: 0 });
+    expect(half.removalSkipped).toMatch(/full list would remove 11\/20/);
+    expect(half.next.missing).toEqual({});
+    const empty = computeSync(snapshotWith(stored, folders()), { discovered: [], sidebarComplete: false, fullList: true, now: 0 });
+    expect(empty.removed).toEqual([]);
+    expect(empty.next.missing).toEqual({});
   });
 });

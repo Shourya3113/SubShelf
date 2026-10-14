@@ -200,6 +200,34 @@ import { bareHandle, normalizeHandle } from '@/utils/channelIdentity';
     });
   } catch {}
 
+  // YouTube's subscribe/unsubscribe responses carry { updateSubscribeButtonAction: { channelId,
+  // subscribed } }: the exact channel and its new state, from any page (video, channel, search...).
+  const reportSubscriptionChanges = (res: any) => {
+    const changes: { channelId: string; subscribed: boolean }[] = [];
+    const find = (n: any, depth = 0) => {
+      if (!n || typeof n !== 'object' || depth > 12) return;
+      const a = n.updateSubscribeButtonAction;
+      if (a && typeof a.channelId === 'string' && /^UC[\w-]{22}$/.test(a.channelId) && typeof a.subscribed === 'boolean') {
+        changes.push({ channelId: a.channelId, subscribed: a.subscribed });
+      }
+      for (const k in n) {
+        if (Object.prototype.hasOwnProperty.call(n, k)) find(n[k], depth + 1);
+      }
+    };
+    find(res);
+    if (changes.length === 0) return;
+    // Forget unsubscribed channels here too, or the next broadcast would report them as still present
+    for (const c of changes) {
+      if (c.subscribed) continue;
+      for (const [key, ch] of Object.entries(channels)) {
+        if (key === c.channelId || ch.ucId === c.channelId) delete channels[key];
+      }
+    }
+    try {
+      window.postMessage({ type: 'SUBSHELF_SUBSCRIPTION_CHANGED', changes }, location.origin);
+    } catch {}
+  };
+
   // Observe guide/browse InnerTube network responses
   try {
     const orig = window.fetch;
@@ -210,6 +238,8 @@ import { bareHandle, normalizeHandle } from '@/utils/channelIdentity';
         const url: string = typeof a0 === 'string' ? a0 : a0?.url || a0?.href || '';
         if (url.includes('/youtubei/v1/guide') || url.includes('/youtubei/v1/browse')) {
           p.then(r => r.clone().json()).then(ingest).catch(() => {});
+        } else if (url.includes('/youtubei/v1/subscription/')) {
+          p.then(r => (r.ok ? r.clone().json() : null)).then(reportSubscriptionChanges).catch(() => {});
         }
       } catch {}
       return p;

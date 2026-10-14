@@ -22,6 +22,7 @@ SubShelf is designed from the ground up on a **strict local-first, zero-telemetr
 
 ### A. YouTube™ Subscription Data
 - **What is accessed:** Channel titles, handles, channel IDs (`ucId`), avatar URLs and short channel descriptions of the channels you subscribe to, read from the YouTube pages you visit (the left sidebar and the subscription data YouTube already loads for that sidebar). To fill in missing channel avatars and descriptions, the extension may also load YouTube's own "All subscriptions" page (`youtube.com/feed/channels`) in the background, using your existing YouTube session. This request goes only to YouTube.
+- **Subscribe and unsubscribe actions:** When you subscribe to or unsubscribe from a channel on YouTube, SubShelf reads YouTube's own confirmation (which channel, and whether you are now subscribed) so your folders stay in sync. A channel you unsubscribe from is removed from your folders, and which folders it was in is remembered on your device for 30 days, so resubscribing puts it back.
 - **Why it is accessed:** To organize your subscribed channels into custom folder decks, filter your subscriptions feed by topic, and render collapsible shelves.
 - **Where it is stored:** Exclusively inside your browser's local storage (`chrome.storage.local`). This data is never sent to any server operated by SubShelf.
 

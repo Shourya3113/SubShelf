@@ -1,5 +1,13 @@
 # Changelog
 
+## 1.3.1 — 2026-10-14
+
+### Unsubscribes now update your folders
+- Unsubscribing from a channel removes it from your folders right away, wherever you unsubscribe: under a video, on the channel's page, in search or on YouTube's All subscriptions page. (YouTube had changed how it reports unsubscribes, so SubShelf missed them.)
+- Resubscribing within 30 days, or pressing YouTube's Undo, puts the channel back in the folder it was in.
+- Channels you unsubscribe from on another device or in the YouTube app are removed within a few hours, using YouTube's All subscriptions list. Several at once is fine; a list that would remove more than half your channels is still ignored as an error.
+- New subscriptions are picked up again right after you subscribe.
+
 ## 1.3.0 — 2026-10-13
 
 - The popup footer has a "Rate SubShelf" link to the store's reviews page.

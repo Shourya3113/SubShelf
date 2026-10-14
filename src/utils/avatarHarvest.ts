@@ -1,6 +1,7 @@
 import { bareHandle, isChannelId, normalizeHandle } from './channelIdentity';
 import { safeAvatarUrl } from './avatarUrl';
 import { cleanDescription } from './channelDetails';
+import { SubscribedChannel } from '@/types';
 
 /** Reads avatars straight from YouTube's native sidebar entries (visible or expanded). */
 export function harvestAvatarsFromDom(): Map<string, string> {
@@ -33,6 +34,10 @@ export interface ChannelsPageData {
   avatars: Map<string, string>;
   /** Cleaned descriptions keyed by UC ID (or "@handle" when YouTube gave no ID); "" when the channel has none. */
   descriptions: Map<string, string>;
+  /** Every subscribed channel the page listed (with a UC ID). */
+  channels: SubscribedChannel[];
+  /** True when the page listed everything at once (no "load more"), so `channels` is the full list. */
+  complete: boolean;
 }
 
 /** Plain text of a YouTube text node ({ simpleText } or { runs: [{ text }] }). */
@@ -45,8 +50,11 @@ const textOf = (node: any): string =>
 export function parseChannelsPage(data: unknown): ChannelsPageData {
   const avatars = new Map<string, string>();
   const descriptions = new Map<string, string>();
+  const channels = new Map<string, SubscribedChannel>();
+  let hasMore = false;
   const walk = (n: any, depth = 0) => {
     if (!n || typeof n !== 'object' || depth > 40) return;
+    if (n.continuationItemRenderer) hasMore = true;
     const r = n.channelRenderer || n.gridChannelRenderer || n.compactChannelRenderer;
     if (r) {
       const base = r.navigationEndpoint?.browseEndpoint?.canonicalBaseUrl as string | undefined;
@@ -70,13 +78,25 @@ export function parseChannelsPage(data: unknown): ChannelsPageData {
       const key = isChannelId(r.channelId) ? r.channelId : handle;
       const desc = cleanDescription(textOf(r.descriptionSnippet));
       if (key && desc !== undefined) descriptions.set(key, desc);
+
+      const title = textOf(r.title).trim();
+      if (isChannelId(r.channelId) && title && !channels.has(r.channelId)) {
+        channels.set(r.channelId, {
+          ucId: r.channelId,
+          title,
+          handle: handle || `@${r.channelId}`,
+          url: handle ? `https://www.youtube.com/${handle}` : `https://www.youtube.com/channel/${r.channelId}`,
+          avatarUrl: url || '',
+          discoveredAt: Date.now(),
+        });
+      }
     }
     for (const k in n) {
       if (Object.prototype.hasOwnProperty.call(n, k)) walk(n[k], depth + 1);
     }
   };
   walk(data);
-  return { avatars, descriptions };
+  return { avatars, descriptions, channels: [...channels.values()], complete: !hasMore && channels.size > 0 };
 }
 
 /**

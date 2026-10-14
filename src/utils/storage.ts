@@ -1,7 +1,7 @@
 import { SubDeckStorageSchema, DEFAULT_STORAGE, SubscribedChannel, CategoryDeck, CURRENT_SCHEMA_VERSION, API_KEY_FIELD } from '@/types';
 import { Logger } from './logger';
 import { isSystemChannelOrCurator } from './systemChannels';
-import { computeSync, MissingRecord, SYNC_MISSING_KEY } from './syncEngine';
+import { applyResubscribe, applyUnsubscribe, computeSync, MissingRecord, RemovedChannel, SYNC_MISSING_KEY, SYNC_REMOVED_KEY, SyncSnapshot } from './syncEngine';
 import { sanitizeAvatarMap } from './avatarUrl';
 import { applyOverrides } from '@/ai/overrides';
 import { isConfident, LearnedModel, predictFolder, trainFromCorrections } from '@/ai/learning';
@@ -165,6 +165,35 @@ function learnedPlacer(raw: Record<string, any>): (ch: SubscribedChannel, engine
     const p = predictFolder(model, ch, exclusions[ch.ucId] ?? []);
     return isConfident(p, engineFolderId) ? p.folderId : null;
   };
+}
+
+/** When YouTube's All subscriptions list was last read in full (see SubscriptionSync.checkAllSubscriptions). */
+export const ALL_SUBSCRIPTIONS_CHECKED_KEY = 'allSubscriptionsCheckedAt';
+
+const SYNC_SNAPSHOT_KEYS = ['channels', 'categories', 'handleToUcId', 'manualAssignments', 'channelExclusions', SYNC_MISSING_KEY, SYNC_REMOVED_KEY];
+
+const asRecord = <T>(v: unknown): Record<string, T> => (v && typeof v === 'object' && !Array.isArray(v) ? (v as Record<string, T>) : {});
+
+/** The part of storage that subscription sync reads and writes. */
+function readSyncSnapshot(raw: Record<string, any>): SyncSnapshot {
+  return {
+    channels: asRecord<SubscribedChannel>(raw.channels),
+    categories: (Array.isArray(raw.categories) ? raw.categories : []).filter((c: any) => c && typeof c === 'object' && c.id),
+    handleToUcId: asRecord<string>(raw.handleToUcId),
+    missing: asRecord<MissingRecord>(raw[SYNC_MISSING_KEY]),
+    removed: asRecord<RemovedChannel>(raw[SYNC_REMOVED_KEY]),
+  };
+}
+
+async function writeSyncSnapshot(next: SyncSnapshot, extra: Record<string, unknown> = {}): Promise<void> {
+  await chrome.storage.local.set({
+    channels: next.channels,
+    categories: next.categories,
+    handleToUcId: next.handleToUcId,
+    [SYNC_MISSING_KEY]: next.missing,
+    [SYNC_REMOVED_KEY]: next.removed ?? {},
+    ...extra,
+  });
 }
 
 export class SubDeckStorage {
@@ -456,30 +485,34 @@ export class SubDeckStorage {
       case 'syncObservation': {
         const discovered: SubscribedChannel[] = (Array.isArray(payload?.discovered) ? payload.discovered : [])
           .filter((c: any) => c && typeof c === 'object' && typeof c.ucId === 'string' && c.ucId && typeof c.title === 'string');
-        const raw = await chrome.storage.local.get(['channels', 'categories', 'handleToUcId', 'manualAssignments', 'channelExclusions', SYNC_MISSING_KEY]);
+        const raw = await chrome.storage.local.get(SYNC_SNAPSHOT_KEYS);
         const now = Date.now();
-        const result = computeSync(
-          {
-            channels: raw.channels && typeof raw.channels === 'object' ? raw.channels : {},
-            categories: (Array.isArray(raw.categories) ? raw.categories : []).filter((c: any) => c && typeof c === 'object' && c.id),
-            handleToUcId: raw.handleToUcId && typeof raw.handleToUcId === 'object' ? raw.handleToUcId : {},
-            missing: (raw[SYNC_MISSING_KEY] && typeof raw[SYNC_MISSING_KEY] === 'object' ? raw[SYNC_MISSING_KEY] : {}) as Record<string, MissingRecord>,
-          },
-          { discovered, sidebarComplete: payload?.sidebarComplete === true, now, placeNew: learnedPlacer(raw) }
-        );
+        const fullList = payload?.fullList === true;
+        const result = computeSync(readSyncSnapshot(raw), {
+          discovered,
+          sidebarComplete: payload?.sidebarComplete === true,
+          fullList,
+          now,
+          placeNew: learnedPlacer(raw),
+        });
         if (result.removalSkipped) {
           Logger.warn('[SubShelf] Skipped unsubscribe reconciliation:', result.removalSkipped);
         }
-        if (result.changed) {
-          await chrome.storage.local.set({
-            channels: result.next.channels,
-            categories: result.next.categories,
-            handleToUcId: result.next.handleToUcId,
-            [SYNC_MISSING_KEY]: result.next.missing,
-            lastScrapedAt: now,
-          });
-        }
-        return { changed: result.changed, added: result.added, removed: result.removed };
+        if (result.changed) await writeSyncSnapshot(result.next, { lastScrapedAt: now });
+        if (fullList) await chrome.storage.local.set({ [ALL_SUBSCRIPTIONS_CHECKED_KEY]: now });
+        return { changed: result.changed, added: result.added, removed: result.removed, restored: result.restored };
+      }
+
+      case 'subscriptionChanged': {
+        // YouTube confirmed a subscribe/unsubscribe click on the page (exact channel ID)
+        const ucId = typeof payload?.ucId === 'string' ? payload.ucId : '';
+        if (!isChannelId(ucId)) return { changed: false };
+        const raw = await chrome.storage.local.get(SYNC_SNAPSHOT_KEYS);
+        const prev = readSyncSnapshot(raw);
+        const next = payload?.subscribed === true ? applyResubscribe(prev, ucId, Date.now()) : applyUnsubscribe(prev, ucId, Date.now());
+        if (!next) return { changed: false };
+        await writeSyncSnapshot(next);
+        return { changed: true };
       }
 
       case 'mergeAvatars': {
@@ -627,8 +660,24 @@ export class SubDeckStorage {
   }
 
   /** Reports what the page shows; the service worker reconciles it against fresh storage. */
-  static async syncObservation(discovered: SubscribedChannel[], sidebarComplete: boolean): Promise<{ changed: boolean; added: string[]; removed: string[] } | null> {
-    return this.requestMutation('syncObservation', { discovered, sidebarComplete });
+  static async syncObservation(
+    discovered: SubscribedChannel[],
+    sidebarComplete: boolean,
+    options: { fullList?: boolean } = {}
+  ): Promise<{ changed: boolean; added: string[]; removed: string[]; restored: string[] } | null> {
+    return this.requestMutation('syncObservation', { discovered, sidebarComplete, fullList: options.fullList === true });
+  }
+
+  /** YouTube confirmed the user subscribed to / unsubscribed from a channel. Returns whether storage changed. */
+  static async subscriptionChanged(ucId: string, subscribed: boolean): Promise<boolean> {
+    const res = await this.requestMutation('subscriptionChanged', { ucId, subscribed });
+    return Boolean(res?.changed);
+  }
+
+  static async getAllSubscriptionsCheckedAt(): Promise<number> {
+    if (!this.isContextValid()) return 0;
+    const raw = await chrome.storage.local.get(ALL_SUBSCRIPTIONS_CHECKED_KEY);
+    return typeof raw[ALL_SUBSCRIPTIONS_CHECKED_KEY] === 'number' ? raw[ALL_SUBSCRIPTIONS_CHECKED_KEY] : 0;
   }
 
   static async mergeAvatars(avatars: Record<string, string>): Promise<{ changed: boolean } | null> {

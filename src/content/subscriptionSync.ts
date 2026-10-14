@@ -4,9 +4,11 @@ import { SidebarManager } from './sidebarManager';
 import { Logger } from '@/utils/logger';
 import { SubscribedChannel } from '@/types';
 import { isSystemChannelOrCurator } from '@/utils/systemChannels';
-import { normalizeHandle } from '@/utils/channelIdentity';
 import { ChannelsPageData, harvestFromChannelsPage } from '@/utils/avatarHarvest';
 import { needsDetailsLookup } from '@/utils/channelDetails';
+
+/** How often YouTube's All subscriptions list is re-read to catch unsubscribes from other devices. */
+export const ALL_SUBSCRIPTIONS_RECHECK_MS = 3 * 60 * 60 * 1000;
 
 export class SubscriptionSync {
   private static isSyncing = false;
@@ -90,22 +92,37 @@ export class SubscriptionSync {
   }
 
   /**
-   * Remove a channel by URL (used for unsubscribe detection on channel pages
-   * where the sidebar may not be fully expanded).
+   * YouTube confirmed a subscribe/unsubscribe click. Unsubscribes are removed at once (the folders
+   * are remembered); a resubscribe within 30 days goes back to its folders, anything else is picked
+   * up and sorted by a normal sync once YouTube's sidebar shows it.
    */
-  static async removeChannelByUrl(url: string): Promise<void> {
+  static async applySubscriptionChange(ucId: string, subscribed: boolean): Promise<void> {
     if (!SubDeckStorage.isContextValid()) return;
-    const handleMatch = url.match(/\/@([^/?#]+)/);
-    if (!handleMatch) return;
-    const handle = normalizeHandle(handleMatch[1]);
+    try {
+      const changed = await SubDeckStorage.subscriptionChanged(ucId, subscribed);
+      Logger.info(`[SubShelf] ${subscribed ? 'Subscribed to' : 'Unsubscribed from'} ${ucId}${changed ? '' : ' (no stored change)'}`);
+      if (changed) await SidebarManager.render();
+      if (subscribed && !changed) {
+        for (const ms of [1500, 3500]) {
+          setTimeout(() => {
+            if (!SubDeckStorage.isContextValid()) return;
+            ChannelExtractor.autoExpandNativeSubscriptions(true);
+            this.diffAndSync();
+          }, ms);
+        }
+      }
+    } catch (err) {
+      Logger.warn('[SubShelf] Could not apply subscription change:', err);
+    }
+  }
 
-    const handleToUcId = await SubDeckStorage.getHandleToUcIdMap();
-    const ucId = handleToUcId[handle];
-    if (!ucId) return;
-
-    await SubDeckStorage.removeChannel(ucId);
-    await SidebarManager.render();
-    Logger.info(`[SubShelf] Removed unsubscribed channel by URL: ${handle} (${ucId})`);
+  /** YouTube's All subscriptions list, when read in full, settles unsubscribes made elsewhere. */
+  static async syncFullList(page: ChannelsPageData): Promise<void> {
+    if (!SubDeckStorage.isContextValid() || page.channels.length === 0) return;
+    const discovered = page.channels.filter(ch => !isSystemChannelOrCurator(ch));
+    const result = await SubDeckStorage.syncObservation(discovered, false, { fullList: page.complete });
+    if (result?.removed.length) Logger.info(`[SubShelf] Removed ${result.removed.length} channel(s) no longer subscribed`);
+    if (result?.changed) await SidebarManager.render();
   }
 
   /**

@@ -9,6 +9,7 @@ import { Logger } from '@/utils/logger';
 import { sanitizeAvatarMap } from '@/utils/avatarUrl';
 import { harvestAvatarsFromDom, harvestFromChannelsPage } from '@/utils/avatarHarvest';
 import { DETAILS_RECHECK_MS, needsDetailsLookup } from '@/utils/channelDetails';
+import { ALL_SUBSCRIPTIONS_RECHECK_MS } from './subscriptionSync';
 
 class SubShelfCoordinator {
   static init(): void {
@@ -40,6 +41,13 @@ class SubShelfCoordinator {
         handleAvatars(e.data.avatars);
       } else if (e.data?.type === 'SUBSHELF_CHANNELS_BROADCAST') {
         handleChannels(e.data.channels);
+      } else if (e.data?.type === 'SUBSHELF_SUBSCRIPTION_CHANGED' && Array.isArray(e.data.changes)) {
+        // Subscribe/unsubscribe clicks, as confirmed by YouTube's own response (see injectedMain)
+        for (const c of e.data.changes.slice(0, 20)) {
+          if (c && typeof c.channelId === 'string' && typeof c.subscribed === 'boolean') {
+            SubscriptionSync.applySubscriptionChange(c.channelId, c.subscribed);
+          }
+        }
       }
     });
 
@@ -65,15 +73,20 @@ class SubShelfCoordinator {
     document.addEventListener('yt-navigate-finish', () => setTimeout(harvest, 1200));
 
     // One-time catch-up, after the first harvests had a chance: YouTube's All subscriptions page
-    // fills in channels still without a logo, and descriptions for channels never looked up
-    // (those are re-checked at most daily, as some channels are never listed there).
+    // fills in channels still without a logo and descriptions never looked up (re-checked at most
+    // daily, as some channels are never listed there), and every few hours it is the full list that
+    // catches channels unsubscribed on another device.
     setTimeout(async () => {
       if (!SubDeckStorage.isContextValid()) return;
       const all = Object.values((await SubDeckStorage.getAll()).channels ?? {});
+      const now = Date.now();
       const checkedAt = await SubDeckStorage.getChannelDetailsCheckedAt();
-      if (!all.some(c => !c.avatarUrl) && !needsDetailsLookup(all, checkedAt, Date.now(), DETAILS_RECHECK_MS)) return;
+      const listDue = now - (await SubDeckStorage.getAllSubscriptionsCheckedAt()) >= ALL_SUBSCRIPTIONS_RECHECK_MS;
+      if (!listDue && !all.some(c => !c.avatarUrl) && !needsDetailsLookup(all, checkedAt, now, DETAILS_RECHECK_MS)) return;
       const page = await harvestFromChannelsPage();
-      if (page) await SubscriptionSync.applyChannelsPage(page);
+      if (!page) return;
+      await SubscriptionSync.applyChannelsPage(page);
+      if (listDue) await SubscriptionSync.syncFullList(page);
     }, 15000);
 
     window.addEventListener('yt-navigate-start', (e: any) => {
@@ -119,41 +132,6 @@ class SubShelfCoordinator {
         }, 2000);
       }
     });
-
-    // Real-time subscribe/unsubscribe detection via YouTube's internal action events
-    document.addEventListener('yt-action', ((e: CustomEvent) => {
-      if (!SubDeckStorage.isContextValid()) return;
-      const actionName = e.detail?.actionName;
-      if (!actionName) return;
-
-      if (actionName === 'yt-subscribe' || actionName === 'yt-subscribe-endpoint') {
-        Logger.info('[SubShelf] Subscribe action detected');
-        // Delay to let YouTube's sidebar update, then sync (picks up new channel + auto-categorizes)
-        setTimeout(() => {
-          if (!SubDeckStorage.isContextValid()) return;
-          ChannelExtractor.autoExpandNativeSubscriptions(true);
-          SubscriptionSync.diffAndSync();
-        }, 1500);
-        // Second pass after sidebar fully renders
-        setTimeout(() => {
-          if (!SubDeckStorage.isContextValid()) return;
-          SubscriptionSync.diffAndSync();
-        }, 3500);
-      }
-
-      if (actionName === 'yt-unsubscribe' || actionName === 'yt-unsubscribe-endpoint') {
-        Logger.info('[SubShelf] Unsubscribe action detected');
-        const currentUrl = window.location.href;
-        setTimeout(() => {
-          if (!SubDeckStorage.isContextValid()) return;
-          SubscriptionSync.removeChannelByUrl(currentUrl);
-        }, 800);
-        setTimeout(() => {
-          if (!SubDeckStorage.isContextValid()) return;
-          SubscriptionSync.diffAndSync();
-        }, 2500);
-      }
-    }) as EventListener);
 
     // Visibility-change fallback: sync when user switches back to YouTube tab
     document.addEventListener('visibilitychange', () => {

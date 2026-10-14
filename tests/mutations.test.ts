@@ -38,6 +38,31 @@ describe('storage mutations', () => {
   let read: () => Record<string, any>;
   afterEach(() => vi.unstubAllGlobals());
 
+  describe('subscriptionChanged', () => {
+    it('removes an unsubscribed channel at once and puts it back in its folder on resubscribe', async () => {
+      read = installFakeChrome({
+        channels: { [UC1]: ch(UC1, '@one'), [UC2]: ch(UC2, '@two') },
+        categories: [deck('mine', [UC1, UC2])],
+        handleToUcId: { '@one': UC1, one: UC1, '@two': UC2, two: UC2 },
+      });
+      expect(await enqueueMutation('subscriptionChanged', { ucId: UC1, subscribed: false })).toEqual({ changed: true });
+      expect(read().channels[UC1]).toBeUndefined();
+      expect(read().categories[0].channelIds).toEqual([UC2]);
+      expect(read().removedChannels[UC1].folderIds).toEqual(['mine']);
+
+      expect(await enqueueMutation('subscriptionChanged', { ucId: UC1, subscribed: true })).toEqual({ changed: true });
+      expect(read().channels[UC1].handle).toBe('@one');
+      expect(read().categories[0].channelIds).toEqual([UC2, UC1]);
+      expect(read().removedChannels[UC1]).toBeUndefined();
+    });
+
+    it('ignores anything that is not a channel ID', async () => {
+      read = installFakeChrome({ channels: { [UC1]: ch(UC1, '@one') }, categories: [] });
+      expect(await enqueueMutation('subscriptionChanged', { ucId: '@one', subscribed: false })).toEqual({ changed: false });
+      expect(read().channels[UC1]).toBeDefined();
+    });
+  });
+
   describe('ratePromptEvent', () => {
     it('stores only the folders date and the answer, and keeps them out of the folder data', async () => {
       read = installFakeChrome({ channels: {}, categories: [] });

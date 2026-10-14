@@ -276,16 +276,25 @@ class PopupManager {
       }
       select.addEventListener('change', () => this.assignChannelToCategory(ch.ucId, select.value));
 
-      const removeBtn = iconButton('close', `Remove ${ch.title} from SubShelf`, 'row-action danger', 18);
-      removeBtn.addEventListener('click', async () => {
-        if (confirm(`Remove "${ch.title}" from SubShelf? (You stay subscribed on YouTube.)`)) {
-          await SubDeckStorage.removeChannel(ch.ucId);
-          this.state = await SubDeckStorage.getAll();
-          await this.renderChannels(filter);
-        }
-      });
+      row.append(this.buildAvatar(ch), info, select);
 
-      row.append(this.buildAvatar(ch), info, select, removeBtn);
+      // Takes the channel out of every folder and keeps it out of Auto-sort (you stay subscribed on
+      // YouTube, so removing it from SubShelf itself would only last until the next sync)
+      if (currentDeck) {
+        const removeBtn = iconButton('close', `Remove ${ch.title} from all folders`, 'row-action danger', 18);
+        removeBtn.addEventListener('click', async () => {
+          if (confirm(`Remove "${ch.title}" from all folders? It stays in this list, and Auto-sort leaves it unsorted until you choose a folder.`)) {
+            await SubDeckStorage.setChannelCategory(ch.ucId, '');
+            this.state = await SubDeckStorage.getAll();
+            await this.renderChannels(filter);
+          }
+        });
+        row.appendChild(removeBtn);
+      } else {
+        const spacer = document.createElement('span');
+        spacer.className = 'row-action-spacer';
+        row.appendChild(spacer); // keeps the folder dropdowns aligned
+      }
       return row;
     }));
   }

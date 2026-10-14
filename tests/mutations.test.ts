@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { SubDeckStorage, enqueueMutation } from '@/utils/storage';
-import { CategoryDeck, SubscribedChannel } from '@/types';
+import { CategoryDeck, NO_FOLDER, SubscribedChannel } from '@/types';
 
 const UC1 = 'UC0000000000000000000001';
 const UC2 = 'UC0000000000000000000002';
@@ -37,6 +37,49 @@ function installFakeChrome(initial: Record<string, unknown>) {
 describe('storage mutations', () => {
   let read: () => Record<string, any>;
   afterEach(() => vi.unstubAllGlobals());
+
+  describe('"No folder" (popup ✕)', () => {
+    const generated = () => [deck('tech-coding', [UC1, UC2], { isSystem: true })];
+    beforeEach(() => {
+      read = installFakeChrome({
+        channels: { [UC1]: ch(UC1, '@one'), [UC2]: ch(UC2, '@two') },
+        categories: [deck('tech-coding', [UC1, UC2], { isSystem: true }), deck('mine', [])],
+        handleToUcId: { '@one': UC1, one: UC1, '@two': UC2, two: UC2 },
+        manualAssignments: {},
+        channelExclusions: {},
+      });
+    });
+
+    it('takes the channel out of every folder and Auto-sort keeps it out', async () => {
+      await enqueueMutation('setChannelCategory', { ucId: UC1, newCatId: '' });
+      expect(read().categories.every((c: CategoryDeck) => !c.channelIds.includes(UC1))).toBe(true);
+      expect(read().manualAssignments[UC1]).toEqual([NO_FOLDER]);
+      expect(read().channels[UC1]).toBeDefined(); // still listed (still subscribed)
+
+      await enqueueMutation('applyGeneratedDecks', { decks: generated() });
+      expect(read().categories.every((c: CategoryDeck) => !c.channelIds.includes(UC1))).toBe(true);
+      expect(read().categories.find((c: CategoryDeck) => c.id === 'tech-coding').channelIds).toEqual([UC2]);
+    });
+
+    it('placing it in a folder again (picker, drag or dropdown) clears the marker', async () => {
+      await enqueueMutation('setChannelCategory', { ucId: UC1, newCatId: '' });
+      await enqueueMutation('addChannelToCategory', { ucId: UC1, categoryId: 'mine' });
+      expect(read().manualAssignments[UC1]).toEqual(['mine']);
+      await enqueueMutation('applyGeneratedDecks', { decks: generated() });
+      expect(read().categories.find((c: CategoryDeck) => c.id === 'mine').channelIds).toContain(UC1);
+
+      await enqueueMutation('setChannelCategory', { ucId: UC2, newCatId: '' });
+      await enqueueMutation('setChannelCategory', { ucId: UC2, newCatId: 'mine' });
+      expect(read().manualAssignments[UC2]).toEqual(['mine']);
+    });
+
+    it('"Forget my corrections" lets Auto-sort sort it again', async () => {
+      await enqueueMutation('setChannelCategory', { ucId: UC1, newCatId: '' });
+      await enqueueMutation('clearOverrides');
+      await enqueueMutation('applyGeneratedDecks', { decks: generated() });
+      expect(read().categories.find((c: CategoryDeck) => c.id === 'tech-coding').channelIds).toContain(UC1);
+    });
+  });
 
   describe('subscriptionChanged', () => {
     it('removes an unsubscribed channel at once and puts it back in its folder on resubscribe', async () => {

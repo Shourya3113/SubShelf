@@ -300,6 +300,11 @@ body {
   opacity: 1;
 }
 
+.row-action-spacer {
+  width: 32px;
+  flex: 0 0 32px;
+}
+
 .row-select {
   max-width: 130px;
   height: 32px;

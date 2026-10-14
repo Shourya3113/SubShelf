@@ -42,6 +42,12 @@ export interface SubDeckStorageSchema {
 }
 
 export const DEFAULT_GEMINI_CLOUD_MODEL = 'gemini-2.5-flash';
+
+/**
+ * Manual-assignment marker for "the user took this channel out of every folder": no folder has this
+ * ID, so applyOverrides keeps the channel out of all folders on every Auto-sort until it is placed again.
+ */
+export const NO_FOLDER = '__none__';
 export const CURRENT_SCHEMA_VERSION = 2;
 export const API_KEY_FIELD = 'geminiApiKey';
 

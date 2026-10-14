@@ -1,4 +1,4 @@
-import { SubDeckStorageSchema, DEFAULT_STORAGE, SubscribedChannel, CategoryDeck, CURRENT_SCHEMA_VERSION, API_KEY_FIELD } from '@/types';
+import { SubDeckStorageSchema, DEFAULT_STORAGE, SubscribedChannel, CategoryDeck, CURRENT_SCHEMA_VERSION, API_KEY_FIELD, NO_FOLDER } from '@/types';
 import { Logger } from './logger';
 import { isSystemChannelOrCurator } from './systemChannels';
 import { applyResubscribe, applyUnsubscribe, computeSync, MissingRecord, RemovedChannel, SYNC_MISSING_KEY, SYNC_REMOVED_KEY, SyncSnapshot } from './syncEngine';
@@ -311,8 +311,9 @@ export class SubDeckStorage {
               delete channelExclusions[id];
             }
           }
+          // "No folder" sticks: Auto-sort keeps the channel out of every folder until it is placed again
           if (!newCatId || newCatId === '__uncategorized__' || newCatId === 'none') {
-            delete manualAssignments[id];
+            manualAssignments[id] = [NO_FOLDER];
           }
         });
 
@@ -354,7 +355,7 @@ export class SubDeckStorage {
               channelExclusions[id] = channelExclusions[id].filter(cId => cId !== categoryId);
               if (channelExclusions[id].length === 0) delete channelExclusions[id];
             }
-            if (!manualAssignments[id]) manualAssignments[id] = [];
+            manualAssignments[id] = (manualAssignments[id] ?? []).filter(cId => cId !== NO_FOLDER);
             if (!manualAssignments[id].includes(categoryId)) manualAssignments[id].push(categoryId);
           });
 

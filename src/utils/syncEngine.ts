@@ -10,6 +10,8 @@ export const SYNC_MISSING_KEY = 'syncMissing';
 export const SYNC_REMOVED_KEY = 'removedChannels';
 /** How long a removed channel's folders are remembered, so resubscribing puts it back where it was. */
 export const REMOVED_KEEP_MS = 30 * 24 * 60 * 60 * 1000;
+/** At most this many removed channels are remembered (the most recent ones). */
+export const REMOVED_KEEP_MAX = 500;
 
 /** A channel must be missing from this many separate complete lists before it is removed. */
 export const REMOVAL_MIN_STRIKES = 2;
@@ -58,6 +60,12 @@ export interface SyncObservation {
    * The most reliable signal that a channel was unsubscribed elsewhere (another device, the app).
    */
   fullList?: boolean;
+  /**
+   * When the observed data was loaded from YouTube (a tab's page load, or the list fetch). A tab
+   * opened before a channel was unsubscribed in another tab still shows it; such stale data must not
+   * bring the channel back.
+   */
+  observedAt?: number;
   now: number;
   /**
    * Optional learned placement for a newly subscribed channel, given the folder the keyword engine
@@ -78,16 +86,45 @@ export interface SyncResult {
   removalSkipped?: string;
 }
 
-/** Drops removal records older than REMOVED_KEEP_MS. Returns true when any were dropped. */
+/** Drops removal records older than REMOVED_KEEP_MS, and the oldest beyond REMOVED_KEEP_MAX. */
 function pruneRemoved(removed: Record<string, RemovedChannel>, now: number): boolean {
   let pruned = false;
   for (const [id, rec] of Object.entries(removed)) {
-    if (!rec || typeof rec !== 'object' || !(now - rec.removedAt < REMOVED_KEEP_MS)) {
+    if (!rec || typeof rec !== 'object' || !rec.channel || !(now - rec.removedAt < REMOVED_KEEP_MS)) {
       delete removed[id];
       pruned = true;
     }
   }
+  const ids = Object.keys(removed);
+  if (ids.length > REMOVED_KEEP_MAX) {
+    ids.sort((a, b) => removed[b].removedAt - removed[a].removedAt);
+    for (const id of ids.slice(REMOVED_KEEP_MAX)) delete removed[id];
+    pruned = true;
+  }
   return pruned;
+}
+
+/**
+ * Files channels into existing folders: the user's learned corrections first, else the keyword engine.
+ * Mutates the categories.
+ */
+function autoPlace(
+  chs: SubscribedChannel[],
+  categories: CategoryDeck[],
+  placeNew?: SyncObservation['placeNew']
+): void {
+  if (chs.length === 0 || categories.length === 0) return;
+  const engineFolder = new Map<string, string>();
+  for (const deck of HeuristicCategorizer.categorize(chs)) {
+    for (const id of deck.channelIds) engineFolder.set(id, deck.id);
+  }
+  for (const ch of chs) {
+    const engineId = engineFolder.get(ch.ucId) ?? null;
+    // The user's own corrections win over the keyword engine when they clearly apply
+    const learnedId = placeNew?.(ch, engineId) ?? null;
+    const target = categories.find(c => c.id === (learnedId ?? engineId));
+    if (target && !target.channelIds.includes(ch.ucId)) target.channelIds.push(ch.ucId);
+  }
 }
 
 /**
@@ -142,8 +179,8 @@ const cloneSnapshot = (prev: SyncSnapshot): SyncSnapshot => ({
 export function applyUnsubscribe(prev: SyncSnapshot, ucId: string, now: number): SyncSnapshot | null {
   if (!prev.channels[ucId]) return null;
   const next = cloneSnapshot(prev);
-  pruneRemoved(next.removed!, now);
   dropChannel(ucId, next.channels, next.categories, next.handleToUcId, next.removed!, now);
+  pruneRemoved(next.removed!, now);
   delete next.missing[ucId];
   return next;
 }
@@ -153,7 +190,12 @@ export function applyUnsubscribe(prev: SyncSnapshot, ucId: string, now: number):
  * into the folders it was in (also covers YouTube's Undo). Returns null when SubShelf has no record
  * of it, in which case the normal sync adds and sorts it.
  */
-export function applyResubscribe(prev: SyncSnapshot, ucId: string, now: number): SyncSnapshot | null {
+export function applyResubscribe(
+  prev: SyncSnapshot,
+  ucId: string,
+  now: number,
+  placeNew?: SyncObservation['placeNew']
+): SyncSnapshot | null {
   const rec = prev.removed?.[ucId];
   if (!rec || !(now - rec.removedAt < REMOVED_KEEP_MS)) return null;
   const next = cloneSnapshot(prev);
@@ -161,7 +203,8 @@ export function applyResubscribe(prev: SyncSnapshot, ucId: string, now: number):
     next.channels[ucId] = rec.channel;
     if (rec.channel.handle) mapHandle(next.handleToUcId, rec.channel.handle, ucId);
   }
-  restoreFolders(ucId, rec, next.categories);
+  // Its old folders were deleted meanwhile: sort it like any new subscription
+  if (!restoreFolders(ucId, rec, next.categories)) autoPlace([next.channels[ucId]], next.categories, placeNew);
   delete next.removed![ucId];
   delete next.missing[ucId];
   return next;
@@ -202,6 +245,9 @@ export function computeSync(prev: SyncSnapshot, obs: SyncObservation): SyncResul
     if (isSystemChannelOrCurator(ch)) continue;
     const handle = normalizeHandle(ch.handle);
     const canonicalId = (isChannelId(ch.ucId) ? ch.ucId : (handleToUcId[handle] || ch.ucId))?.trim();
+    // Data loaded before the channel was removed (another tab, opened earlier) can't bring it back
+    const rec = canonicalId ? removedRecords[canonicalId] : undefined;
+    if (rec && obs.observedAt !== undefined && obs.observedAt <= rec.removedAt) continue;
     const dedupeKey = channelKey({ ucId: canonicalId, handle, title: ch.title });
     if (!dedupeKey || seenKeys.has(dedupeKey)) continue;
     seenKeys.add(dedupeKey);
@@ -263,19 +309,7 @@ export function computeSync(prev: SyncSnapshot, obs: SyncObservation): SyncResul
     }
     toSort.push(ch);
   }
-  if (toSort.length > 0 && categories.length > 0) {
-    const engineFolder = new Map<string, string>();
-    for (const deck of HeuristicCategorizer.categorize(toSort)) {
-      for (const id of deck.channelIds) engineFolder.set(id, deck.id);
-    }
-    for (const ch of toSort) {
-      const engineId = engineFolder.get(ch.ucId) ?? null;
-      // The user's own corrections win over the keyword engine when they clearly apply
-      const learnedId = obs.placeNew?.(ch, engineId) ?? null;
-      const target = categories.find(c => c.id === (learnedId ?? engineId));
-      if (target && !target.channelIds.includes(ch.ucId)) target.channelIds.push(ch.ucId);
-    }
-  }
+  autoPlace(toSort, categories, obs.placeNew);
 
   // 6. Drop purged ids and duplicate ids from folders
   for (const cat of categories) {

@@ -492,6 +492,7 @@ export class SubDeckStorage {
           discovered,
           sidebarComplete: payload?.sidebarComplete === true,
           fullList,
+          observedAt: typeof payload?.observedAt === 'number' ? payload.observedAt : undefined,
           now,
           placeNew: learnedPlacer(raw),
         });
@@ -509,7 +510,9 @@ export class SubDeckStorage {
         if (!isChannelId(ucId)) return { changed: false };
         const raw = await chrome.storage.local.get(SYNC_SNAPSHOT_KEYS);
         const prev = readSyncSnapshot(raw);
-        const next = payload?.subscribed === true ? applyResubscribe(prev, ucId, Date.now()) : applyUnsubscribe(prev, ucId, Date.now());
+        const next = payload?.subscribed === true
+          ? applyResubscribe(prev, ucId, Date.now(), learnedPlacer(raw))
+          : applyUnsubscribe(prev, ucId, Date.now());
         if (!next) return { changed: false };
         await writeSyncSnapshot(next);
         return { changed: true };
@@ -663,9 +666,9 @@ export class SubDeckStorage {
   static async syncObservation(
     discovered: SubscribedChannel[],
     sidebarComplete: boolean,
-    options: { fullList?: boolean } = {}
+    options: { fullList?: boolean; observedAt?: number } = {}
   ): Promise<{ changed: boolean; added: string[]; removed: string[]; restored: string[] } | null> {
-    return this.requestMutation('syncObservation', { discovered, sidebarComplete, fullList: options.fullList === true });
+    return this.requestMutation('syncObservation', { discovered, sidebarComplete, fullList: options.fullList === true, observedAt: options.observedAt });
   }
 
   /** YouTube confirmed the user subscribed to / unsubscribed from a channel. Returns whether storage changed. */

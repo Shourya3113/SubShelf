@@ -85,8 +85,9 @@ class SubShelfCoordinator {
       if (!listDue && !all.some(c => !c.avatarUrl) && !needsDetailsLookup(all, checkedAt, now, DETAILS_RECHECK_MS)) return;
       const page = await harvestFromChannelsPage();
       if (!page) return;
-      await SubscriptionSync.applyChannelsPage(page);
+      // Channels the list adds need their records before descriptions can be stored on them
       if (listDue) await SubscriptionSync.syncFullList(page);
+      await SubscriptionSync.applyChannelsPage(page);
     }, 15000);
 
     window.addEventListener('yt-navigate-start', (e: any) => {

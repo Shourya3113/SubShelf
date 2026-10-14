@@ -6,6 +6,7 @@ import {
   SyncSnapshot,
   REMOVAL_MIN_STRIKES,
   REMOVAL_STRIKE_INTERVAL_MS,
+  REMOVED_KEEP_MAX,
   REMOVED_KEEP_MS,
 } from '@/utils/syncEngine';
 import { CategoryDeck, SubscribedChannel } from '@/types';
@@ -238,5 +239,55 @@ describe('unsubscribes: instant, remembered, and caught from YouTube\'s full lis
     const empty = computeSync(snapshotWith(stored, folders()), { discovered: [], sidebarComplete: false, fullList: true, now: 0 });
     expect(empty.removed).toEqual([]);
     expect(empty.next.missing).toEqual({});
+  });
+});
+
+describe('subscription edge cases', () => {
+  const stored = range(20).map(n => ch(n));
+  const folders = () => [deck('music', stored.slice(0, 10).map(c => c.ucId)), deck('tech', stored.slice(10).map(c => c.ucId))];
+
+  it('a tab opened before the unsubscribe cannot bring the channel back; a fresh page load can', () => {
+    const gone = applyUnsubscribe(snapshotWith(stored, folders()), uc(3), 10_000)!;
+    // Tab B loaded at t=5000, before the unsubscribe in tab A: its sidebar still lists channel 3
+    const stale = computeSync(gone, { discovered: stored, sidebarComplete: true, observedAt: 5_000, now: 20_000 });
+    expect(stale.added).toEqual([]);
+    expect(stale.next.channels[uc(3)]).toBeUndefined();
+    expect(stale.next.removed![uc(3)]).toBeDefined();
+    // Resubscribed on the phone, then a tab loaded at t=30000 lists it again: back in its old folder
+    const fresh = computeSync(gone, { discovered: stored, sidebarComplete: false, observedAt: 30_000, now: 31_000 });
+    expect(fresh.restored).toEqual([uc(3)]);
+    expect(fresh.next.categories.find(c => c.id === 'music')!.channelIds).toContain(uc(3));
+  });
+
+  it('a resubscribed channel whose old folder was deleted is sorted like a new subscription', () => {
+    const fireship = ch(30, 'Fireship', '@fireship');
+    const prev = snapshotWith([...stored, fireship], [...folders(), deck('my-dev', [fireship.ucId]), deck('tech-coding', [], { isSystem: true })]);
+    const gone = applyUnsubscribe(prev, fireship.ucId, 1000)!;
+    gone.categories = gone.categories.filter(c => c.id !== 'my-dev'); // the user deleted that folder
+    const back = applyResubscribe(gone, fireship.ucId, 2000)!;
+    expect(back.channels[fireship.ucId]).toBeDefined();
+    expect(back.categories.find(c => c.id === 'tech-coding')!.channelIds).toContain(fireship.ucId);
+  });
+
+  it('remembers at most REMOVED_KEEP_MAX removed channels, dropping the oldest', () => {
+    const many = range(REMOVED_KEEP_MAX + 5).map(n => ch(100 + n));
+    let state = snapshotWith(many, []);
+    many.forEach((c, i) => { state = applyUnsubscribe(state, c.ucId, 1000 + i)!; });
+    const ids = Object.keys(state.removed!);
+    expect(ids).toHaveLength(REMOVED_KEEP_MAX);
+    expect(ids).not.toContain(many[0].ucId);
+    expect(ids).toContain(many[many.length - 1].ucId);
+  });
+
+  it('unsubscribing from a channel SubShelf never stored changes nothing', () => {
+    expect(applyUnsubscribe(snapshotWith(stored, folders()), uc(999), 0)).toBeNull();
+  });
+
+  it('a duplicate unsubscribe or resubscribe confirmation is harmless', () => {
+    const gone = applyUnsubscribe(snapshotWith(stored, folders()), uc(3), 1000)!;
+    expect(applyUnsubscribe(gone, uc(3), 1001)).toBeNull();
+    const back = applyResubscribe(gone, uc(3), 2000)!;
+    expect(applyResubscribe(back, uc(3), 2001)).toBeNull();
+    expect(back.categories.find(c => c.id === 'music')!.channelIds.filter(id => id === uc(3))).toHaveLength(1);
   });
 });

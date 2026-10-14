@@ -14,6 +14,7 @@ export class SubscriptionSync {
   private static isSyncing = false;
   private static rerunRequested = false;
   private static pendingChannels: SubscribedChannel[] = [];
+  private static recentChanges = new Map<string, number>();
 
   /**
    * Reports the channels visible on the page to the service worker, which reconciles them against
@@ -52,7 +53,8 @@ export class SubscriptionSync {
     // Only a non-empty scrape of the fully expanded list may count toward unsubscribe detection
     const sidebarComplete = scraped.length > 0 && ChannelExtractor.isSidebarFullyExpanded();
 
-    const result = await SubDeckStorage.syncObservation(discovered, sidebarComplete);
+    // Everything here comes from this tab, so it is only as fresh as the tab's page load
+    const result = await SubDeckStorage.syncObservation(discovered, sidebarComplete, { observedAt: Math.floor(performance.timeOrigin) });
     if (result?.added.length) Logger.info(`[SubShelf] Discovered ${result.added.length} new subscription(s)`);
     if (result?.removed.length) Logger.info(`[SubShelf] Removed ${result.removed.length} unsubscribed channel(s)`);
     if (result?.changed) await SidebarManager.render();
@@ -98,18 +100,29 @@ export class SubscriptionSync {
    */
   static async applySubscriptionChange(ucId: string, subscribed: boolean): Promise<void> {
     if (!SubDeckStorage.isContextValid()) return;
+    // YouTube often sends the same confirmation twice; act on it once
+    const key = `${ucId}:${subscribed}`;
+    const last = this.recentChanges.get(key);
+    if (last && Date.now() - last < 5000) return;
+    this.recentChanges.set(key, Date.now());
     try {
       const changed = await SubDeckStorage.subscriptionChanged(ucId, subscribed);
       Logger.info(`[SubShelf] ${subscribed ? 'Subscribed to' : 'Unsubscribed from'} ${ucId}${changed ? '' : ' (no stored change)'}`);
       if (changed) await SidebarManager.render();
       if (subscribed && !changed) {
-        for (const ms of [1500, 3500]) {
-          setTimeout(() => {
-            if (!SubDeckStorage.isContextValid()) return;
-            ChannelExtractor.autoExpandNativeSubscriptions(true);
-            this.diffAndSync();
-          }, ms);
-        }
+        // A channel SubShelf has never seen: YouTube's All subscriptions list already includes it
+        // (with its description, for better sorting), so read it now rather than waiting for a reload
+        setTimeout(async () => {
+          if (!SubDeckStorage.isContextValid()) return;
+          const page = await harvestFromChannelsPage();
+          if (page) {
+            // Add the channel first, so its description has a record to land on
+            await this.syncFullList(page);
+            await this.applyChannelsPage(page);
+          } else {
+            await this.diffAndSync();
+          }
+        }, 1000);
       }
     } catch (err) {
       Logger.warn('[SubShelf] Could not apply subscription change:', err);
@@ -120,7 +133,7 @@ export class SubscriptionSync {
   static async syncFullList(page: ChannelsPageData): Promise<void> {
     if (!SubDeckStorage.isContextValid() || page.channels.length === 0) return;
     const discovered = page.channels.filter(ch => !isSystemChannelOrCurator(ch));
-    const result = await SubDeckStorage.syncObservation(discovered, false, { fullList: page.complete });
+    const result = await SubDeckStorage.syncObservation(discovered, false, { fullList: page.complete, observedAt: page.fetchedAt });
     if (result?.removed.length) Logger.info(`[SubShelf] Removed ${result.removed.length} channel(s) no longer subscribed`);
     if (result?.changed) await SidebarManager.render();
   }

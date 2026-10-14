@@ -38,6 +38,8 @@ export interface ChannelsPageData {
   channels: SubscribedChannel[];
   /** True when the page listed everything at once (no "load more"), so `channels` is the full list. */
   complete: boolean;
+  /** When the page was requested (for parsed test data: when it was parsed). */
+  fetchedAt: number;
 }
 
 /** Plain text of a YouTube text node ({ simpleText } or { runs: [{ text }] }). */
@@ -96,7 +98,7 @@ export function parseChannelsPage(data: unknown): ChannelsPageData {
     }
   };
   walk(data);
-  return { avatars, descriptions, channels: [...channels.values()], complete: !hasMore && channels.size > 0 };
+  return { avatars, descriptions, channels: [...channels.values()], complete: !hasMore && channels.size > 0, fetchedAt: Date.now() };
 }
 
 /**
@@ -106,12 +108,13 @@ export function parseChannelsPage(data: unknown): ChannelsPageData {
  */
 export async function harvestFromChannelsPage(): Promise<ChannelsPageData | null> {
   try {
+    const fetchedAt = Date.now();
     const res = await fetch('/feed/channels', { credentials: 'same-origin' });
     if (!res.ok) return null;
     const html = await res.text();
     const m = html.match(/var ytInitialData = (\{[\s\S]*?\});<\/script>/);
     if (!m) return null;
-    return parseChannelsPage(JSON.parse(m[1]));
+    return { ...parseChannelsPage(JSON.parse(m[1])), fetchedAt };
   } catch {
     return null; // offline or layout change
   }

@@ -125,3 +125,33 @@ describe('Gemini Cloud model', () => {
     expect(urls).toEqual(['https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash-lite:generateContent']);
   });
 });
+
+describe('Gemini Cloud batching', () => {
+  afterEach(() => vi.unstubAllGlobals());
+
+  it('splits 84 channels into batches of at most 40, three at a time, and keeps every answer', async () => {
+    vi.stubGlobal('chrome', {
+      runtime: { id: 'test-extension' },
+      storage: { local: { get: async () => ({ settings: { aiProvider: 'gemini-api' } }) } },
+      permissions: { contains: async () => true },
+    });
+    let inFlight = 0;
+    let maxInFlight = 0;
+    const sizes: number[] = [];
+    vi.stubGlobal('fetch', vi.fn(async (_url: string, init: any) => {
+      inFlight++;
+      maxInFlight = Math.max(maxInFlight, inFlight);
+      const refs: string[] = JSON.parse(init.body).generationConfig.responseSchema.properties['tech-coding'].items.enum;
+      sizes.push(refs.length);
+      await new Promise(r => setTimeout(r, 20));
+      inFlight--;
+      return new Response(JSON.stringify({ candidates: [{ content: { parts: [{ text: JSON.stringify({ 'tech-coding': refs }) }] } }] }));
+    }));
+    const channels = Array.from({ length: 84 }, (_, i) => ch(i + 1, `Channel ${i + 1}`, `@channel${i + 1}`));
+    const result = await AICategorizer.categorizeAll(channels, 'test-key');
+    expect(sizes.sort((a, b) => b - a)).toEqual([40, 40, 4]);
+    expect(maxInFlight).toBe(3);
+    expect(result.providerUsed).toBe('gemini-api');
+    expect(result.decks.find(d => d.id === 'tech-coding')?.channelIds).toHaveLength(84);
+  });
+});

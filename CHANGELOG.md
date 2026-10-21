@@ -19,6 +19,7 @@
 
 ### Gemini Cloud
 - The default Gemini Cloud model is now `gemini-3.5-flash-lite`. Google no longer offers `gemini-2.5-flash` to new API keys, so with the old default new users got an error and Auto-sort quietly fell back to the offline engine. If you never changed the model, SubShelf switches automatically; a model you typed yourself is kept.
+- Gemini Cloud sorts in batches of 40 channels, three at a time, and waits up to 60 seconds for each. It used to send every channel in one request and give up after 25 seconds, which often wasn't enough, so Auto-sort fell back to the offline engine.
 
 ### Rating
 - The popup footer has a "Rate SubShelf" link to the store's reviews page.

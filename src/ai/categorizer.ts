@@ -63,8 +63,11 @@ export interface CategorizeOptions {
 // ~120 tokens per channel with a 200-char description: 20 channels keep a prompt near 2.4k tokens,
 // well inside Gemini Nano's per-session input quota (40 was ~4.7k and risked overflowing it)
 const NANO_CHUNK = 20;
-const CLOUD_CHUNK = 150;
-const CLOUD_TIMEOUT_MS = 25_000;
+// Cloud: smaller batches, a few at a time. One request for every channel could take Google longer
+// than any sensible wait with a few hundred channels.
+const CLOUD_CHUNK = 40;
+const CLOUD_PARALLEL = 3;
+const CLOUD_TIMEOUT_MS = 60_000;
 
 const chunk = <T,>(a: T[], n: number): T[][] =>
   Array.from({ length: Math.ceil(a.length / n) }, (_, i) => a.slice(i * n, i * n + n));
@@ -174,6 +177,44 @@ async function runChunks(
 
   if (!ok) throw lastErr ?? new Error('Model returned no usable output across chunks');
   return merged;
+}
+
+/**
+ * runChunks for the cloud: up to `parallel` batches in flight at once. Results are merged in batch
+ * order; partial success merges results; total failure throws.
+ */
+async function runChunksParallel(
+  channels: SubscribedChannel[],
+  size: number,
+  parallel: number,
+  call: (prompt: string, refs: string[]) => Promise<string>
+): Promise<CategoryDeck[]> {
+  const parts = chunk(channels, size);
+  const results: (CategoryDeck[] | null)[] = parts.map(() => null);
+  let lastErr: unknown;
+  let next = 0;
+
+  const worker = async () => {
+    while (next < parts.length) {
+      const i = next++;
+      const part = parts[i];
+      const startedAt = Date.now();
+      try {
+        const refs = part.map((_, j) => `c${j}`);
+        const out = await call(buildCategorizationPrompt(part), refs);
+        results[i] = parseAIResponse(out, part);
+        Logger.info(`[SubShelf AI] Cloud batch ${i + 1}/${parts.length} (${part.length} channels) took ${Date.now() - startedAt} ms`);
+      } catch (e) {
+        lastErr = e;
+        Logger.warn(`[SubShelf AI] Cloud batch ${i + 1}/${parts.length} failed after ${Date.now() - startedAt} ms:`, e);
+      }
+    }
+  };
+  await Promise.all(Array.from({ length: Math.min(parallel, parts.length) }, worker));
+
+  const ok = results.filter((r): r is CategoryDeck[] => r !== null);
+  if (ok.length === 0) throw lastErr ?? new Error('Model returned no usable output across chunks');
+  return ok.reduce<CategoryDeck[]>((merged, decks) => mergeDecks(merged, decks), []);
 }
 
 // ---------- Gemini Nano (Chrome Built-in Prompt API) ----------
@@ -317,7 +358,7 @@ export class AICategorizer {
             continue;
           }
           const model = resolveGeminiModel(settings.geminiModel);
-          decks = await runChunks(channels, CLOUD_CHUNK, (pr, refs) => callGemini(pr, refs, apiKey, model));
+          decks = await runChunksParallel(channels, CLOUD_CHUNK, CLOUD_PARALLEL, (pr, refs) => callGemini(pr, refs, apiKey, model));
         } else {
           decks = HeuristicCategorizer.categorize(channels);
         }

@@ -84,7 +84,7 @@ SubShelf provides three distinct categorization engines:
    - **Privacy:** 100% On-Device. Zero network requests.
 
 3. **Optional Google Gemini Cloud API:**
-   - Utilizes Google's cloud-hosted Gemini models (e.g., `gemini-2.5-flash`).
+   - Utilizes Google's cloud-hosted Gemini models (e.g., `gemini-3.5-flash-lite`).
    - Requires a personal API key provided by the user.
    - **Privacy:** Network transmission of channel titles, handles and short channel descriptions to Google. Governed by Google's Generative AI Terms of Service and data use policies.
 

@@ -62,7 +62,7 @@ Gemini Cloud API (opt-in, your key) ──(fails)──────► Offline
 * **Offline (default):** keyword matching on channel names, handles and descriptions, a built-in list of well-known creators, and what it learns from your manual moves. Instant even for 500+ channels.
 * **Offline + on-device AI:** uses Chrome's Gemini Nano only if Chrome already has it installed, and only for channels left in "General & Others". SubShelf never downloads the model; nothing leaves your device.
 * **Learning from your corrections:** every channel you move by hand teaches its folder; similar channels follow it, including into folders you created.
-* **Gemini Cloud API:** sends channel titles, handles and short descriptions to Google with your own API key (model configurable, default `gemini-2.5-flash`).
+* **Gemini Cloud API:** sends channel titles, handles and short descriptions to Google with your own API key (model configurable, default `gemini-3.5-flash-lite`).
 
 ### Pre-Configured Taxonomies
 1. 💻 **Tech & Coding** (*Programming, Apple, Linux, AI, Hardware, Gadgets*)

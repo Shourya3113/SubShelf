@@ -3,7 +3,7 @@ import { categorizationJsonSchema, categorizationGeminiSchema } from '@/ai/respo
 import { localNanoRunner } from '@/ai/nano';
 import { AICategorizer } from '@/ai/categorizer';
 import { SUBDECK_TAXONOMY } from '@/ai/heuristic';
-import { SubscribedChannel } from '@/types';
+import { DEFAULT_GEMINI_CLOUD_MODEL, resolveGeminiModel, SubscribedChannel } from '@/types';
 
 const ch = (n: number, title: string, handle: string): SubscribedChannel => ({
   ucId: `UC${String(n).padStart(22, '0')}`, title, handle, url: '', avatarUrl: '', discoveredAt: 0,
@@ -96,5 +96,32 @@ describe('Gemini Cloud schema fallback', () => {
     expect(bodies).toHaveLength(2);
     expect(bodies[1].generationConfig.responseSchema).toBeUndefined();
     expect(result.providerUsed).toBe('gemini-api');
+  });
+});
+
+describe('Gemini Cloud model', () => {
+  afterEach(() => vi.unstubAllGlobals());
+
+  it('moves the old saved default to the current default, but keeps a model the user typed', () => {
+    expect(DEFAULT_GEMINI_CLOUD_MODEL).toBe('gemini-3.5-flash-lite');
+    expect(resolveGeminiModel(undefined)).toBe(DEFAULT_GEMINI_CLOUD_MODEL);
+    expect(resolveGeminiModel('  ')).toBe(DEFAULT_GEMINI_CLOUD_MODEL);
+    expect(resolveGeminiModel('gemini-2.5-flash')).toBe(DEFAULT_GEMINI_CLOUD_MODEL);
+    expect(resolveGeminiModel(' gemini-3.8-flash ')).toBe('gemini-3.8-flash');
+  });
+
+  it('calls the current default when settings still hold the old default', async () => {
+    vi.stubGlobal('chrome', {
+      runtime: { id: 'test-extension' },
+      storage: { local: { get: async () => ({ settings: { aiProvider: 'gemini-api', geminiModel: 'gemini-2.5-flash' } }) } },
+      permissions: { contains: async () => true },
+    });
+    const urls: string[] = [];
+    vi.stubGlobal('fetch', vi.fn(async (url: string) => {
+      urls.push(url);
+      return new Response(JSON.stringify({ candidates: [{ content: { parts: [{ text: '{"tech-coding":["c0"]}' }] } }] }));
+    }));
+    await AICategorizer.categorizeAll([ch(1, 'Fireship', '@fireship')], 'test-key');
+    expect(urls).toEqual(['https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash-lite:generateContent']);
   });
 });

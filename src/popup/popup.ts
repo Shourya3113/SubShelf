@@ -1,7 +1,7 @@
 import { SubDeckStorage } from '@/utils/storage';
 import { ExportImport } from '@/utils/exportImport';
 import { debounce } from '@/utils/debounce';
-import { CategoryDeck, SubDeckStorageSchema, SubscribedChannel } from '@/types';
+import { CategoryDeck, resolveGeminiModel, SubDeckStorageSchema, SubscribedChannel } from '@/types';
 import { toast } from '@/utils/toast';
 import { hasCloudPermission, requestCloudPermission } from '@/utils/cloudPermission';
 import { safeAvatarUrl } from '@/utils/avatarUrl';
@@ -380,7 +380,7 @@ class PopupManager {
 
     const geminiModel = document.getElementById('setting-gemini-model') as HTMLInputElement;
     if (geminiModel) {
-      geminiModel.value = this.state.settings.geminiModel || '';
+      geminiModel.value = resolveGeminiModel(this.state.settings.geminiModel);
       geminiModel.addEventListener('change', async () => {
         const val = geminiModel.value.trim();
         if (this.state) {

@@ -17,6 +17,9 @@
 ### Auto-sort
 - The Auto-sort button now keeps showing "Finding channels…", "Reading channels…" and "Sorting…" until sorting is done. It used to switch back to "Auto-sort" partway through whenever the sidebar refreshed, so it looked like nothing was happening, and a second click could start another sort.
 
+### Gemini Cloud
+- The default Gemini Cloud model is now `gemini-3.5-flash-lite`. Google no longer offers `gemini-2.5-flash` to new API keys, so with the old default new users got an error and Auto-sort quietly fell back to the offline engine. If you never changed the model, SubShelf switches automatically; a model you typed yourself is kept.
+
 ### Rating
 - The popup footer has a "Rate SubShelf" link to the store's reviews page.
 - A one-time "Enjoying SubShelf?" card appears in the sidebar a week after you first have folders. "Not now" hides it for a month; a second "Not now" or rating hides it for good. It tracks no usage.

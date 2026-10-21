@@ -1,4 +1,4 @@
-import { SubscribedChannel, CategoryDeck, DEFAULT_GEMINI_CLOUD_MODEL, DEFAULT_STORAGE } from '@/types';
+import { SubscribedChannel, CategoryDeck, DEFAULT_STORAGE, resolveGeminiModel } from '@/types';
 import { HeuristicCategorizer, SUBDECK_TAXONOMY } from './heuristic';
 import { buildCategorizationPrompt } from './prompt';
 import { categorizationGeminiSchema, categorizationJsonSchema } from './responseSchema';
@@ -316,7 +316,7 @@ export class AICategorizer {
             failures.push('Cloud: permission to contact the Gemini API was not granted (re-select Cloud in Settings)');
             continue;
           }
-          const model = settings.geminiModel || DEFAULT_GEMINI_CLOUD_MODEL;
+          const model = resolveGeminiModel(settings.geminiModel);
           decks = await runChunks(channels, CLOUD_CHUNK, (pr, refs) => callGemini(pr, refs, apiKey, model));
         } else {
           decks = HeuristicCategorizer.categorize(channels);

@@ -41,7 +41,19 @@ export interface SubDeckStorageSchema {
   lastScrapedAt: number;
 }
 
-export const DEFAULT_GEMINI_CLOUD_MODEL = 'gemini-2.5-flash';
+export const DEFAULT_GEMINI_CLOUD_MODEL = 'gemini-3.5-flash-lite';
+
+/**
+ * Defaults that earlier versions saved into settings. Google stopped serving them to new API users, so
+ * they count as "no model chosen" and follow the current default. A model the user typed is kept.
+ */
+const FORMER_DEFAULT_GEMINI_MODELS = ['gemini-2.5-flash'];
+
+/** The Gemini Cloud model to use for a stored `settings.geminiModel`. */
+export function resolveGeminiModel(stored?: string): string {
+  const model = stored?.trim();
+  return model && !FORMER_DEFAULT_GEMINI_MODELS.includes(model) ? model : DEFAULT_GEMINI_CLOUD_MODEL;
+}
 
 /**
  * Manual-assignment marker for "the user took this channel out of every folder": no folder has this

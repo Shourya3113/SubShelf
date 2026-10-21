@@ -1,8 +1,8 @@
 import { icon, iconButton } from '@/ui/icons';
 
 export interface ActionCardHandlers {
-  /** Runs the full Auto-sort flow; the button is passed so the flow can show progress on it. */
-  onAutoSort: (button: HTMLButtonElement) => Promise<void>;
+  /** Runs the full Auto-sort flow; its progress is shown on every Auto-sort button (see SidebarManager). */
+  onAutoSort: () => Promise<void>;
   onCreateFolder: (name: string, icon: string) => Promise<void>;
 }
 
@@ -33,6 +33,7 @@ export function buildActionCard(channelCount: number, handlers: ActionCardHandle
   autoSort.className = 'subdeck-autosort-btn';
   autoSort.id = 'subdeck-ai-btn';
   autoSort.title = 'Sort every channel into folders';
+  autoSort.dataset.idleLabel = 'Auto-sort';
   autoSort.appendChild(icon('sparkle', 16));
   const autoSortLabel = document.createElement('span');
   autoSortLabel.className = 'subdeck-autosort-label';
@@ -77,7 +78,7 @@ export function buildActionCard(channelCount: number, handlers: ActionCardHandle
   };
 
   autoSort.addEventListener('click', () => {
-    if (!autoSort.disabled) handlers.onAutoSort(autoSort);
+    if (!autoSort.disabled) handlers.onAutoSort();
   });
   newFolderBtn.addEventListener('click', () => setFormOpen(form.hidden));
   cancelBtn.addEventListener('click', () => setFormOpen(false));
@@ -106,7 +107,7 @@ export function buildActionCard(channelCount: number, handlers: ActionCardHandle
  * First-run card, shown while the user has no folders yet: explains the product in one sentence and
  * offers the one-click start. The button reuses the Auto-sort flow (and its progress labels).
  */
-export function buildFirstRunCard(channelCount: number, onAutoSort: (button: HTMLButtonElement) => Promise<void>): HTMLElement {
+export function buildFirstRunCard(channelCount: number, onAutoSort: () => Promise<void>): HTMLElement {
   const card = document.createElement('div');
   card.className = 'subdeck-firstrun';
 
@@ -128,13 +129,14 @@ export function buildFirstRunCard(channelCount: number, onAutoSort: (button: HTM
   const start = document.createElement('button');
   start.type = 'button';
   start.className = 'subdeck-firstrun-btn';
+  start.dataset.idleLabel = `Auto-sort ${channelCount} channels`;
   start.appendChild(icon('sparkle', 18));
   const label = document.createElement('span');
   label.className = 'subdeck-autosort-label';
-  label.textContent = `Auto-sort ${channelCount} channels`;
+  label.textContent = start.dataset.idleLabel;
   start.appendChild(label);
   start.addEventListener('click', () => {
-    if (!start.disabled) onAutoSort(start);
+    if (!start.disabled) onAutoSort();
   });
 
   const hint = document.createElement('p');

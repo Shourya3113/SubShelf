@@ -211,11 +211,11 @@ export class SidebarManager {
 
     const fragment = document.createDocumentFragment();
     fragment.appendChild(buildActionCard(entries.length, {
-      onAutoSort: (button) => this.runAutoAI(button),
+      onAutoSort: () => this.runAutoAI(),
       onCreateFolder: (name, icon) => this.createFolder(name, icon),
     }));
     if (state.categories.length === 0) {
-      fragment.appendChild(buildFirstRunCard(entries.length, (button) => this.runAutoAI(button)));
+      fragment.appendChild(buildFirstRunCard(entries.length, () => this.runAutoAI()));
     } else {
       const rateCard = await this.maybeBuildRateCard();
       if (rateCard) fragment.appendChild(rateCard);
@@ -235,6 +235,8 @@ export class SidebarManager {
 
     // Atomic DOM replacement - single operation with zero interleaving window
     container.replaceChildren(fragment);
+    // The new Auto-sort buttons pick up a sort that is still running
+    this.applySortState();
 
     // Release minHeight and ensure scroll position was preserved
     requestAnimationFrame(() => {
@@ -330,16 +332,34 @@ export class SidebarManager {
     await this.render();
   }
 
+  /**
+   * Non-null while Auto-sort runs: the label every Auto-sort button shows. Kept here rather than on
+   * the clicked button because the sidebar re-renders during a sort, replacing its buttons.
+   */
+  private static sortLabel: string | null = null;
+
+  private static setSortLabel(text: string | null): void {
+    this.sortLabel = text;
+    this.applySortState();
+  }
+
+  private static applySortState(): void {
+    document.querySelectorAll<HTMLButtonElement>('#subdeck-ai-btn, .subdeck-firstrun-btn').forEach((b) => {
+      b.disabled = this.sortLabel !== null;
+      setAutoSortLabel(b, this.sortLabel ?? b.dataset.idleLabel ?? 'Auto-sort');
+    });
+  }
+
   /** Auto-sort: expand YouTube's full subscription list, sync it, then categorize every channel. */
-  private static async runAutoAI(aiBtn: HTMLButtonElement): Promise<void> {
+  private static async runAutoAI(): Promise<void> {
+    if (this.sortLabel !== null) return; // already sorting
     // After the extension is reloaded or updated, scripts already on this page lose access to it
     // until the page reloads; every read comes back empty, so say that instead of "not signed in".
     if (!SubDeckStorage.isContextValid()) {
       this.showToast('SubShelf was updated or reloaded. Refresh this page to keep using it.', 6000);
       return;
     }
-    aiBtn.disabled = true;
-    setAutoSortLabel(aiBtn, 'Finding channels…');
+    this.setSortLabel('Finding channels…');
 
     const guideInner = document.querySelector<HTMLElement>('#guide-inner-content');
     const savedGuideScroll = guideInner ? guideInner.scrollTop : 0;
@@ -371,12 +391,12 @@ export class SidebarManager {
       }
 
       // 3. Descriptions give every engine more to go on than the channel name
-      setAutoSortLabel(aiBtn, 'Reading channels…');
+      this.setSortLabel('Reading channels…');
       await SubscriptionSync.refreshChannelDescriptions(DETAILS_RECHECK_ON_DEMAND_MS);
       keepScrollLevel();
 
       // 4. Categorize in the service worker; fall back to this page if it can't
-      setAutoSortLabel(aiBtn, 'Sorting…');
+      this.setSortLabel('Sorting…');
       const startedAt = performance.now();
       await new Promise<void>((resolve) => {
         chrome.runtime.sendMessage({ type: 'subshelf-auto-organize' }, async (res) => {
@@ -396,8 +416,7 @@ export class SidebarManager {
       await this.runDirectCategorization();
       keepScrollLevel();
     } finally {
-      aiBtn.disabled = false;
-      setAutoSortLabel(aiBtn, 'Auto-sort');
+      this.setSortLabel(null);
       keepScrollLevel();
     }
   }

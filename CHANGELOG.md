@@ -14,6 +14,9 @@
 ### Folders
 - Removing a channel in the popup now takes it out of all folders and keeps it out of Auto-sort until you place it again. (It used to come straight back, because you are still subscribed.) Choosing "No folder" works the same way.
 
+### Auto-sort
+- The Auto-sort button now keeps showing "Finding channels…", "Reading channels…" and "Sorting…" until sorting is done. It used to switch back to "Auto-sort" partway through whenever the sidebar refreshed, so it looked like nothing was happening, and a second click could start another sort.
+
 ### Rating
 - The popup footer has a "Rate SubShelf" link to the store's reviews page.
 - A one-time "Enjoying SubShelf?" card appears in the sidebar a week after you first have folders. "Not now" hides it for a month; a second "Not now" or rating hides it for good. It tracks no usage.

@@ -18,6 +18,10 @@ Channels are sorted by a fast offline engine that learns from your own correctio
 
 Free, no account needed. If SubShelf helps you, a [rating or review](https://chromewebstore.google.com/detail/elmeglemgjhfadeahmlbcgkjkfkfkfgd/reviews) helps other people find it. The Getting Started section below is only for building it from source.
 
+### 🎬 Watch the demo
+
+[![SubShelf demo video on YouTube](https://img.youtube.com/vi/d0MzwjozSnU/maxresdefault.jpg)](https://www.youtube.com/watch?v=d0MzwjozSnU)
+
 ---
 
 ## ⚡ Key Features

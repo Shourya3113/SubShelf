@@ -3,6 +3,7 @@ import { debounce } from '@/utils/debounce';
 import { CategoryDeck } from '@/types';
 import { IdNormalizer } from '@/utils/idNormalizer';
 import { buildFeedTargets, cardMatches } from '@/utils/feedMatch';
+import { NewUploads } from './newUploads';
 
 // While a folder filter is active the grid carries FILTERING_CLASS and CSS hides every card except
 // those marked MATCH_CLASS, so cards YouTube appends are hidden from the moment they are inserted
@@ -211,7 +212,12 @@ export class FeedFilter {
     }
   }
 
-  private static buildChip(label: string, emoji: string | null, active: boolean, onClick: () => void): HTMLButtonElement {
+  /** Redraws the chips (e.g. when the new-video dots change); does nothing if the bar isn't shown. */
+  static refreshChips(): void {
+    if (document.getElementById(this.bannerId)) this.renderBar();
+  }
+
+  private static buildChip(label: string, emoji: string | null, active: boolean, onClick: () => void, hasNew = false): HTMLButtonElement {
     const chip = document.createElement('button');
     chip.type = 'button';
     chip.className = 'subdeck-chip';
@@ -224,6 +230,13 @@ export class FeedFilter {
       chip.appendChild(e);
     }
     chip.appendChild(document.createTextNode(label));
+    if (hasNew) {
+      const dot = document.createElement('span');
+      dot.className = 'subdeck-new-dot';
+      dot.setAttribute('aria-hidden', 'true');
+      chip.appendChild(dot);
+      chip.title = `${label} has new videos`;
+    }
     chip.addEventListener('click', onClick);
     return chip;
   }
@@ -254,9 +267,10 @@ export class FeedFilter {
       if (this.activeCategory) this.setCategory(null);
     }));
     for (const folder of [...this.folders].sort((a, b) => a.sortOrder - b.sortOrder)) {
+      const hasNew = folder.channelIds.some(id => NewUploads.has({ ucId: id, handle: id }));
       chips.appendChild(this.buildChip(folder.name, folder.icon, folder.id === activeId, () => {
         if (this.activeCategory?.id !== folder.id) this.setCategory(folder);
-      }));
+      }, hasNew));
     }
 
     const status = document.createElement('div');

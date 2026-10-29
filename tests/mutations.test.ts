@@ -174,6 +174,31 @@ describe('storage mutations', () => {
       expect(Object.keys(s.channels)).toHaveLength(2);
     });
 
+    it('reorderCategories puts folders in the given order and keeps everything else', async () => {
+      read = installFakeChrome({
+        categories: [deck('a', [UC1], { sortOrder: 0 }), deck('b', [], { sortOrder: 1 }), deck('c', [UC2], { sortOrder: 2, name: 'Mine' })],
+      });
+      await enqueueMutation('reorderCategories', { ids: ['c', 'nope', 'a'] });
+      const cats: CategoryDeck[] = read().categories;
+      const order = [...cats].sort((x, y) => x.sortOrder - y.sortOrder).map(c => c.id);
+      expect(order).toEqual(['c', 'a', 'b']); // unknown IDs ignored, missing ones after, in their old order
+      expect(cats.find(c => c.id === 'c')).toMatchObject({ name: 'Mine', channelIds: [UC2] });
+    });
+
+    it('Auto-sort keeps the order the user chose', async () => {
+      read = installFakeChrome({
+        channels: { [UC1]: ch(UC1, '@one'), [UC2]: ch(UC2, '@two') },
+        categories: [deck('tech-coding', [UC1], { isSystem: true, sortOrder: 0 }), deck('gaming', [UC2], { isSystem: true, sortOrder: 1 })],
+        handleToUcId: {}, manualAssignments: {}, channelExclusions: {},
+      });
+      await enqueueMutation('reorderCategories', { ids: ['gaming', 'tech-coding'] });
+      await enqueueMutation('applyGeneratedDecks', {
+        decks: [deck('tech-coding', [UC1], { isSystem: true, sortOrder: 0 }), deck('gaming', [UC2], { isSystem: true, sortOrder: 1 })],
+      });
+      const order = [...read().categories].sort((x: CategoryDeck, y: CategoryDeck) => x.sortOrder - y.sortOrder).map((c: CategoryDeck) => c.id);
+      expect(order).toEqual(['gaming', 'tech-coding']);
+    });
+
     it('unknown mutations are rejected without writing (e.g. the removed "addChannel")', async () => {
       const before = JSON.stringify(read());
       expect(await enqueueMutation('addChannel', { channel: ch('UC9', '@x') })).toBeNull();

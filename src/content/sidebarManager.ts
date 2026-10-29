@@ -224,14 +224,16 @@ export class SidebarManager {
 
     const activeId = window.location.pathname.startsWith('/feed/subscriptions') ? FeedFilter.getActiveCategoryId() : null;
     const handlers = this.folderHandlers();
-    for (const cat of [...state.categories].sort((a, b) => a.sortOrder - b.sortOrder)) {
+    const ordered = [...state.categories].sort((a, b) => a.sortOrder - b.sortOrder);
+    for (const [index, cat] of ordered.entries()) {
       const inFolder = new Set(cat.channelIds);
       const members = cat.channelIds
         .filter(id => state.channels[id])
         .map(id => ({ id, channel: state.channels[id] }))
         .sort(byTitle);
       const available = entries.filter(m => !inFolder.has(m.id)).sort(byTitle);
-      fragment.appendChild(buildFolder(cat, members, available, activeId === cat.id, handlers));
+      const position = { first: index === 0, last: index === ordered.length - 1 };
+      fragment.appendChild(buildFolder(cat, members, available, activeId === cat.id, position, handlers));
     }
 
     // Atomic DOM replacement - single operation with zero interleaving window
@@ -293,7 +295,27 @@ export class SidebarManager {
       onDropChannel: (cat, dropped) => this.moveDroppedChannel(cat, dropped),
       hasNewUploads: (channel) => NewUploads.has(channel),
       onOpenChannel: (channel) => NewUploads.clear(channel),
+      onReorder: (draggedId, target, after) => rerenderAfter(this.placeFolder(draggedId, target.id, after)),
+      onMove: async (cat, step) => {
+        const ids = await this.orderedFolderIds();
+        const neighbour = ids[ids.indexOf(cat.id) + step];
+        if (neighbour) await rerenderAfter(this.placeFolder(cat.id, neighbour, step === 1));
+      },
     };
+  }
+
+  private static async orderedFolderIds(): Promise<string[]> {
+    const categories = await SubDeckStorage.getCategories();
+    return [...categories].sort((a, b) => a.sortOrder - b.sortOrder).map(c => c.id);
+  }
+
+  /** Puts one folder just before or after another (folder drag, Move up/down). */
+  private static async placeFolder(folderId: string, targetId: string, after: boolean): Promise<void> {
+    const ids = (await this.orderedFolderIds()).filter(id => id !== folderId);
+    const at = ids.indexOf(targetId);
+    if (at === -1) return;
+    ids.splice(after ? at + 1 : at, 0, folderId);
+    await SubDeckStorage.reorderCategories(ids);
   }
 
   /** Drag & drop: moving a channel onto a folder is a manual correction (the learner uses it). */
@@ -311,6 +333,14 @@ export class SidebarManager {
     const channel = id ? state.channels[id] : undefined;
     if (!id || !channel) {
       this.showToast('That channel isn\'t in your subscriptions yet. Subscribe first, then try again.');
+      return;
+    }
+    if (dropped.copy) {
+      // Ctrl+drag: also in this folder, and still in the ones it was in
+      if (cat.channelIds.includes(id)) return;
+      await SubDeckStorage.addChannelToCategory(id, cat.id);
+      await this.render();
+      this.showToast(`Added ${channel.title} to ${cat.name}`);
       return;
     }
     if (cat.channelIds.includes(id) && (state.manualAssignments[id] ?? []).join() === cat.id) return;

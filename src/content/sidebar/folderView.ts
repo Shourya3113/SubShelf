@@ -13,6 +13,8 @@ export interface FolderMember {
 export interface DroppedChannel {
   channelId?: string;
   url?: string;
+  /** Ctrl/⌘ held: add to this folder and keep it where it is. */
+  copy?: boolean;
 }
 
 export interface FolderHandlers {
@@ -28,6 +30,10 @@ export interface FolderHandlers {
   hasNewUploads: (channel: SubscribedChannel) => boolean;
   /** A channel link was clicked (clears its dot). */
   onOpenChannel: (channel: SubscribedChannel) => void;
+  /** Move the dragged folder just before or after `target`. */
+  onReorder: (draggedId: string, target: CategoryDeck, after: boolean) => Promise<void>;
+  /** Move one place up (-1) or down (+1). */
+  onMove: (cat: CategoryDeck, step: -1 | 1) => Promise<void>;
 }
 
 /** YouTube's blue "new videos" dot. */
@@ -40,6 +46,8 @@ function newDot(className: string): HTMLElement {
 
 /** MIME type for dragging one of our channel rows (keeps drags from other pages/apps out). */
 export const CHANNEL_DRAG_TYPE = 'application/x-subshelf-channel';
+/** MIME type for dragging a folder to reorder it; never mixed up with a channel drag. */
+export const FOLDER_DRAG_TYPE = 'application/x-subshelf-folder';
 const PICKER_LIMIT = 50;
 
 const fallbackColor = (title: string): string => {
@@ -79,7 +87,7 @@ function buildChannelItem(
   const item = document.createElement('div');
   item.className = 'subdeck-channel-item';
   item.draggable = true;
-  item.title = `${ch.title}${hasNew ? ' (new videos)' : ''} — drag onto another folder to move it, or add it to a second folder with that folder's ⋯ → Add channel`;
+  item.title = `${ch.title}${hasNew ? ' (new videos)' : ''} — drag onto another folder to move it, or Ctrl+drag to add it there too`;
 
   const link = document.createElement('a');
   link.className = 'subdeck-channel-link';
@@ -104,7 +112,7 @@ function buildChannelItem(
   item.addEventListener('dragstart', (e) => {
     e.dataTransfer?.setData(CHANNEL_DRAG_TYPE, member.id);
     e.dataTransfer?.setData('text/plain', ch.title);
-    if (e.dataTransfer) e.dataTransfer.effectAllowed = 'move';
+    if (e.dataTransfer) e.dataTransfer.effectAllowed = 'copyMove';
     item.classList.add('dragging');
     document.documentElement.classList.add('subdeck-dragging');
   });
@@ -176,6 +184,7 @@ export function buildFolder(
   members: FolderMember[],
   available: FolderMember[],
   isActive: boolean,
+  position: { first: boolean; last: boolean },
   handlers: FolderHandlers
 ): HTMLElement {
   const folder = document.createElement('div');
@@ -190,6 +199,7 @@ export function buildFolder(
   folderMain.className = 'subdeck-folder-main';
   folderMain.href = '/feed/subscriptions';
   folderMain.title = `Show videos from ${cat.name}`;
+  folderMain.draggable = false; // drag the header (reorders the folder), not the bare link
 
   const iconSpan = document.createElement('span');
   iconSpan.className = 'subdeck-folder-icon';
@@ -289,6 +299,8 @@ export function buildFolder(
     openMenu(moreBtn, [
       { label: 'Rename', icon: 'edit', onSelect: () => { editBox.hidden = false; editName.focus(); } },
       { label: 'Add channel', icon: 'add', onSelect: () => (pickerSlot.hidden ? openPicker() : closePicker()) },
+      ...(position.first ? [] : [{ label: 'Move up', icon: 'arrowUp' as const, onSelect: () => { handlers.onMove(cat, -1); } }]),
+      ...(position.last ? [] : [{ label: 'Move down', icon: 'arrowDown' as const, onSelect: () => { handlers.onMove(cat, 1); } }]),
       { label: 'Delete folder', icon: 'delete', danger: true, onSelect: () => {
         if (confirm(`Delete folder "${cat.name}"? Its channels stay subscribed and become unsorted.`)) handlers.onDelete(cat);
       } },
@@ -324,25 +336,53 @@ export function buildFolder(
     handlers.onOpen(cat, header);
   });
 
-  // Drop target: our channel rows, or channel links dragged from YouTube's own subscription list
+  // The header drags the whole folder to reorder it
+  header.draggable = true;
+  header.addEventListener('dragstart', (e) => {
+    e.dataTransfer?.setData(FOLDER_DRAG_TYPE, cat.id);
+    e.dataTransfer?.setData('text/plain', cat.name);
+    if (e.dataTransfer) e.dataTransfer.effectAllowed = 'move';
+    folder.classList.add('dragging');
+  });
+  header.addEventListener('dragend', () => folder.classList.remove('dragging'));
+
+  // Drop target: our channel rows, channel links dragged from YouTube's own subscription list, or
+  // another folder being reordered (placed before or after this one, by pointer position)
+  const isFolderDrag = (e: DragEvent) => Boolean(e.dataTransfer?.types.includes(FOLDER_DRAG_TYPE));
   const accepts = (e: DragEvent) =>
     Boolean(e.dataTransfer?.types.includes(CHANNEL_DRAG_TYPE) || e.dataTransfer?.types.includes('text/uri-list'));
+  const dropsAfter = (e: DragEvent) => e.clientY > folder.getBoundingClientRect().top + header.offsetHeight / 2;
+  const clearDropMarks = () => folder.classList.remove('subdeck-drop-target', 'subdeck-drop-before', 'subdeck-drop-after');
   folder.addEventListener('dragover', (e) => {
+    if (isFolderDrag(e)) {
+      e.preventDefault();
+      if (e.dataTransfer) e.dataTransfer.dropEffect = 'move';
+      const after = dropsAfter(e);
+      folder.classList.toggle('subdeck-drop-after', after);
+      folder.classList.toggle('subdeck-drop-before', !after);
+      return;
+    }
     if (!accepts(e)) return;
     e.preventDefault();
-    if (e.dataTransfer) e.dataTransfer.dropEffect = 'move';
+    if (e.dataTransfer) e.dataTransfer.dropEffect = e.ctrlKey || e.metaKey ? 'copy' : 'move';
     folder.classList.add('subdeck-drop-target');
   });
   folder.addEventListener('dragleave', (e) => {
-    if (!folder.contains(e.relatedTarget as Node)) folder.classList.remove('subdeck-drop-target');
+    if (!folder.contains(e.relatedTarget as Node)) clearDropMarks();
   });
   folder.addEventListener('drop', (e) => {
-    folder.classList.remove('subdeck-drop-target');
+    clearDropMarks();
+    if (isFolderDrag(e)) {
+      e.preventDefault();
+      const draggedId = e.dataTransfer?.getData(FOLDER_DRAG_TYPE);
+      if (draggedId && draggedId !== cat.id) handlers.onReorder(draggedId, cat, dropsAfter(e));
+      return;
+    }
     if (!accepts(e)) return;
     e.preventDefault();
     const channelId = e.dataTransfer?.getData(CHANNEL_DRAG_TYPE) || undefined;
     const url = channelId ? undefined : e.dataTransfer?.getData('text/uri-list')?.split('\n')[0]?.trim();
-    handlers.onDropChannel(cat, { channelId, url });
+    handlers.onDropChannel(cat, { channelId, url, copy: e.ctrlKey || e.metaKey });
   });
 
   folder.append(header, editBox, pickerSlot, list);

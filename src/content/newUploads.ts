@@ -11,10 +11,14 @@ const MAX_KEYS = 5000;
 export class NewUploads {
   private static keys = new Set<string>();
   private static seq = 0;
-  private static listener: (() => void) | null = null;
+  private static listeners: (() => void)[] = [];
 
   static onChange(listener: () => void): void {
-    this.listener = listener;
+    this.listeners.push(listener);
+  }
+
+  private static notify(): void {
+    for (const listener of this.listeners) listener();
   }
 
   /** Applies a snapshot from the page script; returns false if it was invalid or already applied. */
@@ -29,7 +33,7 @@ export class NewUploads {
     }
     const changed = next.size !== this.keys.size || [...next].some(k => !this.keys.has(k));
     this.keys = next;
-    if (changed) this.listener?.();
+    if (changed) this.notify();
     return true;
   }
 
@@ -49,7 +53,7 @@ export class NewUploads {
     const h = normalizeHandle(ch.handle);
     const byId = this.keys.delete(ch.ucId);
     const byHandle = Boolean(h) && this.keys.delete(h);
-    if (byId || byHandle) this.listener?.();
+    if (byId || byHandle) this.notify();
   }
 
   /** Clears the channel a YouTube page path belongs to ("/@name…" or "/channel/UC…"). */

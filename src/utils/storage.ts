@@ -433,6 +433,23 @@ export class SubDeckStorage {
         return { categories };
       }
 
+      case 'reorderCategories': {
+        // Folders in `ids` come first, in that order; any others keep their relative order after them
+        const ids: unknown[] = Array.isArray(payload?.ids) ? payload.ids : [];
+        const raw = await chrome.storage.local.get('categories');
+        const categories: CategoryDeck[] = Array.isArray(raw.categories) ? raw.categories : [];
+        const rank = new Map<string, number>();
+        ids.forEach((id, i) => {
+          if (typeof id === 'string' && !rank.has(id)) rank.set(id, i);
+        });
+        const ordered = [...categories].sort((a, b) =>
+          (rank.get(a.id) ?? Infinity) - (rank.get(b.id) ?? Infinity) || (a.sortOrder ?? 0) - (b.sortOrder ?? 0)
+        );
+        ordered.forEach((c, i) => { c.sortOrder = i; });
+        await chrome.storage.local.set({ categories });
+        return { categories };
+      }
+
       case 'applyGeneratedDecks': {
         const decks: CategoryDeck[] = Array.isArray(payload?.decks) ? payload.decks : [];
         const raw = await chrome.storage.local.get(['categories', 'manualAssignments', 'channelExclusions', 'channels']);
@@ -739,6 +756,11 @@ export class SubDeckStorage {
     patch: Partial<Pick<CategoryDeck, 'name' | 'icon' | 'isCollapsed' | 'sortOrder'>>
   ): Promise<void> {
     await this.requestMutation('updateCategory', { categoryId, patch });
+  }
+
+  /** Puts the folders in this order (sidebar drag or Move up/down). */
+  static async reorderCategories(ids: string[]): Promise<void> {
+    await this.requestMutation('reorderCategories', { ids });
   }
 
   /** Merges AI/heuristic output with the user's overrides against fresh storage inside the queue. */

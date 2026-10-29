@@ -20,6 +20,7 @@ class SubShelfCoordinator {
     // YouTube's "new videos" dots: redraw the sidebar when they change, and clear a channel's dot
     // once the user opens it, wherever on YouTube (YouTube clears its own the same way)
     NewUploads.onChange(() => SidebarManager.render());
+    NewUploads.onChange(() => FeedFilter.refreshChips());
     window.addEventListener('yt-navigate-finish', async () => {
       if (NewUploads.isEmpty || !SubDeckStorage.isContextValid()) return;
       try {

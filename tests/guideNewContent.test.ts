@@ -91,6 +91,14 @@ describe('NewUploads (content-script store)', () => {
     expect(NewUploads.isEmpty).toBe(true);
   });
 
+  it('tells every listener (sidebar and feed chips)', () => {
+    let other = 0;
+    NewUploads.onChange(() => other++);
+    NewUploads.apply(++seq, [id(7)]);
+    expect(changes).toBeGreaterThan(0);
+    expect(other).toBe(1);
+  });
+
   it('rejects malformed messages', () => {
     expect(NewUploads.apply('1', [id(1)])).toBe(false);
     expect(NewUploads.apply(++seq, 'nope')).toBe(false);

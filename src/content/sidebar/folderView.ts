@@ -24,6 +24,18 @@ export interface FolderHandlers {
   onRemoveChannel: (cat: CategoryDeck, channelId: string) => Promise<void>;
   onToggle: (cat: CategoryDeck, collapsed: boolean) => Promise<void>;
   onDropChannel: (cat: CategoryDeck, dropped: DroppedChannel) => Promise<void>;
+  /** Whether YouTube shows its blue "new videos" dot for this channel. */
+  hasNewUploads: (channel: SubscribedChannel) => boolean;
+  /** A channel link was clicked (clears its dot). */
+  onOpenChannel: (channel: SubscribedChannel) => void;
+}
+
+/** YouTube's blue "new videos" dot. */
+function newDot(className: string): HTMLElement {
+  const dot = document.createElement('span');
+  dot.className = className;
+  dot.setAttribute('aria-hidden', 'true');
+  return dot;
 }
 
 /** MIME type for dragging one of our channel rows (keeps drags from other pages/apps out). */
@@ -56,17 +68,25 @@ function buildAvatar(ch: SubscribedChannel, onBroken: (fallback: HTMLElement) =>
   return img;
 }
 
-function buildChannelItem(member: FolderMember, folderName: string, onRemove: () => void): HTMLElement {
+function buildChannelItem(
+  member: FolderMember,
+  folderName: string,
+  hasNew: boolean,
+  onOpen: () => void,
+  onRemove: () => void
+): HTMLElement {
   const ch = member.channel;
   const item = document.createElement('div');
   item.className = 'subdeck-channel-item';
   item.draggable = true;
-  item.title = `${ch.title} — drag onto another folder to move it, or add it to a second folder with that folder's ⋯ → Add channel`;
+  item.title = `${ch.title}${hasNew ? ' (new videos)' : ''} — drag onto another folder to move it, or add it to a second folder with that folder's ⋯ → Add channel`;
 
   const link = document.createElement('a');
   link.className = 'subdeck-channel-link';
   link.href = ch.url.startsWith('https://') || ch.url.startsWith('/') ? ch.url : '#';
   link.draggable = false; // drag the row (our data), not the bare link
+  if (hasNew) link.setAttribute('aria-label', `${ch.title}, new videos`);
+  link.addEventListener('click', onOpen);
 
   const titleSpan = document.createElement('span');
   titleSpan.className = 'subdeck-channel-title';
@@ -93,7 +113,8 @@ function buildChannelItem(member: FolderMember, folderName: string, onRemove: ()
     document.documentElement.classList.remove('subdeck-dragging');
   });
 
-  item.append(link, removeBtn);
+  if (hasNew) item.append(link, newDot('subdeck-new-dot'), removeBtn);
+  else item.append(link, removeBtn);
   return item;
 }
 
@@ -183,6 +204,11 @@ export function buildFolder(
   countSpan.textContent = String(members.length);
 
   folderMain.append(iconSpan, titleSpan, countSpan);
+  const newCount = members.filter(m => handlers.hasNewUploads(m.channel)).length;
+  if (newCount > 0) {
+    folderMain.append(newDot('subdeck-new-dot subdeck-folder-new-dot'));
+    folderMain.title += ` (${newCount} with new videos)`;
+  }
 
   const moreBtn = iconButton('more', `More actions for ${cat.name}`, 'subdeck-more-btn', 18);
   moreBtn.setAttribute('aria-haspopup', 'menu');
@@ -270,7 +296,13 @@ export function buildFolder(
   });
 
   for (const m of members) {
-    list.appendChild(buildChannelItem(m, cat.name, () => handlers.onRemoveChannel(cat, m.id)));
+    list.appendChild(buildChannelItem(
+      m,
+      cat.name,
+      handlers.hasNewUploads(m.channel),
+      () => handlers.onOpenChannel(m.channel),
+      () => handlers.onRemoveChannel(cat, m.id)
+    ));
   }
 
   // Chevron only toggles the list; it never navigates

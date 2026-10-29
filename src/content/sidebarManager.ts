@@ -15,6 +15,7 @@ import { resolveChannelId } from '@/utils/channelIdentity';
 import { FILTER_CHANGED_EVENT } from './feedFilter';
 import { buildRateCard } from './sidebar/rateCard';
 import { shouldShowRatePrompt, storeReviewUrl } from '@/utils/ratePrompt';
+import { NewUploads } from './newUploads';
 
 const byTitle = (a: FolderMember, b: FolderMember) =>
   a.channel.title.localeCompare(b.channel.title, undefined, { sensitivity: 'base' });
@@ -290,6 +291,8 @@ export class SidebarManager {
       onRemoveChannel: (cat, id) => rerenderAfter(SubDeckStorage.removeChannelFromCategory(id, cat.id)),
       onToggle: (cat, collapsed) => SubDeckStorage.updateCategory(cat.id, { isCollapsed: collapsed }),
       onDropChannel: (cat, dropped) => this.moveDroppedChannel(cat, dropped),
+      hasNewUploads: (channel) => NewUploads.has(channel),
+      onOpenChannel: (channel) => NewUploads.clear(channel),
     };
   }
 

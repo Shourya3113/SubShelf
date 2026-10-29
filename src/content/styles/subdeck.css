@@ -456,6 +456,29 @@ html[dark],
   opacity: 1;
 }
 
+/* YouTube's blue "new videos" dot. In a row it sits centred in the ✕ slot (net width 0) and
+   gives way to ✕ on hover; in a folder header it follows the channel count. */
+.subdeck-new-dot {
+  flex: 0 0 4px;
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  background: var(--sd-accent);
+}
+
+.subdeck-channel-item .subdeck-new-dot {
+  margin: 0 -16px 0 12px;
+}
+
+.subdeck-channel-item:hover .subdeck-new-dot,
+.subdeck-channel-item:focus-within .subdeck-new-dot {
+  visibility: hidden;
+}
+
+.subdeck-folder-new-dot {
+  margin-right: 6px;
+}
+
 .subdeck-channel-remove-btn:hover {
   color: var(--sd-danger);
 }

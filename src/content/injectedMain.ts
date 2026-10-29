@@ -1,5 +1,6 @@
 import { isSystemChannelOrCurator } from '@/utils/systemChannels';
 import { bareHandle, normalizeHandle } from '@/utils/channelIdentity';
+import { newContentKeys } from '@/utils/guideNewContent';
 
 (() => {
   const avatars: Record<string, string> = {};
@@ -155,11 +156,26 @@ import { bareHandle, normalizeHandle } from '@/utils/channelIdentity';
     }
   };
 
+  let newUploads: { seq: number; keys: string[] } = { seq: 0, keys: [] };
+  const sendNewUploads = () => {
+    if (newUploads.seq === 0) return;
+    try {
+      window.postMessage({ type: 'SUBSHELF_NEW_UPLOADS', ...newUploads }, location.origin);
+    } catch {}
+  };
+
   const ingest = (data: any) => {
     if (!data || typeof data !== 'object' || scanned.has(data)) return;
     scanned.add(data);
     walk(data);
     broadcast();
+    // YouTube's "new videos" dots, numbered per guide payload: the content script applies each
+    // number once, so a resend never relights a dot the user cleared by opening the channel.
+    const fresh = newContentKeys(data);
+    if (fresh.found) {
+      newUploads = { seq: newUploads.seq + 1, keys: fresh.keys };
+      sendNewUploads();
+    }
   };
 
   const scanInitial = () => {
@@ -168,6 +184,11 @@ import { bareHandle, normalizeHandle } from '@/utils/channelIdentity';
       if (guide) ingest(guide);
       const initial = (window as any).ytInitialData || (window as any).ytcfg?.get?.('INITIAL_DATA');
       if (initial) ingest(initial);
+      // YouTube often loads the guide after the page, sometimes before our fetch hook is in place;
+      // the rendered sidebar element keeps the same data
+      const guideEl = document.querySelector('ytd-guide-renderer') as any;
+      const rendered = guideEl?.data || guideEl?.__data?.data;
+      if (rendered) ingest(rendered);
     } catch {}
   };
 
@@ -250,15 +271,18 @@ import { bareHandle, normalizeHandle } from '@/utils/channelIdentity';
   document.addEventListener('subshelf-request-avatars', () => {
     scanInitial();
     broadcast(true);
+    sendNewUploads();
   });
   window.addEventListener('message', (e) => {
     if (e.source !== window || e.data?.type !== 'SUBSHELF_REQUEST_AVATARS') return;
     scanInitial();
     broadcast(true);
+    sendNewUploads();
   });
 
   document.addEventListener('yt-navigate-finish', scanInitial);
   document.addEventListener('yt-page-data-updated', scanInitial);
   scanInitial();
   setTimeout(scanInitial, 1500);
+  setTimeout(scanInitial, 5000);
 })();

@@ -2,6 +2,9 @@
 
 ## 1.3.1 — 2026-10-29
 
+### New videos
+- Channels with new videos get YouTube's blue dot in your folders, and a folder gets a dot when any of its channels has one, so you can spot what's new without expanding every folder. The dot comes from what YouTube already shows in its own subscription list, and clears when you open the channel.
+
 ### Offline sorting
 - A channel with "home" or "house" in its name is no longer sent to Food & Lifestyle for that alone. Homelab channels such as "ServersatHome" now go to Tech & Coding, and gaming channels such as "DefendTheHouse" no longer land in Food & Lifestyle. Real home channels still match through phrases like "home decor", "home cooking" and "house tour".
 - Homelab and self-hosting words (servers, homelab, self-hosted, NAS, TrueNAS, Unraid, Proxmox) now count towards Tech & Coding.

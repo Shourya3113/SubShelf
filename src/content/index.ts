@@ -3,6 +3,7 @@ import { HealthMonitor } from './healthMonitor';
 import { FeedFilter } from './feedFilter';
 import { SubscriptionSync } from './subscriptionSync';
 import { ChannelExtractor } from './channelExtractor';
+import { NewUploads } from './newUploads';
 import { SubDeckStorage } from '@/utils/storage';
 import { debounce } from '@/utils/debounce';
 import { Logger } from '@/utils/logger';
@@ -15,6 +16,16 @@ class SubShelfCoordinator {
   static init(): void {
     Logger.info('Initializing SubShelf Coordinator');
     SidebarManager.listenForFilterChanges();
+
+    // YouTube's "new videos" dots: redraw the sidebar when they change, and clear a channel's dot
+    // once the user opens it, wherever on YouTube (YouTube clears its own the same way)
+    NewUploads.onChange(() => SidebarManager.render());
+    window.addEventListener('yt-navigate-finish', async () => {
+      if (NewUploads.isEmpty || !SubDeckStorage.isContextValid()) return;
+      try {
+        NewUploads.clearForPath(window.location.pathname, (await SubDeckStorage.getAll()).channels);
+      } catch {}
+    });
 
     // Secure avatar broadcasts handling
     const handleAvatars = (payload: unknown) => {
@@ -41,6 +52,8 @@ class SubShelfCoordinator {
         handleAvatars(e.data.avatars);
       } else if (e.data?.type === 'SUBSHELF_CHANNELS_BROADCAST') {
         handleChannels(e.data.channels);
+      } else if (e.data?.type === 'SUBSHELF_NEW_UPLOADS') {
+        NewUploads.apply(e.data.seq, e.data.keys);
       } else if (e.data?.type === 'SUBSHELF_SUBSCRIPTION_CHANGED' && Array.isArray(e.data.changes)) {
         // Subscribe/unsubscribe clicks, as confirmed by YouTube's own response (see injectedMain)
         for (const c of e.data.changes.slice(0, 20)) {

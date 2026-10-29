@@ -33,6 +33,7 @@ Free, no account needed. If SubShelf helps you, a [rating or review](https://chr
 | 🎯 **Custom Feed Filtering** | Clicking any category folder instantly filters `/feed/subscriptions` to display only videos from channels in that folder. |
 | ⚡ **Live Feed Filtering** | Filters as YouTube loads more videos, without moving your scroll position. Quiet folders pause loading and offer a **Load more** button. |
 | 📺 **In-Sidebar Folder Controls** | Each folder's ⋯ menu renames it, adds channels with a searchable picker (a channel can be in several folders), or deletes it; ✕ removes a channel; the folder icon next to Auto-sort creates a new folder. |
+| 🔵 **New-video dots** | The same blue dot YouTube shows for channels with new videos, on each channel and on its folder, so you can see what's new without opening every folder. |
 | 🖱️ **Drag & Drop** | Drag channels between folders, or straight from YouTube's own subscription list. Each move teaches Auto-sort. |
 | 🏷️ **Folder Chips** | YouTube-style chips above your subscriptions feed (*All · Tech · Gaming …*) filter it in one click. |
 | 🎛️ **Popup Manager** | Search channels, move them between folders, rename/delete folders, and configure sorting. |

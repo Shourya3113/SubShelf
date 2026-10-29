@@ -294,18 +294,32 @@ export class FeedFilter {
     const existing = document.getElementById(this.bannerId);
     const scrollLeft = existing?.querySelector('.subdeck-chips')?.scrollLeft ?? 0;
     existing?.remove();
-    // Pin it right under the masthead as measured. YouTube's --ytd-masthead-height is 112px on the
-    // subscriptions page (it counts a chip row YouTube doesn't show there), and sticking at 112px
-    // pushed the bar down out of its own space onto the first row of thumbnails.
-    const masthead = document.getElementById('masthead-container')?.getBoundingClientRect().height;
-    if (masthead && masthead > 0 && masthead < 200) bar.style.top = `${Math.round(masthead)}px`;
     grid.parentNode.insertBefore(bar, grid);
+    bar.style.top = `${this.stickyTop(bar)}px`;
     chips.scrollLeft = scrollLeft;
     // Bring the active chip into view horizontally only (scrollIntoView could also scroll the page)
     const active = chips.querySelector<HTMLElement>('[aria-pressed="true"]');
     if (active && (active.offsetLeft < chips.scrollLeft || active.offsetLeft + active.offsetWidth > chips.scrollLeft + chips.clientWidth)) {
       chips.scrollLeft = Math.max(0, active.offsetLeft - 16);
     }
+  }
+
+  /**
+   * The sticky offset that puts the bar right under the masthead. Sticky is measured from the nearest
+   * ancestor whose overflow isn't visible, even one that never scrolls. On YouTube that ancestor
+   * starts below the masthead, so a fixed 56px put the bar 56px below its own slot, over the first
+   * row of thumbnails.
+   */
+  private static stickyTop(bar: HTMLElement): number {
+    const masthead = document.getElementById('masthead-container')?.getBoundingClientRect();
+    const under = masthead && masthead.height > 0 && masthead.height < 200 ? masthead.bottom : 56;
+    for (let a = bar.parentElement; a && a !== document.body && a !== document.documentElement; a = a.parentElement) {
+      const s = getComputedStyle(a);
+      if (/auto|scroll|hidden/.test(`${s.overflowX} ${s.overflowY}`)) {
+        return Math.max(0, Math.round(under - (a.getBoundingClientRect().top + window.scrollY)));
+      }
+    }
+    return Math.round(under);
   }
 
   static removeBanner(): void {

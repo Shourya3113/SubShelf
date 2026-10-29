@@ -659,8 +659,7 @@ html.subdeck-dragging .subdeck-folder-container:not(.subdeck-drop-target) .subde
 
 .subdeck-chipbar {
   position: sticky;
-  /* Right under the masthead; feedFilter sets the measured height (YouTube's --ytd-masthead-height
-     includes a chip row on the subscriptions page and would push the bar onto the thumbnails) */
+  /* Right under the masthead; feedFilter sets the real offset (see FeedFilter.stickyTop) */
   top: 56px;
   /* Above video cards (YouTube enlarges a hovered card), below the masthead (2020) and its menus */
   z-index: 2000;

@@ -249,7 +249,7 @@ export class FeedFilter {
       return;
     }
     const grid = this.feedRoot();
-    if (!grid) {
+    if (!grid?.parentNode) {
       if (this.barRetries++ < 20) setTimeout(() => this.renderBar(), 500);
       return;
     }
@@ -294,9 +294,12 @@ export class FeedFilter {
     const existing = document.getElementById(this.bannerId);
     const scrollLeft = existing?.querySelector('.subdeck-chips')?.scrollLeft ?? 0;
     existing?.remove();
-    // First child of YouTube's grid, not its sibling: on the subscriptions page YouTube lays the grid
-    // over the space before it, so a sibling bar covered the top of the first row of thumbnails
-    grid.prepend(bar);
+    // Pin it right under the masthead as measured. YouTube's --ytd-masthead-height is 112px on the
+    // subscriptions page (it counts a chip row YouTube doesn't show there), and sticking at 112px
+    // pushed the bar down out of its own space onto the first row of thumbnails.
+    const masthead = document.getElementById('masthead-container')?.getBoundingClientRect().height;
+    if (masthead && masthead > 0 && masthead < 200) bar.style.top = `${Math.round(masthead)}px`;
+    grid.parentNode.insertBefore(bar, grid);
     chips.scrollLeft = scrollLeft;
     // Bring the active chip into view horizontally only (scrollIntoView could also scroll the page)
     const active = chips.querySelector<HTMLElement>('[aria-pressed="true"]');
@@ -328,7 +331,7 @@ export class FeedFilter {
     this.observeRetries = 0;
     if (this.observer) this.observer.disconnect();
     // The chip row may have been rendered before the grid existed (arriving from another page)
-    if (document.getElementById(this.bannerId)?.parentElement !== target) this.renderBar();
+    if (document.getElementById(this.bannerId)?.nextElementSibling !== target) this.renderBar();
     this.applyFilter();
 
     const debouncedFilter = debounce(() => this.applyFilter(), 200);

@@ -1,5 +1,17 @@
 # Changelog
 
+## 1.3.2 — 2026-10-29
+
+### Subscriptions feed with a folder selected
+- The folder chip bar no longer lets thumbnails show over or around it while you scroll, and a video you hover no longer covers it.
+- YouTube's grey placeholder cards no longer sit next to your folder's videos while more are loading, which looked like videos that would never load. The chip bar says "looking for more…" instead.
+- Each folder chip gets the blue new-videos dot when that folder has new videos.
+
+### Folders
+- Reorder your folders: drag a folder by its name, or use its ⋯ menu → Move up / Move down. Auto-sort keeps your order.
+- Hold Ctrl (⌘ on Mac) while dragging a channel onto a folder to add it there too; a normal drag still moves it.
+- The New folder and Rename forms give the name box its own row, so there is room to type.
+
 ## 1.3.1 — 2026-10-29
 
 ### New videos

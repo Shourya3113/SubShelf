@@ -32,9 +32,9 @@ Free, no account needed. If SubShelf helps you, a [rating or review](https://chr
 | ✨ **1-Click Auto-sort** | Sorts hundreds of subscriptions into folders instantly, on your device, and learns from the channels you move by hand. |
 | 🎯 **Custom Feed Filtering** | Clicking any category folder instantly filters `/feed/subscriptions` to display only videos from channels in that folder. |
 | ⚡ **Live Feed Filtering** | Filters as YouTube loads more videos, without moving your scroll position. Quiet folders pause loading and offer a **Load more** button. |
-| 📺 **In-Sidebar Folder Controls** | Each folder's ⋯ menu renames it, adds channels with a searchable picker (a channel can be in several folders), or deletes it; ✕ removes a channel; the folder icon next to Auto-sort creates a new folder. |
+| 📺 **In-Sidebar Folder Controls** | Each folder's ⋯ menu renames it, adds channels with a searchable picker (a channel can be in several folders), moves it up or down, or deletes it; ✕ removes a channel; the folder icon next to Auto-sort creates a new folder. |
 | 🔵 **New-video dots** | The same blue dot YouTube shows for channels with new videos, on each channel and on its folder, so you can see what's new without opening every folder. |
-| 🖱️ **Drag & Drop** | Drag channels between folders, or straight from YouTube's own subscription list. Each move teaches Auto-sort. |
+| 🖱️ **Drag & Drop** | Drag channels between folders, or straight from YouTube's own subscription list (Ctrl+drag adds a channel to a second folder). Each move teaches Auto-sort. Drag a folder by its name to reorder your folders. |
 | 🏷️ **Folder Chips** | YouTube-style chips above your subscriptions feed (*All · Tech · Gaming …*) filter it in one click. |
 | 🎛️ **Popup Manager** | Search channels, move them between folders, rename/delete folders, and configure sorting. |
 | 🚫 **Hide Shorts** | Optional toggle in Settings that hides the Shorts shelf and Shorts cards on your subscription feed, applied instantly. |
@@ -125,7 +125,7 @@ npm run package
 ```
 This compiles the production bundle in `dist/` and generates a Chrome Web Store-ready archive:
 ```
-subshelf-v1.3.1.zip (manifest.json at archive root)
+subshelf-v1.3.2.zip (manifest.json at archive root)
 ```
 
 ### 5. Load into Chrome

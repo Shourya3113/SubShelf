@@ -660,12 +660,14 @@ html.subdeck-dragging .subdeck-folder-container:not(.subdeck-drop-target) .subde
 .subdeck-chipbar {
   position: sticky;
   top: var(--ytd-masthead-height, 56px);
-  z-index: 3;
+  /* Above video cards (YouTube enlarges a hovered card), below the masthead (2020) and its menus */
+  z-index: 2000;
   display: flex;
   align-items: center;
   gap: 12px;
-  margin: 0 16px;
-  padding: 12px 0;
+  /* Padding, not margin, so the opaque background reaches the edges and nothing shows past it */
+  margin: 0;
+  padding: 12px 16px;
   background: var(--sd-base);
   font-family: "Roboto", "Arial", sans-serif;
 }
@@ -734,6 +736,14 @@ html.subdeck-dragging .subdeck-folder-container:not(.subdeck-drop-target) .subde
 .subshelf-filtering ytd-rich-section-renderer,
 .subshelf-shorts-hidden,
 .subshelf-loading-paused ytd-continuation-item-renderer {
+  display: none !important;
+}
+
+/* YouTube's grey placeholder cards while it loads more. With a folder selected they sat beside the
+   few matching videos and looked like videos that never load. The continuation element itself stays
+   (it is what makes YouTube load the next page); our chip bar says what is happening instead. */
+.subshelf-filtering ytd-continuation-item-renderer #ghost-cards,
+.subshelf-filtering ytd-continuation-item-renderer ytd-ghost-grid-renderer {
   display: none !important;
 }
 

@@ -204,7 +204,8 @@ export class FeedFilter {
     if (!this.activeCategory) {
       statusEl.textContent = '';
     } else if (count > 0) {
-      statusEl.textContent = `${count} video${count === 1 ? '' : 's'}`;
+      const looking = count < MIN_VISIBLE && !this.loadingPaused ? ' · looking for more…' : '';
+      statusEl.textContent = `${count} video${count === 1 ? '' : 's'}${looking}`;
     } else if (this.loadingPaused) {
       statusEl.textContent = `None in your latest ${this.scannedCount} uploads`;
     } else {

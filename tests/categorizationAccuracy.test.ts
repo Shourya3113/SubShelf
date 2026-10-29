@@ -79,3 +79,22 @@ describe('categorization accuracy (offline heuristic, public-channel fixture)', 
     expect(after.generalShare).toBeLessThanOrEqual(before.generalShare);
   });
 });
+
+describe('"home" and "house" in a channel name (reported on Reddit)', () => {
+  const folderOf = (title: string, handle: string, description = '') => {
+    const ch: SubscribedChannel = { ucId: placeholderId(1), title, handle, url: '', avatarUrl: '', discoveredAt: 0, description };
+    return HeuristicCategorizer.categorize([ch]).find(d => d.channelIds.includes(ch.ucId))?.id;
+  };
+
+  it('does not send homelab or gaming channels to Food & Lifestyle', () => {
+    expect(folderOf('ServersatHome', '@ServersatHome')).toBe('tech-coding');
+    expect(folderOf('Servers at Home', '@serversathome', 'Homelab, self-hosting and TrueNAS guides.')).toBe('tech-coding');
+    expect(folderOf('DefendTheHouse', '@DefendTheHouse')).not.toBe('lifestyle-food');
+    expect(folderOf('DefendTheHouse', '@DefendTheHouse', 'Arc Raiders, Helldivers and other video games.')).toBe('gaming');
+  });
+
+  it('still files real home and cooking channels under Food & Lifestyle', () => {
+    expect(folderOf('Home Decor Ideas', '@homedecorideas')).toBe('lifestyle-food');
+    expect(folderOf('Pro Home Cooks', '@ProHomeCooks')).toBe('lifestyle-food');
+  });
+});

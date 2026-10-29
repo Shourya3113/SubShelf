@@ -86,6 +86,8 @@ export const SUBDECK_TAXONOMY: TaxonomyEntry[] = [
       'kotlin', 'jetpack compose', 'java', 'c++', 'cpp', 'c#', 'dotnet', '.net', 'unboxing',
       'teardown', 'firmware', 'open source', 'foss', 'embedded', 'clean code', 'refactoring',
       'unit testing', 'ci cd', 'monorepo', 'microservices', 'cloud native',
+      'servers', 'homelab', 'home lab', 'home server', 'selfhosted', 'self hosted', 'self hosting',
+      'selfhosting', 'nas', 'truenas', 'unraid', 'proxmox',
     ],
   },
   {
@@ -447,7 +449,8 @@ export const SUBDECK_TAXONOMY: TaxonomyEntry[] = [
     ],
     keywords: [
       'food', 'foodie', 'cook', 'cooking', 'recipe', 'recipes', 'kitchen', 'chef',
-      'bake', 'baking', 'bakery', 'lifestyle', 'house', 'home', 'interior design',
+      'bake', 'baking', 'bakery', 'lifestyle', 'interior design', 'home decor', 'home cooking',
+      'home tour', 'house tour', 'home organization', 'home makeover', 'home renovation',
       'room tour', 'apartment tour', 'diy', 'restaurant', 'street food', 'eating',
       'asmr', 'mukbang', 'grill', 'grilling', 'bbq', 'culinary', 'sourdough', 'pastry',
       'dessert', 'dinner', 'spices', 'gourmet', 'gardening', 'garden', 'plants',

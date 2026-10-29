@@ -1,5 +1,14 @@
 # Changelog
 
+## 1.3.1 — 2026-10-29
+
+### Offline sorting
+- A channel with "home" or "house" in its name is no longer sent to Food & Lifestyle for that alone. Homelab channels such as "ServersatHome" now go to Tech & Coding, and gaming channels such as "DefendTheHouse" no longer land in Food & Lifestyle. Real home channels still match through phrases like "home decor", "home cooking" and "house tour".
+- Homelab and self-hosting words (servers, homelab, self-hosted, NAS, TrueNAS, Unraid, Proxmox) now count towards Tech & Coding.
+
+### Folders
+- Hovering a channel in the sidebar now mentions that you can add it to a second folder with that folder's ⋯ → Add channel. Dragging still moves it.
+
 ## 1.3.0 — 2026-10-14
 
 ### Unsubscribes now update your folders

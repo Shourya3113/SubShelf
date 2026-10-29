@@ -61,7 +61,7 @@ function buildChannelItem(member: FolderMember, folderName: string, onRemove: ()
   const item = document.createElement('div');
   item.className = 'subdeck-channel-item';
   item.draggable = true;
-  item.title = `${ch.title} — drag onto another folder to move it`;
+  item.title = `${ch.title} — drag onto another folder to move it, or add it to a second folder with that folder's ⋯ → Add channel`;
 
   const link = document.createElement('a');
   link.className = 'subdeck-channel-link';

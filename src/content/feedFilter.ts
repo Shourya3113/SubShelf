@@ -249,7 +249,7 @@ export class FeedFilter {
       return;
     }
     const grid = this.feedRoot();
-    if (!grid?.parentNode) {
+    if (!grid) {
       if (this.barRetries++ < 20) setTimeout(() => this.renderBar(), 500);
       return;
     }
@@ -294,7 +294,9 @@ export class FeedFilter {
     const existing = document.getElementById(this.bannerId);
     const scrollLeft = existing?.querySelector('.subdeck-chips')?.scrollLeft ?? 0;
     existing?.remove();
-    grid.parentNode.insertBefore(bar, grid);
+    // First child of YouTube's grid, not its sibling: on the subscriptions page YouTube lays the grid
+    // over the space before it, so a sibling bar covered the top of the first row of thumbnails
+    grid.prepend(bar);
     chips.scrollLeft = scrollLeft;
     // Bring the active chip into view horizontally only (scrollIntoView could also scroll the page)
     const active = chips.querySelector<HTMLElement>('[aria-pressed="true"]');
@@ -326,7 +328,7 @@ export class FeedFilter {
     this.observeRetries = 0;
     if (this.observer) this.observer.disconnect();
     // The chip row may have been rendered before the grid existed (arriving from another page)
-    if (document.getElementById(this.bannerId)?.nextElementSibling !== target) this.renderBar();
+    if (document.getElementById(this.bannerId)?.parentElement !== target) this.renderBar();
     this.applyFilter();
 
     const debouncedFilter = debounce(() => this.applyFilter(), 200);

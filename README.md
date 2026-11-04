@@ -10,8 +10,6 @@
 [![CI](https://github.com/Shourya3113/SubShelf/actions/workflows/ci.yml/badge.svg)](https://github.com/Shourya3113/SubShelf/actions/workflows/ci.yml)
 [![License](https://img.shields.io/badge/License-Source--Available-yellow.svg)](./LICENSE)
 
-<a href="https://www.producthunt.com/products/subshelf?embed=true&amp;utm_source=badge-featured&amp;utm_medium=badge&amp;utm_campaign=badge-subshelf" target="_blank" rel="noopener noreferrer"><img alt="SubShelf - Folders for your YouTube subscriptions, sorted in one click | Product Hunt" width="250" height="54" src="https://api.producthunt.com/widgets/embed-image/v1/featured.svg?post_id=1301779&amp;theme=light&amp;t=1793693019484"></a>
-
 **SubShelf** is a lightweight, privacy-first Chrome Extension that transforms your cluttered YouTube subscriptions into organized, themed category folders directly inside YouTube's native left sidebar and subscription feed.
 
 Channels are sorted by a fast offline engine that learns from your own corrections, optionally helped by Chrome's on-device AI (if Chrome already has it) or, opt-in, the cloud **Google Gemini API** with your own key. SubShelf never downloads AI models.

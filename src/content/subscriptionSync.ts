@@ -114,7 +114,7 @@ export class SubscriptionSync {
         // (with its description, for better sorting), so read it now rather than waiting for a reload
         setTimeout(async () => {
           if (!SubDeckStorage.isContextValid()) return;
-          const page = await harvestFromChannelsPage();
+          const page = await harvestFromChannelsPage(SubDeckStorage.currentAccount);
           if (page) {
             // Add the channel first, so its description has a record to land on
             await this.syncFullList(page);
@@ -169,7 +169,7 @@ export class SubscriptionSync {
     const channels = Object.values(await SubDeckStorage.getChannels());
     if (!needsDetailsLookup(channels, await SubDeckStorage.getChannelDetailsCheckedAt(), Date.now(), minIntervalMs)) return;
     const page = await Promise.race([
-      harvestFromChannelsPage(),
+      harvestFromChannelsPage(SubDeckStorage.currentAccount),
       new Promise<null>(resolve => setTimeout(() => resolve(null), timeoutMs)),
     ]);
     if (page) await this.applyChannelsPage(page);

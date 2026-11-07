@@ -1,6 +1,7 @@
 import { bareHandle, isChannelId, normalizeHandle } from './channelIdentity';
 import { safeAvatarUrl } from './avatarUrl';
 import { cleanDescription } from './channelDetails';
+import { hashAccountId } from './account';
 import { SubscribedChannel } from '@/types';
 
 /** Reads avatars straight from YouTube's native sidebar entries (visible or expanded). */
@@ -105,13 +106,19 @@ export function parseChannelsPage(data: unknown): ChannelsPageData {
  * Same-origin fetch of /feed/channels (YouTube's All subscriptions page), which lists the user's
  * subscriptions with avatars and short descriptions. Later pages would need YouTube's signed API
  * headers, so only this first page is read. Returns null when the page can't be read.
+ *
+ * The request follows the browser's current YouTube account, which isn't always this tab's: a tab
+ * left open after switching accounts elsewhere would get the other account's list, and as a full
+ * list it could add and remove channels. So the page must prove it belongs to `account`.
  */
-export async function harvestFromChannelsPage(): Promise<ChannelsPageData | null> {
+export async function harvestFromChannelsPage(account: string | null): Promise<ChannelsPageData | null> {
   try {
     const fetchedAt = Date.now();
     const res = await fetch('/feed/channels', { credentials: 'same-origin' });
     if (!res.ok) return null;
     const html = await res.text();
+    const id = html.match(/"DATASYNC_ID":"([^"]+)"/)?.[1];
+    if (!id || (await hashAccountId(id)) !== account) return null;
     const m = html.match(/var ytInitialData = (\{[\s\S]*?\});<\/script>/);
     if (!m) return null;
     return { ...parseChannelsPage(JSON.parse(m[1])), fetchedAt };

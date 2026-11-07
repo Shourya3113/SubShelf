@@ -101,7 +101,7 @@ class SubShelfCoordinator {
       const checkedAt = await SubDeckStorage.getChannelDetailsCheckedAt();
       const listDue = now - (await SubDeckStorage.getAllSubscriptionsCheckedAt()) >= ALL_SUBSCRIPTIONS_RECHECK_MS;
       if (!listDue && !all.some(c => !c.avatarUrl) && !needsDetailsLookup(all, checkedAt, now, DETAILS_RECHECK_MS)) return;
-      const page = await harvestFromChannelsPage();
+      const page = await harvestFromChannelsPage(SubDeckStorage.currentAccount);
       if (!page) return;
       // Channels the list adds need their records before descriptions can be stored on them
       if (listDue) await SubscriptionSync.syncFullList(page);

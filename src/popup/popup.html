@@ -127,6 +127,18 @@
           <button id="reset-overrides-btn" class="btn btn-tonal btn-block"><span data-icon="reset" data-size="18"></span>Forget my corrections</button>
           <span class="settings-help">Clears every channel you placed or removed by hand, so Auto-sort starts from scratch and stops learning from them.</span>
         </div>
+        <div class="settings-group">
+          <button id="report-wrong-btn" class="btn btn-tonal btn-block"><span data-icon="openInNew" data-size="18"></span>Report wrong folders</button>
+          <span class="settings-help">Helps improve the offline sorter with the channels you moved by hand. You see the text first, and nothing is sent unless you submit it on GitHub.</span>
+          <div id="report-panel" class="import-panel" hidden>
+            <textarea id="report-text" class="report-text" rows="7" readonly aria-label="Text of the GitHub issue"></textarea>
+            <span class="settings-help">This will be a public GitHub issue and shows these channels. You need a GitHub account.</span>
+            <div class="form-buttons">
+              <button id="report-cancel-btn" class="btn btn-text">Cancel</button>
+              <button id="report-open-btn" class="btn btn-primary">Open GitHub</button>
+            </div>
+          </div>
+        </div>
       </details>
     </section>
   </main>

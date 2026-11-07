@@ -625,3 +625,15 @@ body {
 .import-panel .btn-text {
   align-self: flex-end;
 }
+
+.report-text {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 8px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--subtle);
+  color: var(--text-primary);
+  font: 12px/1.4 monospace;
+  resize: vertical;
+}

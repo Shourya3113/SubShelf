@@ -8,6 +8,7 @@ import { safeAvatarUrl } from '@/utils/avatarUrl';
 import { hydrateIcons, iconButton } from '@/ui/icons';
 import { storeReviewUrl } from '@/utils/ratePrompt';
 import { isAccountHash } from '@/utils/account';
+import { buildCorrectionReport, CorrectionReport, reportIssueUrl } from '@/utils/correctionReport';
 import {
   describeNanoStatus,
   getNanoStatus,
@@ -435,6 +436,26 @@ class PopupManager {
 
     exportBtn?.addEventListener('click', async () => {
       await ExportImport.exportToFile();
+    });
+
+    const reportPanel = document.getElementById('report-panel') as HTMLElement;
+    let report: CorrectionReport | null = null;
+    document.getElementById('report-wrong-btn')?.addEventListener('click', async () => {
+      report = buildCorrectionReport(await SubDeckStorage.getAll(), chrome.runtime.getManifest().version);
+      if (report.count === 0) {
+        reportPanel.hidden = true;
+        toast('Nothing to report yet. Move a channel to the right built-in folder first.');
+        return;
+      }
+      (document.getElementById('report-text') as HTMLTextAreaElement).value = report.body;
+      reportPanel.hidden = false;
+    });
+    document.getElementById('report-open-btn')?.addEventListener('click', () => {
+      if (report) openTab(reportIssueUrl(report));
+      reportPanel.hidden = true;
+    });
+    document.getElementById('report-cancel-btn')?.addEventListener('click', () => {
+      reportPanel.hidden = true;
     });
 
     const importPanel = document.getElementById('import-panel') as HTMLElement;

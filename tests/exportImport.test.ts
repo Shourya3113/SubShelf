@@ -67,6 +67,14 @@ describe('import preview', () => {
     expect(describeMergeResult({ added: 4, combined: 2, kept: 12 })).toBe('Added 4 folders, combined 2, kept 12.');
   });
 
+  it('leaves out what did not happen', () => {
+    expect(describeMergeResult({ added: 0, combined: 10, kept: 0 })).toBe('Combined 10 folders.');
+    expect(describeMergeResult({ added: 2, combined: 0, kept: 5 })).toBe('Added 2 folders, kept 5.');
+    expect(describeMergeResult({ added: 0, combined: 0, kept: 12 })).toBe('Nothing new in this file.');
+    const preview = { addFolders: 0, combineFolders: 10, newChannels: 75, fileFolders: 10, dropFolders: [], unfiledChannels: 3 };
+    expect(describeMerge(preview)).toBe('Combines 10 folders, 75 new channels. Everything you have now stays.');
+  });
+
   it('does not list every folder Replace would drop', () => {
     const many = Array.from({ length: 8 }, (_, i) => deck(`f${i}`, `F${i}`, []));
     const text = describeReplace(previewImport({ ...file, categories: [] }, { categories: many, channels: {} }));

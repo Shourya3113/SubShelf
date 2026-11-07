@@ -59,7 +59,7 @@ export function previewImport(data: ImportData, current: Pick<SubDeckStorageSche
 export function describeMerge(p: ImportPreview): string {
   const parts = [
     p.addFolders > 0 ? `adds ${count(p.addFolders, 'folder')}` : '',
-    p.combineFolders > 0 ? `combines ${p.combineFolders}` : '',
+    p.combineFolders > 0 ? `combines ${p.addFolders > 0 ? p.combineFolders : count(p.combineFolders, 'folder')}` : '',
     p.newChannels > 0 ? count(p.newChannels, 'new channel') : '',
   ].filter(Boolean);
   if (parts.length === 0) return 'Nothing new in this file.';
@@ -79,7 +79,15 @@ export function describeReplace(p: ImportPreview): string {
 }
 
 export function describeMergeResult(r: { added: number; combined: number; kept: number }): string {
-  return `Added ${count(r.added, 'folder')}, combined ${r.combined}, kept ${r.kept}.`;
+  // Only what happened: "kept 0" would read as if nothing was kept
+  const parts = [
+    r.added > 0 ? `added ${count(r.added, 'folder')}` : '',
+    r.combined > 0 ? `combined ${r.added > 0 ? r.combined : count(r.combined, 'folder')}` : '',
+    r.kept > 0 && (r.added > 0 || r.combined > 0) ? `kept ${r.kept}` : '',
+  ].filter(Boolean);
+  if (parts.length === 0) return 'Nothing new in this file.';
+  const text = parts.join(', ');
+  return `${text[0].toUpperCase()}${text.slice(1)}.`;
 }
 
 export class ExportImport {

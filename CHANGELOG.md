@@ -4,7 +4,7 @@
 
 ### Folders per YouTube account
 - Each YouTube account now has its own folders, channels and corrections. Switching accounts no longer mixes their subscriptions into one set of folders.
-- Updating keeps your sorting whichever account you open first. The first account keeps everything, and any other account starts from the same folders and gets its channels back where they were. If your folders were already mixed, the first account can keep a few of the other account's channels until you remove them.
+- Updating keeps your sorting whichever account you open first. The first account keeps everything, and any other account starts from the same folders and gets its channels back where they were. If your folders were already mixed, the first account clears out the other account's channels once it has read its full subscription list. With a very long list YouTube doesn't show everything at once, so a few can stay until you remove them.
 - The popup shows the account in the YouTube tab you opened it from, or the one you used last, and says which when you have more than one.
 - Settings and your Gemini key are shared by all accounts. SubShelf stores a hash of YouTube's account ID, never the ID itself.
 

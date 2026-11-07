@@ -74,6 +74,12 @@ export interface SyncObservation {
   placeNew?: (ch: SubscribedChannel, engineFolderId: string | null) => string | null;
   /** Folders a new channel belongs in from data older than this account's own (see claimAccount). */
   knownFolders?: (ucId: string) => string[];
+  /**
+   * This full list is the first for an account holding 1.3.2's shared data, so most of what it lacks
+   * can be another account's channels: drop them at once, past the usual limits. The list is known
+   * to be this account's, and anything it was wrong about returns through `knownFolders`.
+   */
+  settleSharedData?: boolean;
 }
 
 export interface SyncResult {
@@ -341,7 +347,10 @@ export function computeSync(prev: SyncSnapshot, obs: SyncObservation): SyncResul
   if ((obs.sidebarComplete || obs.fullList) && discovered.length > 0) {
     const total = Object.keys(channels).length;
     const candidates = Object.entries(channels).filter(([id, ch]) => !isSeen(id, ch));
-    const limit = obs.fullList
+    const settling = obs.fullList === true && obs.settleSharedData === true;
+    const limit = settling
+      ? total
+      : obs.fullList
       ? Math.floor(total * REMOVAL_MAX_SHARE_FULL_LIST)
       : Math.max(REMOVAL_MAX_ABSOLUTE, Math.ceil(total * REMOVAL_MAX_FRACTION));
 
@@ -358,7 +367,7 @@ export function computeSync(prev: SyncSnapshot, obs: SyncObservation): SyncResul
           changed = true;
         }
 
-        if (missing[id].strikes >= REMOVAL_MIN_STRIKES) {
+        if (settling || missing[id].strikes >= REMOVAL_MIN_STRIKES) {
           dropChannel(id, channels, categories, handleToUcId, removedRecords, obs.now);
           delete missing[id];
           removed.push(id);

@@ -171,6 +171,50 @@ describe('per-account folders', () => {
       expect(Object.keys(read()[accountKey(second, 'channels')]).sort()).toEqual([id(2), id(3)]);
     });
 
+    it('clears another account\'s channels from the first account with its first full list', async () => {
+      await enqueueMutation('claimAccount', undefined, A);
+      const seen = { discovered: [ch(2)], sidebarComplete: false };
+
+      // Not a full list: nothing can be concluded, and the shared data stays
+      await enqueueMutation('syncObservation', seen, A);
+      expect(Object.keys(read()[accountKey(A, 'channels')])).toHaveLength(3);
+
+      const res = await enqueueMutation('syncObservation', { ...seen, fullList: true }, A);
+      expect(res.removed.sort()).toEqual([id(1), id(3)]); // 2 of 3, past the usual limit
+      expect(Object.keys(read()[accountKey(A, 'channels')])).toEqual([id(2)]);
+      expect(inFolder(read, A, 'music')).toEqual([id(2)]);
+    });
+
+    it('does that only once', async () => {
+      await enqueueMutation('claimAccount', undefined, A);
+      await enqueueMutation('syncObservation', { discovered: [ch(1), ch(2), ch(3)], sidebarComplete: false, fullList: true }, A);
+      const res = await enqueueMutation('syncObservation', { discovered: [ch(2)], sidebarComplete: false, fullList: true }, A);
+      expect(res.removed).toEqual([]); // back to the usual limits, so a bad page can't wipe folders
+      expect(Object.keys(read()[accountKey(A, 'channels')])).toHaveLength(3);
+    });
+
+    it('reads the first account\'s full list right away', async () => {
+      read = installFakeChrome({ ...legacy(), allSubscriptionsCheckedAt: Date.now() });
+      await enqueueMutation('claimAccount', undefined, A);
+      SubDeckStorage.setAccount(A);
+      expect(await SubDeckStorage.getAllSubscriptionsCheckedAt()).toBe(0);
+    });
+
+    it('leaves an account that started empty on the usual limits', async () => {
+      await enqueueMutation('claimAccount', undefined, A);
+      await enqueueMutation('claimAccount', undefined, B);
+      await enqueueMutation('syncObservation', { discovered: [ch(1), ch(2), ch(3)], sidebarComplete: false }, B);
+      const res = await enqueueMutation('syncObservation', { discovered: [ch(2)], sidebarComplete: false, fullList: true }, B);
+      expect(res.removed).toEqual([]);
+    });
+
+    it('brings a channel back to its folder if that first list was wrong about it', async () => {
+      await enqueueMutation('claimAccount', undefined, A);
+      await enqueueMutation('syncObservation', { discovered: [ch(2)], sidebarComplete: false, fullList: true }, A);
+      await enqueueMutation('syncObservation', { discovered: [ch(1), ch(2)], sidebarComplete: false }, A);
+      expect(inFolder(read, A, 'tech')).toEqual([id(1)]);
+    });
+
     it('sorts a channel the old data never had as usual', async () => {
       await enqueueMutation('claimAccount', undefined, A);
       await enqueueMutation('claimAccount', undefined, B);

@@ -207,6 +207,9 @@ function learnedPlacer(raw: Record<string, any>): (ch: SubscribedChannel, engine
 /** When YouTube's All subscriptions list was last read in full (see SubscriptionSync.checkAllSubscriptions). */
 export const ALL_SUBSCRIPTIONS_CHECKED_KEY = 'allSubscriptionsCheckedAt';
 
+/** Set on the account that got 1.3.2's shared data, until a full list has settled what is really its own. */
+const SHARED_COPY_KEY = 'holdsSharedData';
+
 /** Everything stored per YouTube account. The same keys at the top level are 1.3.2's data (see claimAccount). */
 const ACCOUNT_DATA_KEYS = [
   'categories', 'channels', 'activeCategoryId', 'handleToUcId', 'channelExclusions', 'manualAssignments', 'lastScrapedAt',
@@ -576,10 +579,11 @@ export class SubDeckStorage {
       case 'syncObservation': {
         const discovered: SubscribedChannel[] = (Array.isArray(payload?.discovered) ? payload.discovered : [])
           .filter((c: any) => c && typeof c === 'object' && typeof c.ucId === 'string' && c.ucId && typeof c.title === 'string');
-        const raw = await store.get(SYNC_SNAPSHOT_KEYS);
+        const raw = await store.get([...SYNC_SNAPSHOT_KEYS, SHARED_COPY_KEY]);
         const legacy = await chrome.storage.local.get('categories');
         const now = Date.now();
         const fullList = payload?.fullList === true;
+        const settleSharedData = fullList && raw[SHARED_COPY_KEY] === true;
         const result = computeSync(readSyncSnapshot(raw), {
           discovered,
           sidebarComplete: payload?.sidebarComplete === true,
@@ -588,12 +592,13 @@ export class SubDeckStorage {
           now,
           placeNew: learnedPlacer(raw),
           knownFolders: knownFoldersFrom(legacy.categories),
+          settleSharedData,
         });
         if (result.removalSkipped) {
           Logger.warn('[SubShelf] Skipped unsubscribe reconciliation:', result.removalSkipped);
         }
         if (result.changed) await writeSyncSnapshot(store, result.next, { lastScrapedAt: now });
-        if (fullList) await store.set({ [ALL_SUBSCRIPTIONS_CHECKED_KEY]: now });
+        if (fullList) await store.set({ [ALL_SUBSCRIPTIONS_CHECKED_KEY]: now, [SHARED_COPY_KEY]: false });
         return { changed: result.changed, added: result.added, removed: result.removed, restored: result.restored };
       }
 
@@ -722,10 +727,11 @@ export class SubDeckStorage {
           // 1.3.2 kept one set of folders for every account and its keys stay as they are. Which
           // account opens first is chance, and that data may be a mix of accounts, so the first gets
           // it all (nothing changes for people with one account) and later ones start from its
-          // folders; syncObservation then puts their channels back where it had them.
+          // folders; syncObservation then puts their channels back where it had them. The first
+          // reads its full list straight away, which clears out any other account's channels.
           const legacy = await chrome.storage.local.get(ACCOUNT_DATA_KEYS);
           const first = Object.keys(accounts).length === 0;
-          await store.set(first ? legacy : {
+          await store.set(first ? { ...legacy, [ALL_SUBSCRIPTIONS_CHECKED_KEY]: 0, [SHARED_COPY_KEY]: true } : {
             categories: (Array.isArray(legacy.categories) ? legacy.categories : []).map((c: CategoryDeck) => ({ ...c, channelIds: [] })),
             handleToUcId: legacy.handleToUcId ?? {},
             channelExclusions: legacy.channelExclusions ?? {},

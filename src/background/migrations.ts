@@ -37,6 +37,9 @@ export const MIGRATION_REGISTRY: Record<number, MigrationStep> = {
     migrated.version = 2;
     return migrated;
   },
+  // Migration 2 -> 3: folders became per YouTube account. The account is only known on YouTube, so
+  // the data moves in the claimAccount mutation; these top-level keys stay as they are.
+  3: (data) => ({ ...data, version: 3 }),
 };
 
 /**

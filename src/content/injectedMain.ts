@@ -280,6 +280,27 @@ import { newContentKeys } from '@/utils/guideNewContent';
     sendNewUploads();
   });
 
+  // The signed-in account (see utils/account). ytcfg fills in while the page loads, so keep looking
+  // until it says who is signed in; SubShelf stays idle until then.
+  const sendAccount = (): boolean => {
+    const cfg = (window as any).ytcfg?.data_;
+    const id = typeof cfg?.DATASYNC_ID === 'string' && cfg.DATASYNC_ID ? cfg.DATASYNC_ID : null;
+    const signedOut = !id && cfg?.LOGGED_IN === false;
+    if (!id && !signedOut) return false;
+    try {
+      window.postMessage({ type: 'SUBSHELF_ACCOUNT', id, signedOut }, location.origin);
+    } catch {}
+    return true;
+  };
+  window.addEventListener('message', (e) => {
+    if (e.source === window && e.data?.type === 'SUBSHELF_REQUEST_ACCOUNT') sendAccount();
+  });
+  document.addEventListener('yt-navigate-finish', sendAccount);
+  let accountTries = 0;
+  const accountTimer = setInterval(() => {
+    if (sendAccount() || ++accountTries >= 80) clearInterval(accountTimer);
+  }, 250);
+
   document.addEventListener('yt-navigate-finish', scanInitial);
   document.addEventListener('yt-page-data-updated', scanInitial);
   scanInitial();

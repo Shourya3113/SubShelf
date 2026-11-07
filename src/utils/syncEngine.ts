@@ -72,6 +72,8 @@ export interface SyncObservation {
    * picked (or null). Returns a folder ID to use instead, or null to keep the engine's choice.
    */
   placeNew?: (ch: SubscribedChannel, engineFolderId: string | null) => string | null;
+  /** Folders a new channel belongs in from data older than this account's own (see claimAccount). */
+  knownFolders?: (ucId: string) => string[];
 }
 
 export interface SyncResult {
@@ -307,6 +309,8 @@ export function computeSync(prev: SyncSnapshot, obs: SyncObservation): SyncResul
         continue;
       }
     }
+    const known = obs.knownFolders?.(ch.ucId) ?? [];
+    if (known.length > 0 && restoreFolders(ch.ucId, { channel: ch, folderIds: known, removedAt: 0 }, categories)) continue;
     toSort.push(ch);
   }
   autoPlace(toSort, categories, obs.placeNew);

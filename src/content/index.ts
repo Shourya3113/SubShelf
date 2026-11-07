@@ -11,6 +11,10 @@ import { sanitizeAvatarMap } from '@/utils/avatarUrl';
 import { harvestAvatarsFromDom, harvestFromChannelsPage } from '@/utils/avatarHarvest';
 import { DETAILS_RECHECK_MS, needsDetailsLookup } from '@/utils/channelDetails';
 import { ALL_SUBSCRIPTIONS_RECHECK_MS } from './subscriptionSync';
+import { accountKey, hashAccountId } from '@/utils/account';
+
+/** ytcfg normally answers within a second; past this YouTube has changed how it reports the account. */
+const ACCOUNT_WAIT_MS = 20_000;
 
 class SubShelfCoordinator {
   static init(): void {
@@ -119,10 +123,13 @@ class SubShelfCoordinator {
       chrome.storage.onChanged.addListener((changes, area) => {
         if (!SubDeckStorage.isContextValid()) return;
         if (area !== 'local') return;
-        if (changes.categories || changes.channels) {
+        const account = SubDeckStorage.currentAccount;
+        if (!account) return;
+        const folders = changes[accountKey(account, 'categories')] || changes[accountKey(account, 'channels')];
+        if (folders) {
           SidebarManager.render();
         }
-        if (changes.categories || changes.channels || changes.handleToUcId) {
+        if (folders || changes[accountKey(account, 'handleToUcId')]) {
           FeedFilter.refreshFromStorage();
         }
         if (changes.settings) {
@@ -152,6 +159,7 @@ class SubShelfCoordinator {
     document.addEventListener('visibilitychange', () => {
       if (!SubDeckStorage.isContextValid()) return;
       if (document.visibilityState === 'visible') {
+        SubDeckStorage.requestMutation('claimAccount').catch(() => {}); // the popup follows this account
         setTimeout(() => {
           if (!SubDeckStorage.isContextValid()) return;
           SubscriptionSync.diffAndSync();
@@ -226,4 +234,42 @@ class SubShelfCoordinator {
   }, 350);
 }
 
-SubShelfCoordinator.init();
+/** Nothing runs until the tab's account is known: a sync before that would land in the wrong folders. */
+function startWhenAccountKnown(): void {
+  let started = false;
+  const giveUp = setTimeout(() => {
+    Logger.warn('[SubShelf] YouTube did not report the signed-in account');
+    HealthMonitor.showDegradationBanner();
+  }, ACCOUNT_WAIT_MS);
+
+  chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
+    if (message?.type === 'subshelf-get-account') sendResponse({ account: SubDeckStorage.currentAccount });
+    return false;
+  });
+
+  window.addEventListener('message', async (e) => {
+    if (e.source !== window || e.origin !== location.origin || e.data?.type !== 'SUBSHELF_ACCOUNT') return;
+    if (e.data.signedOut === true) clearTimeout(giveUp);
+    if (typeof e.data.id !== 'string' || !e.data.id) return;
+
+    const account = await hashAccountId(e.data.id);
+    if (started) {
+      if (account !== SubDeckStorage.currentAccount) window.location.reload();
+      return;
+    }
+    started = true;
+    clearTimeout(giveUp);
+    SubDeckStorage.setAccount(account);
+    try {
+      await SubDeckStorage.requestMutation('claimAccount');
+      SubShelfCoordinator.init();
+    } catch (err) {
+      started = false; // the page sends the account again on the next navigation
+      Logger.warn('[SubShelf] Could not set up this YouTube account:', err);
+    }
+  });
+
+  window.postMessage({ type: 'SUBSHELF_REQUEST_ACCOUNT' }, location.origin);
+}
+
+startWhenAccountKnown();

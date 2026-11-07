@@ -594,3 +594,9 @@ body {
   opacity: 0;
   transform: translateY(6px);
 }
+
+.account-note {
+  margin: 0 0 8px;
+  font-size: 12px;
+  color: var(--text-secondary);
+}

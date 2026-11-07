@@ -3,8 +3,9 @@ import { AICategorizer } from '@/ai/categorizer';
 import { Logger } from '@/utils/logger';
 import { runMigrations } from './migrations';
 import { acquireOffscreenNano, releaseOffscreenNano } from './offscreenNano';
-import { CURRENT_SCHEMA_VERSION, DEFAULT_STORAGE } from '@/types';
+import { CategoryDeck, CURRENT_SCHEMA_VERSION, DEFAULT_STORAGE } from '@/types';
 import { GEMINI_ORIGIN } from '@/utils/cloudPermission';
+import { ACCOUNTS_KEY, isAccountHash } from '@/utils/account';
 
 // All storage writes below go through the shared queue so they serialize with content/popup mutations.
 chrome.runtime.onInstalled.addListener((details) => {
@@ -30,7 +31,9 @@ enqueueStorageTask(async () => {
   }
 }).catch(err => Logger.error('[SubShelf] Startup schema migration check failed:', err));
 
-enqueueMutation('normalize').catch(err => Logger.error('[SubShelf] Startup normalization failed:', err));
+chrome.storage.local.get(ACCOUNTS_KEY).then(async (raw) => {
+  for (const account of Object.keys(raw[ACCOUNTS_KEY] ?? {})) await enqueueMutation('normalize', undefined, account);
+}).catch(err => Logger.error('[SubShelf] Startup normalization failed:', err));
 
 // Cloud opt-in: Chrome's permission prompt closes the popup, so the popup records the user's intent
 // here and the provider is switched only when Chrome reports the permission as granted.
@@ -62,7 +65,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   if (message?.type === 'subshelf-storage-mutate') {
     (async () => {
       try {
-        const result = await enqueueMutation(message.action, message.payload);
+        const result = await enqueueMutation(message.action, message.payload, message.account);
         sendResponse({ success: true, result });
       } catch (err) {
         Logger.error('[SubShelf Background] Storage mutation failed:', err);
@@ -114,8 +117,13 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   if (message?.type === 'subshelf-auto-organize') {
     (async () => {
       try {
+        const account = message.account;
+        if (!isAccountHash(account)) {
+          sendResponse({ success: false, message: 'No YouTube account' });
+          return;
+        }
         Logger.info('[SubShelf Background] Running AI auto-categorization...');
-        const channelsMap = await SubDeckStorage.getChannels();
+        const channelsMap = await SubDeckStorage.getChannels(account);
         const channels = Object.values(channelsMap);
 
         if (channels.length === 0) {
@@ -127,6 +135,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         // offscreen document. The heuristic fallback still applies if neither context can use it.
         let usedOffscreen = false;
         const result = await AICategorizer.categorizeAll(channels, undefined, {
+          account,
           nanoFallback: async () => {
             const runner = await acquireOffscreenNano();
             usedOffscreen = Boolean(runner);
@@ -135,7 +144,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         }).finally(() => (usedOffscreen ? releaseOffscreenNano() : undefined));
 
         // Overrides are applied against fresh storage inside the write queue
-        const finalDecks = await SubDeckStorage.applyGeneratedDecks(result.decks);
+        const finalDecks: CategoryDeck[] = (await enqueueMutation('applyGeneratedDecks', { decks: result.decks }, account))?.categories ?? [];
 
         Logger.info(`[SubShelf Background] Categorized into ${finalDecks.length} unique decks`);
         sendResponse({

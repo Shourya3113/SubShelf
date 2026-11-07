@@ -7,6 +7,7 @@ import { hasCloudPermission, requestCloudPermission } from '@/utils/cloudPermiss
 import { safeAvatarUrl } from '@/utils/avatarUrl';
 import { hydrateIcons, iconButton } from '@/ui/icons';
 import { storeReviewUrl } from '@/utils/ratePrompt';
+import { isAccountHash } from '@/utils/account';
 import {
   describeNanoStatus,
   getNanoStatus,
@@ -23,6 +24,18 @@ const openTab = (url: string) => {
   else window.open(url, '_blank');
 };
 
+/** The account of the YouTube tab in front, if that's where the popup was opened. */
+async function activeTabAccount(): Promise<string | null> {
+  try {
+    const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+    if (tab?.id === undefined) return null;
+    const res = await chrome.tabs.sendMessage(tab.id, { type: 'subshelf-get-account' });
+    return isAccountHash(res?.account) ? res.account : null;
+  } catch {
+    return null; // not a YouTube tab
+  }
+}
+
 class PopupManager {
   private static state: SubDeckStorageSchema | null = null;
 
@@ -32,6 +45,7 @@ class PopupManager {
     if (versionEl) {
       versionEl.textContent = `v${chrome.runtime.getManifest().version}`;
     }
+    await this.chooseAccount();
     this.state = await SubDeckStorage.getAll();
     this.setupTabs();
     this.setupDeckForm();
@@ -40,6 +54,25 @@ class PopupManager {
     document.getElementById('open-youtube-btn')?.addEventListener('click', () => openTab(YOUTUBE_SUBSCRIPTIONS_URL));
     await this.renderDecks();
     await this.renderChannels();
+  }
+
+  private static async chooseAccount(): Promise<void> {
+    const inTab = await activeTabAccount();
+    const known = await SubDeckStorage.getKnownAccounts();
+    SubDeckStorage.setAccount(inTab ?? known.last);
+
+    const note = document.getElementById('account-note');
+    if (note && known.count > 1) {
+      note.textContent = inTab ? 'Showing the YouTube account in this tab' : 'Showing the YouTube account you used last';
+      note.hidden = false;
+    }
+    // Folders belong to an account, so without one there is nothing to edit yet
+    if (!SubDeckStorage.currentAccount) {
+      for (const id of ['add-deck-btn', 'backup-section']) {
+        const el = document.getElementById(id);
+        if (el) el.hidden = true;
+      }
+    }
   }
 
   // --- TABS ---

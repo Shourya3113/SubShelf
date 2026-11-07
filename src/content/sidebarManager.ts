@@ -432,7 +432,7 @@ export class SidebarManager {
       this.setSortLabel('Sorting…');
       const startedAt = performance.now();
       await new Promise<void>((resolve) => {
-        chrome.runtime.sendMessage({ type: 'subshelf-auto-organize' }, async (res) => {
+        chrome.runtime.sendMessage({ type: 'subshelf-auto-organize', account: SubDeckStorage.currentAccount }, async (res) => {
           if (res?.success) {
             this.showAutoAISummary(res, performance.now() - startedAt);
             await this.render();

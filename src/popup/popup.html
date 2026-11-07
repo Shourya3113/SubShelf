@@ -21,6 +21,7 @@
   </nav>
 
   <main class="content">
+    <p id="account-note" class="account-note" hidden></p>
     <!-- FOLDERS -->
     <section id="tab-decks" class="tab-panel active">
       <div id="folders-empty" class="empty-state" hidden>
@@ -97,13 +98,15 @@
         <input type="checkbox" id="setting-hide-shorts" class="toggle-switch" />
       </div>
 
-      <h2 class="section-title">Backup</h2>
-      <div class="settings-group backup-buttons">
-        <button id="export-backup-btn" class="btn btn-tonal"><span data-icon="download" data-size="18"></span>Export</button>
-        <label class="btn btn-tonal upload-btn">
-          <span data-icon="upload" data-size="18"></span>Import
-          <input type="file" id="import-backup-file" accept=".json" hidden />
-        </label>
+      <div id="backup-section">
+        <h2 class="section-title">Backup</h2>
+        <div class="settings-group backup-buttons">
+          <button id="export-backup-btn" class="btn btn-tonal"><span data-icon="download" data-size="18"></span>Export</button>
+          <label class="btn btn-tonal upload-btn">
+            <span data-icon="upload" data-size="18"></span>Import
+            <input type="file" id="import-backup-file" accept=".json" hidden />
+          </label>
+        </div>
       </div>
 
       <details class="advanced">

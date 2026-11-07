@@ -60,7 +60,7 @@ export function resolveGeminiModel(stored?: string): string {
  * ID, so applyOverrides keeps the channel out of all folders on every Auto-sort until it is placed again.
  */
 export const NO_FOLDER = '__none__';
-export const CURRENT_SCHEMA_VERSION = 2;
+export const CURRENT_SCHEMA_VERSION = 3;
 export const API_KEY_FIELD = 'geminiApiKey';
 
 export const DEFAULT_STORAGE: SubDeckStorageSchema = {

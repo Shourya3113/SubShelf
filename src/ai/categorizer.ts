@@ -58,6 +58,8 @@ export function placeUnclearChannels(base: CategoryDeck[], ai: CategoryDeck[]): 
 export interface CategorizeOptions {
   /** Runs Gemini Nano in another context (an offscreen document) when this one can't. */
   nanoFallback?: () => Promise<NanoRunner | null>;
+  /** The YouTube account to sort for, where the context has none of its own (the service worker). */
+  account?: string;
 }
 
 // ~120 tokens per channel with a 200-char description: 20 channels keep a prompt near 2.4k tokens,
@@ -319,7 +321,7 @@ export class AICategorizer {
     channels = channels.filter(ch => !isSystemChannelOrCurator(ch));
     if (channels.length === 0) return { decks: [], providerUsed: 'heuristic' };
 
-    const state = await SubDeckStorage.getAll();
+    const state = await SubDeckStorage.getAll(options.account);
     const settings = state.settings || structuredClone(DEFAULT_STORAGE.settings);
     const apiKey = apiKeyOverride || (typeof window === 'undefined' ? await SubDeckStorage.getApiKey() : undefined);
     const requested: AIProvider = (settings.aiProvider as AIProvider) ?? 'heuristic';

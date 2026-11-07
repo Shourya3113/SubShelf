@@ -1,6 +1,12 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import { SubDeckStorage, enqueueMutation } from '@/utils/storage';
+import { SubDeckStorage, enqueueMutation as enqueueFor } from '@/utils/storage';
 import { CategoryDeck, NO_FOLDER, SubscribedChannel } from '@/types';
+import { accountKey } from '@/utils/account';
+
+const ACCOUNT = 'aaaaaaaaaaaaaaaa';
+const PREFIX = accountKey(ACCOUNT, '');
+const SHARED_KEYS = ['settings', 'version', 'ratePrompt'];
+const enqueueMutation = (action: string, payload?: unknown) => enqueueFor(action, payload, ACCOUNT);
 
 const UC1 = 'UC0000000000000000000001';
 const UC2 = 'UC0000000000000000000002';
@@ -13,9 +19,12 @@ const deck = (id: string, channelIds: string[], extra: Partial<CategoryDeck> = {
   id, name: id, icon: '📁', channelIds, isCollapsed: true, sortOrder: 0, ...extra,
 });
 
-/** Minimal in-memory chrome.storage.local, enough for executeMutation. */
+/** Minimal in-memory chrome.storage.local, enough for executeMutation; `initial` is one account's data. */
 function installFakeChrome(initial: Record<string, unknown>) {
-  let store: Record<string, unknown> = structuredClone(initial);
+  SubDeckStorage.setAccount(ACCOUNT);
+  let store: Record<string, unknown> = Object.fromEntries(
+    Object.entries(structuredClone(initial)).map(([k, v]) => [SHARED_KEYS.includes(k) ? k : PREFIX + k, v])
+  );
   const pick = (keys: string | string[] | null) => {
     if (keys === null) return structuredClone(store);
     const list = Array.isArray(keys) ? keys : [keys];
@@ -31,7 +40,7 @@ function installFakeChrome(initial: Record<string, unknown>) {
       },
     },
   });
-  return () => store;
+  return () => Object.fromEntries(Object.entries(store).map(([k, v]) => [k.startsWith(PREFIX) ? k.slice(PREFIX.length) : k, v])) as Record<string, any>;
 }
 
 describe('storage mutations', () => {

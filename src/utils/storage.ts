@@ -3,6 +3,7 @@ import { Logger } from './logger';
 import { isSystemChannelOrCurator } from './systemChannels';
 import { applyResubscribe, applyUnsubscribe, computeSync, MissingRecord, RemovedChannel, SYNC_MISSING_KEY, SYNC_REMOVED_KEY, SyncSnapshot } from './syncEngine';
 import { sanitizeAvatarMap } from './avatarUrl';
+import { accountStore, AccountStore, ACCOUNTS_KEY, isAccountHash, LAST_ACCOUNT_KEY } from './account';
 import { applyOverrides } from '@/ai/overrides';
 import { isConfident, LearnedModel, predictFolder, trainFromCorrections } from '@/ai/learning';
 import { channelAliases, isChannelId, mapHandle, resolveChannelId } from './channelIdentity';
@@ -23,8 +24,8 @@ export function enqueueStorageTask<T>(task: () => Promise<T>): Promise<T> {
   return run;
 }
 
-export function enqueueMutation(action: string, payload?: unknown): Promise<any> {
-  return enqueueStorageTask(() => SubDeckStorage.executeMutation(action, payload));
+export function enqueueMutation(action: string, payload?: unknown, account?: string | null): Promise<any> {
+  return enqueueStorageTask(() => SubDeckStorage.executeMutation(action, payload, account));
 }
 
 /**
@@ -153,6 +154,15 @@ export function normalizeState(raw: Record<string, any>): { data: SubDeckStorage
   return { data: data as SubDeckStorageSchema, dirty };
 }
 
+/**
+ * The folders 1.3.2's shared data had each channel in, so an account set up after the update gets
+ * its channels back in place as they are found.
+ */
+function knownFoldersFrom(legacyCategories: unknown): (ucId: string) => string[] {
+  const cats: CategoryDeck[] = Array.isArray(legacyCategories) ? legacyCategories : [];
+  return (ucId) => cats.filter(c => Array.isArray(c?.channelIds) && c.channelIds.includes(ucId)).map(c => c.id);
+}
+
 /** Places newly subscribed channels by the user's corrections; trains lazily, only if one is needed. */
 function learnedPlacer(raw: Record<string, any>): (ch: SubscribedChannel, engineFolderId: string | null) => string | null {
   let model: LearnedModel | null | undefined;
@@ -170,6 +180,15 @@ function learnedPlacer(raw: Record<string, any>): (ch: SubscribedChannel, engine
 /** When YouTube's All subscriptions list was last read in full (see SubscriptionSync.checkAllSubscriptions). */
 export const ALL_SUBSCRIPTIONS_CHECKED_KEY = 'allSubscriptionsCheckedAt';
 
+/** Everything stored per YouTube account. The same keys at the top level are 1.3.2's data (see claimAccount). */
+const ACCOUNT_DATA_KEYS = [
+  'categories', 'channels', 'activeCategoryId', 'handleToUcId', 'channelExclusions', 'manualAssignments', 'lastScrapedAt',
+  SYNC_MISSING_KEY, SYNC_REMOVED_KEY, ALL_SUBSCRIPTIONS_CHECKED_KEY, CHANNEL_DETAILS_CHECKED_KEY,
+];
+
+/** Mutations of data shared by all accounts; every other one needs an account. */
+const SHARED_MUTATIONS = new Set(['updateSettings', 'ratePromptEvent']);
+
 const SYNC_SNAPSHOT_KEYS = ['channels', 'categories', 'handleToUcId', 'manualAssignments', 'channelExclusions', SYNC_MISSING_KEY, SYNC_REMOVED_KEY];
 
 const asRecord = <T>(v: unknown): Record<string, T> => (v && typeof v === 'object' && !Array.isArray(v) ? (v as Record<string, T>) : {});
@@ -185,8 +204,8 @@ function readSyncSnapshot(raw: Record<string, any>): SyncSnapshot {
   };
 }
 
-async function writeSyncSnapshot(next: SyncSnapshot, extra: Record<string, unknown> = {}): Promise<void> {
-  await chrome.storage.local.set({
+async function writeSyncSnapshot(store: AccountStore, next: SyncSnapshot, extra: Record<string, unknown> = {}): Promise<void> {
+  await store.set({
     channels: next.channels,
     categories: next.categories,
     handleToUcId: next.handleToUcId,
@@ -197,6 +216,31 @@ async function writeSyncSnapshot(next: SyncSnapshot, extra: Record<string, unkno
 }
 
 export class SubDeckStorage {
+  /** The YouTube account this page works on: its tab's account, or the one the popup is showing. */
+  private static account: string | null = null;
+
+  static setAccount(account: string | null): void {
+    this.account = isAccountHash(account) ? account : null;
+  }
+
+  static get currentAccount(): string | null {
+    return this.account;
+  }
+
+  /** The account to show outside YouTube, and how many accounts SubShelf has seen. */
+  static async getKnownAccounts(): Promise<{ last: string | null; count: number }> {
+    const raw = await chrome.storage.local.get([ACCOUNTS_KEY, LAST_ACCOUNT_KEY]);
+    return {
+      last: isAccountHash(raw[LAST_ACCOUNT_KEY]) ? raw[LAST_ACCOUNT_KEY] : null,
+      count: Object.keys(asRecord<number>(raw[ACCOUNTS_KEY])).length,
+    };
+  }
+
+  /** This context's account data; empty until the account is known. */
+  private static async own(keys: string | string[]): Promise<Record<string, any>> {
+    return this.account ? accountStore(this.account).get(keys) : {};
+  }
+
   static isContextValid(): boolean {
     try {
       return typeof chrome !== 'undefined' && Boolean(chrome.runtime?.id);
@@ -217,16 +261,14 @@ export class SubDeckStorage {
    * Returns a normalized view of storage. Read-only: cleanup is persisted separately by the
    * service worker's 'normalize' mutation so reads can never race with queued writes.
    */
-  static async getAll(): Promise<SubDeckStorageSchema> {
+  static async getAll(account: string | null = this.account): Promise<SubDeckStorageSchema> {
     if (!this.isContextValid()) {
       return structuredClone(DEFAULT_STORAGE);
     }
     try {
-      const raw = await chrome.storage.local.get(Object.keys(DEFAULT_STORAGE));
-      if (!raw || Object.keys(raw).length === 0) {
-        return structuredClone(DEFAULT_STORAGE);
-      }
-      return normalizeState(raw).data;
+      const shared = await chrome.storage.local.get(['version', 'settings']);
+      const own = account ? await accountStore(account).get(ACCOUNT_DATA_KEYS) : {};
+      return normalizeState({ ...shared, ...own }).data;
     } catch (err: any) {
       if (err?.message?.includes('Extension context invalidated')) {
         return structuredClone(DEFAULT_STORAGE);
@@ -242,7 +284,7 @@ export class SubDeckStorage {
    */
   static async requestMutation(action: string, payload?: unknown): Promise<any> {
     if (this.isServiceWorker()) {
-      return enqueueMutation(action, payload);
+      return enqueueMutation(action, payload, this.account);
     }
     if (!this.isContextValid()) return null;
 
@@ -250,7 +292,7 @@ export class SubDeckStorage {
     for (let attempt = 0; attempt < 3; attempt++) {
       const res = await new Promise<{ success?: boolean; result?: any; error?: string; transport?: boolean }>((resolve) => {
         try {
-          chrome.runtime.sendMessage({ type: 'subshelf-storage-mutate', action, payload }, (r) => {
+          chrome.runtime.sendMessage({ type: 'subshelf-storage-mutate', action, payload, account: this.account }, (r) => {
             const err = chrome.runtime?.lastError;
             resolve(err ? { transport: true, error: err.message } : (r ?? { transport: true, error: 'empty response' }));
           });
@@ -273,13 +315,17 @@ export class SubDeckStorage {
    * Executes one mutation directly against chrome.storage.local.
    * Must only run inside the queue (via enqueueMutation) and must never call requestMutation.
    */
-  static async executeMutation(action: string, payload?: any): Promise<any> {
+  static async executeMutation(action: string, payload?: any, account?: string | null): Promise<any> {
     if (!this.isContextValid()) return null;
+    if (SHARED_MUTATIONS.has(action)) return this.executeSharedMutation(action, payload);
+
+    // Throws without a valid account: nothing may be written for "no account"
+    const store = accountStore(account as string);
 
     switch (action) {
       case 'setChannelCategory': {
         const { ucId, newCatId } = payload;
-        const raw = await chrome.storage.local.get(['categories', 'manualAssignments', 'channelExclusions', 'handleToUcId', 'channels']);
+        const raw = await store.get(['categories', 'manualAssignments', 'channelExclusions', 'handleToUcId', 'channels']);
         const categories: CategoryDeck[] = Array.isArray(raw.categories) ? raw.categories : [];
         const manualAssignments: Record<string, string[]> = raw.manualAssignments || {};
         const channelExclusions: Record<string, string[]> = raw.channelExclusions || {};
@@ -329,13 +375,13 @@ export class SubDeckStorage {
           }
         }
 
-        await chrome.storage.local.set({ categories, manualAssignments, channelExclusions });
+        await store.set({ categories, manualAssignments, channelExclusions });
         return { categories, manualAssignments, channelExclusions };
       }
 
       case 'addChannelToCategory': {
         const { ucId, categoryId } = payload;
-        const raw = await chrome.storage.local.get(['categories', 'manualAssignments', 'channelExclusions', 'handleToUcId', 'channels']);
+        const raw = await store.get(['categories', 'manualAssignments', 'channelExclusions', 'handleToUcId', 'channels']);
         const categories: CategoryDeck[] = Array.isArray(raw.categories) ? raw.categories : [];
         const manualAssignments: Record<string, string[]> = raw.manualAssignments || {};
         const channelExclusions: Record<string, string[]> = raw.channelExclusions || {};
@@ -359,14 +405,14 @@ export class SubDeckStorage {
             if (!manualAssignments[id].includes(categoryId)) manualAssignments[id].push(categoryId);
           });
 
-          await chrome.storage.local.set({ categories, manualAssignments, channelExclusions });
+          await store.set({ categories, manualAssignments, channelExclusions });
         }
         return { categories, manualAssignments, channelExclusions };
       }
 
       case 'removeChannelFromCategory': {
         const { ucId, categoryId } = payload;
-        const raw = await chrome.storage.local.get(['categories', 'manualAssignments', 'channelExclusions', 'handleToUcId', 'channels']);
+        const raw = await store.get(['categories', 'manualAssignments', 'channelExclusions', 'handleToUcId', 'channels']);
         const categories: CategoryDeck[] = Array.isArray(raw.categories) ? raw.categories : [];
         const manualAssignments: Record<string, string[]> = raw.manualAssignments || {};
         const channelExclusions: Record<string, string[]> = raw.channelExclusions || {};
@@ -386,14 +432,14 @@ export class SubDeckStorage {
               if (manualAssignments[id].length === 0) delete manualAssignments[id];
             }
           });
-          await chrome.storage.local.set({ categories, manualAssignments, channelExclusions });
+          await store.set({ categories, manualAssignments, channelExclusions });
         }
         return { categories, manualAssignments, channelExclusions };
       }
 
       case 'deleteCategory': {
         const { categoryId } = payload;
-        const raw = await chrome.storage.local.get(['categories', 'manualAssignments', 'activeCategoryId']);
+        const raw = await store.get(['categories', 'manualAssignments', 'activeCategoryId']);
         const categories: CategoryDeck[] = Array.isArray(raw.categories)
           ? raw.categories.filter((c: CategoryDeck) => c.id !== categoryId && c.id !== '__uncategorized__')
           : [];
@@ -403,17 +449,17 @@ export class SubDeckStorage {
           if (manualAssignments[id].length === 0) delete manualAssignments[id];
         }
         const activeCategoryId = raw.activeCategoryId === categoryId ? null : raw.activeCategoryId;
-        await chrome.storage.local.set({ categories, manualAssignments, activeCategoryId });
+        await store.set({ categories, manualAssignments, activeCategoryId });
         return { categories, manualAssignments, activeCategoryId };
       }
 
       case 'createCategory': {
         const { category } = payload;
-        const raw = await chrome.storage.local.get('categories');
+        const raw = await store.get('categories');
         const categories: CategoryDeck[] = Array.isArray(raw.categories) ? raw.categories : [];
         if (!categories.find(c => c.id === category.id)) {
           categories.push(category);
-          await chrome.storage.local.set({ categories });
+          await store.set({ categories });
         }
         return { categories };
       }
@@ -421,7 +467,7 @@ export class SubDeckStorage {
 
       case 'updateCategory': {
         const { categoryId, patch } = payload || {};
-        const raw = await chrome.storage.local.get('categories');
+        const raw = await store.get('categories');
         const categories: CategoryDeck[] = Array.isArray(raw.categories) ? raw.categories : [];
         const target = categories.find(c => c.id === categoryId);
         if (!target || !patch || typeof patch !== 'object') return { categories };
@@ -429,14 +475,14 @@ export class SubDeckStorage {
         if (typeof patch.icon === 'string' && patch.icon.trim()) target.icon = patch.icon.trim().slice(0, 10);
         if (typeof patch.isCollapsed === 'boolean') target.isCollapsed = patch.isCollapsed;
         if (typeof patch.sortOrder === 'number' && Number.isFinite(patch.sortOrder)) target.sortOrder = patch.sortOrder;
-        await chrome.storage.local.set({ categories });
+        await store.set({ categories });
         return { categories };
       }
 
       case 'reorderCategories': {
         // Folders in `ids` come first, in that order; any others keep their relative order after them
         const ids: unknown[] = Array.isArray(payload?.ids) ? payload.ids : [];
-        const raw = await chrome.storage.local.get('categories');
+        const raw = await store.get('categories');
         const categories: CategoryDeck[] = Array.isArray(raw.categories) ? raw.categories : [];
         const rank = new Map<string, number>();
         ids.forEach((id, i) => {
@@ -446,13 +492,13 @@ export class SubDeckStorage {
           (rank.get(a.id) ?? Infinity) - (rank.get(b.id) ?? Infinity) || (a.sortOrder ?? 0) - (b.sortOrder ?? 0)
         );
         ordered.forEach((c, i) => { c.sortOrder = i; });
-        await chrome.storage.local.set({ categories });
+        await store.set({ categories });
         return { categories };
       }
 
       case 'applyGeneratedDecks': {
         const decks: CategoryDeck[] = Array.isArray(payload?.decks) ? payload.decks : [];
-        const raw = await chrome.storage.local.get(['categories', 'manualAssignments', 'channelExclusions', 'channels']);
+        const raw = await store.get(['categories', 'manualAssignments', 'channelExclusions', 'channels']);
         const categories = applyOverrides(
           decks,
           Array.isArray(raw.categories) ? raw.categories : [],
@@ -460,18 +506,18 @@ export class SubDeckStorage {
           raw.channelExclusions || {},
           Object.values((raw.channels || {}) as Record<string, SubscribedChannel>)
         ).filter(c => c.id !== '__uncategorized__');
-        await chrome.storage.local.set({ categories });
+        await store.set({ categories });
         return { categories };
       }
 
       case 'clearOverrides': {
-        await chrome.storage.local.set({ channelExclusions: {}, manualAssignments: {} });
+        await store.set({ channelExclusions: {}, manualAssignments: {} });
         return {};
       }
 
       case 'removeChannel': {
         const { ucId } = payload;
-        const raw = await chrome.storage.local.get(['channels', 'handleToUcId', 'channelExclusions', 'manualAssignments', 'categories']);
+        const raw = await store.get(['channels', 'handleToUcId', 'channelExclusions', 'manualAssignments', 'categories']);
         const channels = raw.channels || {};
         const handleToUcId = raw.handleToUcId || {};
         const channelExclusions = raw.channelExclusions || {};
@@ -489,7 +535,7 @@ export class SubDeckStorage {
             cat.channelIds = cat.channelIds.filter(id => id !== ucId);
           });
 
-          await chrome.storage.local.set({
+          await store.set({
             channels,
             handleToUcId,
             channelExclusions,
@@ -503,7 +549,8 @@ export class SubDeckStorage {
       case 'syncObservation': {
         const discovered: SubscribedChannel[] = (Array.isArray(payload?.discovered) ? payload.discovered : [])
           .filter((c: any) => c && typeof c === 'object' && typeof c.ucId === 'string' && c.ucId && typeof c.title === 'string');
-        const raw = await chrome.storage.local.get(SYNC_SNAPSHOT_KEYS);
+        const raw = await store.get(SYNC_SNAPSHOT_KEYS);
+        const legacy = await chrome.storage.local.get('categories');
         const now = Date.now();
         const fullList = payload?.fullList === true;
         const result = computeSync(readSyncSnapshot(raw), {
@@ -513,12 +560,13 @@ export class SubDeckStorage {
           observedAt: typeof payload?.observedAt === 'number' ? payload.observedAt : undefined,
           now,
           placeNew: learnedPlacer(raw),
+          knownFolders: knownFoldersFrom(legacy.categories),
         });
         if (result.removalSkipped) {
           Logger.warn('[SubShelf] Skipped unsubscribe reconciliation:', result.removalSkipped);
         }
-        if (result.changed) await writeSyncSnapshot(result.next, { lastScrapedAt: now });
-        if (fullList) await chrome.storage.local.set({ [ALL_SUBSCRIPTIONS_CHECKED_KEY]: now });
+        if (result.changed) await writeSyncSnapshot(store, result.next, { lastScrapedAt: now });
+        if (fullList) await store.set({ [ALL_SUBSCRIPTIONS_CHECKED_KEY]: now });
         return { changed: result.changed, added: result.added, removed: result.removed, restored: result.restored };
       }
 
@@ -526,20 +574,20 @@ export class SubDeckStorage {
         // YouTube confirmed a subscribe/unsubscribe click on the page (exact channel ID)
         const ucId = typeof payload?.ucId === 'string' ? payload.ucId : '';
         if (!isChannelId(ucId)) return { changed: false };
-        const raw = await chrome.storage.local.get(SYNC_SNAPSHOT_KEYS);
+        const raw = await store.get(SYNC_SNAPSHOT_KEYS);
         const prev = readSyncSnapshot(raw);
         const next = payload?.subscribed === true
           ? applyResubscribe(prev, ucId, Date.now(), learnedPlacer(raw))
           : applyUnsubscribe(prev, ucId, Date.now());
         if (!next) return { changed: false };
-        await writeSyncSnapshot(next);
+        await writeSyncSnapshot(store, next);
         return { changed: true };
       }
 
       case 'mergeAvatars': {
         const avatars = sanitizeAvatarMap(payload?.avatars);
         if (avatars.size === 0) return { changed: false };
-        const raw = await chrome.storage.local.get(['channels', 'handleToUcId']);
+        const raw = await store.get(['channels', 'handleToUcId']);
         const channels: Record<string, SubscribedChannel> = raw.channels || {};
         const handleToUcId: Record<string, string> = raw.handleToUcId || {};
         let changed = false;
@@ -551,13 +599,13 @@ export class SubDeckStorage {
             changed = true;
           }
         }
-        if (changed) await chrome.storage.local.set({ channels });
+        if (changed) await store.set({ channels });
         return { changed };
       }
 
       case 'mergeChannelDetails': {
         const descriptions = sanitizeDescriptionMap(payload?.descriptions);
-        const raw = await chrome.storage.local.get(['channels', 'handleToUcId']);
+        const raw = await store.get(['channels', 'handleToUcId']);
         const channels: Record<string, SubscribedChannel> = raw.channels || {};
         const handleToUcId: Record<string, string> = raw.handleToUcId || {};
         let updated = 0;
@@ -571,7 +619,7 @@ export class SubDeckStorage {
         }
         // The check time is recorded even when nothing changed, so channels the page doesn't
         // list aren't looked up again on every YouTube visit
-        await chrome.storage.local.set({
+        await store.set({
           ...(updated > 0 ? { channels } : {}),
           [CHANNEL_DETAILS_CHECKED_KEY]: Date.now(),
         });
@@ -581,7 +629,7 @@ export class SubDeckStorage {
       case 'importMerge': {
         const inc = payload || {};
         const incCategories: CategoryDeck[] = Array.isArray(inc.categories) ? inc.categories : [];
-        const raw = await chrome.storage.local.get(['categories', 'channels', 'handleToUcId', 'channelExclusions', 'manualAssignments']);
+        const raw = await store.get(['categories', 'channels', 'handleToUcId', 'channelExclusions', 'manualAssignments']);
 
         const mergeLists = (a: Record<string, string[]> = {}, b: Record<string, string[]> = {}) => {
           const out: Record<string, string[]> = { ...a };
@@ -612,7 +660,7 @@ export class SubDeckStorage {
           channelExclusions: mergeLists(raw.channelExclusions, inc.channelExclusions),
           manualAssignments: mergeLists(raw.manualAssignments, inc.manualAssignments),
         });
-        await chrome.storage.local.set({
+        await store.set({
           categories: next.categories,
           channels: next.channels,
           handleToUcId: next.handleToUcId,
@@ -622,6 +670,54 @@ export class SubDeckStorage {
         return { categories: next.categories.length, channels: Object.keys(next.channels).length };
       }
 
+      case 'claimAccount': {
+        const shared = await chrome.storage.local.get([ACCOUNTS_KEY, LAST_ACCOUNT_KEY]);
+        const accounts = asRecord<number>(shared[ACCOUNTS_KEY]);
+        const isNew = !accounts[account as string];
+        if (isNew) {
+          // 1.3.2 kept one set of folders for every account and its keys stay as they are. Which
+          // account opens first is chance, and that data may be a mix of accounts, so the first gets
+          // it all (nothing changes for people with one account) and later ones start from its
+          // folders; syncObservation then puts their channels back where it had them.
+          const legacy = await chrome.storage.local.get(ACCOUNT_DATA_KEYS);
+          const first = Object.keys(accounts).length === 0;
+          await store.set(first ? legacy : {
+            categories: (Array.isArray(legacy.categories) ? legacy.categories : []).map((c: CategoryDeck) => ({ ...c, channelIds: [] })),
+            handleToUcId: legacy.handleToUcId ?? {},
+            channelExclusions: legacy.channelExclusions ?? {},
+            manualAssignments: legacy.manualAssignments ?? {},
+          });
+          accounts[account as string] = Date.now();
+        }
+        if (isNew || shared[LAST_ACCOUNT_KEY] !== account) {
+          await chrome.storage.local.set({ [ACCOUNTS_KEY]: accounts, [LAST_ACCOUNT_KEY]: account });
+        }
+        return { isNew };
+      }
+
+      case 'normalize': {
+        const raw = await store.get(ACCOUNT_DATA_KEYS);
+        if (Object.keys(raw).length === 0) return { dirty: false };
+        const { data, dirty } = normalizeState(raw);
+        if (dirty) {
+          await store.set({
+            channels: data.channels,
+            categories: data.categories,
+            handleToUcId: data.handleToUcId,
+            manualAssignments: data.manualAssignments,
+            channelExclusions: data.channelExclusions,
+          });
+        }
+        return { dirty };
+      }
+
+      default:
+        return null;
+    }
+  }
+
+  private static async executeSharedMutation(action: string, payload?: any): Promise<any> {
+    switch (action) {
       case 'updateSettings': {
         const partial = { ...(payload || {}) };
         delete partial.apiKey;
@@ -639,22 +735,6 @@ export class SubDeckStorage {
         return { changed: Boolean(next) };
       }
 
-      case 'normalize': {
-        const raw = await chrome.storage.local.get(Object.keys(DEFAULT_STORAGE));
-        if (!raw || Object.keys(raw).length === 0) return { dirty: false };
-        const { data, dirty } = normalizeState(raw);
-        if (dirty) {
-          await chrome.storage.local.set({
-            channels: data.channels,
-            categories: data.categories,
-            handleToUcId: data.handleToUcId,
-            manualAssignments: data.manualAssignments,
-            channelExclusions: data.channelExclusions,
-          });
-        }
-        return { dirty };
-      }
-
       default:
         return null;
     }
@@ -670,9 +750,9 @@ export class SubDeckStorage {
     await this.requestMutation('ratePromptEvent', { event });
   }
 
-  static async getChannels(): Promise<Record<string, SubscribedChannel>> {
+  static async getChannels(account: string | null = this.account): Promise<Record<string, SubscribedChannel>> {
     if (!this.isContextValid()) return structuredClone(DEFAULT_STORAGE.channels);
-    const data = await chrome.storage.local.get('channels');
+    const data = account ? await accountStore(account).get('channels') : {};
     return (data.channels && typeof data.channels === 'object') ? data.channels : {};
   }
 
@@ -697,7 +777,7 @@ export class SubDeckStorage {
 
   static async getAllSubscriptionsCheckedAt(): Promise<number> {
     if (!this.isContextValid()) return 0;
-    const raw = await chrome.storage.local.get(ALL_SUBSCRIPTIONS_CHECKED_KEY);
+    const raw = await this.own(ALL_SUBSCRIPTIONS_CHECKED_KEY);
     return typeof raw[ALL_SUBSCRIPTIONS_CHECKED_KEY] === 'number' ? raw[ALL_SUBSCRIPTIONS_CHECKED_KEY] : 0;
   }
 
@@ -713,14 +793,14 @@ export class SubDeckStorage {
   /** When channel details were last read from YouTube (0 if never). */
   static async getChannelDetailsCheckedAt(): Promise<number> {
     if (!this.isContextValid()) return 0;
-    const data = await chrome.storage.local.get(CHANNEL_DETAILS_CHECKED_KEY);
+    const data = await this.own(CHANNEL_DETAILS_CHECKED_KEY);
     const at = data[CHANNEL_DETAILS_CHECKED_KEY];
     return typeof at === 'number' && Number.isFinite(at) ? at : 0;
   }
 
   static async getCategories(): Promise<CategoryDeck[]> {
     if (!this.isContextValid()) return [];
-    const data = await chrome.storage.local.get('categories');
+    const data = await this.own('categories');
     const cats = Array.isArray(data.categories) ? data.categories : [];
     return cats
       .filter((c: any) => c && typeof c === 'object' && c.id && c.id !== '__uncategorized__')
@@ -775,7 +855,7 @@ export class SubDeckStorage {
 
   static async getHandleToUcIdMap(): Promise<Record<string, string>> {
     if (!this.isContextValid()) return {};
-    const data = await chrome.storage.local.get('handleToUcId');
+    const data = await this.own('handleToUcId');
     return (data.handleToUcId && typeof data.handleToUcId === 'object') ? data.handleToUcId : {};
   }
 

@@ -38,7 +38,9 @@ Free, no account needed. If SubShelf helps you, a [rating or review](https://chr
 | 🏷️ **Folder Chips** | YouTube-style chips above your subscriptions feed (*All · Tech · Gaming …*) filter it in one click. |
 | 🎛️ **Popup Manager** | Search channels, move them between folders, rename/delete folders, and configure sorting. |
 | 🚫 **Hide Shorts** | Optional toggle in Settings that hides the Shorts shelf and Shorts cards on your subscription feed, applied instantly. |
-| 📥 **Backup & Restore** | Export and import timestamped JSON backups (`subshelf_backup_YYYY-MM-DD.json`) with automated API key sanitization. |
+| 👥 **Folders per account** | Each YouTube account you use keeps its own folders, channels and corrections. |
+| 📥 **Backup & Restore** | Back up or move your folders with Export / Import in the popup. Importing shows what will change first, then lets you Merge or Replace. Backups are timestamped JSON (`subshelf_backup_YYYY-MM-DD.json`) and never include your API key. |
+| 🐞 **Report wrong folders** | Turn the channels you moved by hand into a prefilled GitHub issue. You read it first, and nothing is sent unless you submit it. |
 
 ---
 

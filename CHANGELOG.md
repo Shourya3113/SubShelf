@@ -1,5 +1,22 @@
 # Changelog
 
+## 1.3.3 — 2026-11-07
+
+### Folders per YouTube account
+- Each YouTube account now has its own folders, channels and corrections. Switching accounts no longer mixes their subscriptions into one set of folders.
+- Updating keeps your sorting whichever account you open first. The first account keeps everything, and any other account starts from the same folders and gets its channels back where they were. If your folders were already mixed, the first account can keep a few of the other account's channels until you remove them.
+- The popup shows the account in the YouTube tab you opened it from, or the one you used last, and says which when you have more than one.
+- Settings and your Gemini key are shared by all accounts. SubShelf stores a hash of YouTube's account ID, never the ID itself.
+
+### Import
+- Importing a backup now tells you what will happen first, then asks: **Merge** ("Adds 4 folders, combines 2, 37 new channels") or **Replace**, which lists the folders you'd lose and saves your current ones to a file first.
+- After an import, a short summary confirms what happened.
+- Folders with the same name now combine, so importing someone's setup doesn't give you two "Gaming" folders.
+
+### Sorting
+- **Report wrong folders** (Settings → Advanced) turns the channels you moved by hand into a GitHub issue, so the offline sorter can learn from real mistakes. You read the exact text first, and nothing is sent unless you submit it on GitHub.
+- Auto-sort now says how many channels it placed and how many stayed in General & Others.
+
 ## 1.3.2 — 2026-10-29
 
 ### Subscriptions feed with a folder selected

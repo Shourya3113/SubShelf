@@ -1,6 +1,6 @@
 # Privacy Policy for SubShelf — Smart YouTube™ Subscription Folders
 
-**Last Updated:** October 29, 2026  
+**Last Updated:** November 7, 2026  
 **Extension Name:** SubShelf — Smart YouTube™ Subscription Folders  
 **Repository:** [https://github.com/Shourya3113/SubShelf](https://github.com/Shourya3113/SubShelf)
 
@@ -24,6 +24,7 @@ SubShelf is designed from the ground up on a **strict local-first, zero-telemetr
 - **What is accessed:** Channel titles, handles, channel IDs (`ucId`), avatar URLs and short channel descriptions of the channels you subscribe to, read from the YouTube pages you visit (the left sidebar and the subscription data YouTube already loads for that sidebar). To fill in missing channel avatars and descriptions, the extension may also load YouTube's own "All subscriptions" page (`youtube.com/feed/channels`) in the background, using your existing YouTube session. This request goes only to YouTube.
 - **New-video dots:** The same sidebar data says which of your subscriptions YouTube marks with its blue "new videos" dot. SubShelf shows that dot in your folders. It is kept only in the open YouTube tab, never stored or sent anywhere, and requires no extra requests.
 - **Subscribe and unsubscribe actions:** When you subscribe to or unsubscribe from a channel on YouTube, SubShelf reads YouTube's own confirmation (which channel, and whether you are now subscribed) so your folders stay in sync. A channel you unsubscribe from is removed from your folders, and which folders it was in is remembered on your device for 30 days, so resubscribing puts it back.
+- **Which YouTube account is signed in:** SubShelf reads the account ID YouTube already has in the page, so each account keeps its own folders. Only a one-way hash of that ID is stored, on your device. The ID itself is never stored or sent anywhere, and SubShelf doesn't read your name or email address.
 - **Why it is accessed:** To organize your subscribed channels into custom folder decks, filter your subscriptions feed by topic, and render collapsible shelves.
 - **Where it is stored:** Exclusively inside your browser's local storage (`chrome.storage.local`). This data is never sent to any server operated by SubShelf.
 
@@ -96,6 +97,8 @@ SubShelf provides three distinct categorization engines:
 - **Zero Third-Party Sharing:** We do not sell, rent, trade, or transfer your personal data or browsing activity to any third parties, advertisers, or data brokers.
 - **Zero Tracking Telemetry:** There is no telemetry tracking code, usage tracking, or crash analytics embedded in the extension.
 - **No Third-Party Scripts:** SubShelf does not load external scripts, remote code, tracking pixels, or third-party stylesheets.
+
+- **Report wrong folders (optional):** This button in Settings → Advanced opens a GitHub issue prefilled with the titles and handles of channels you moved by hand into built-in folders, and those folders' names. SubShelf shows you the exact text first and sends nothing itself. The text only leaves your browser if you open GitHub and submit the issue, and it is then public on GitHub under your GitHub account.
 
 ---
 

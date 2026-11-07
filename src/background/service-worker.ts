@@ -151,6 +151,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
           success: true,
           count: channels.length,
           decks: finalDecks.length,
+          general: finalDecks.find(d => d.id === 'general-other')?.channelIds.length ?? 0,
           provider: result.providerUsed,
           aiReviewed: result.aiReviewed,
           learnedMoves: result.learnedMoves,

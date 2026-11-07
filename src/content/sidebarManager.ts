@@ -463,7 +463,7 @@ export class SidebarManager {
     const result = await AICategorizer.categorizeAll(channels);
     const rawDecks = result.decks;
     this.showAutoAISummary(
-      { count: channels.length, decks: rawDecks.length, provider: result.providerUsed, aiReviewed: result.aiReviewed, learnedMoves: result.learnedMoves, fallbackNotice: result.fallbackNotice },
+      { count: channels.length, decks: rawDecks.length, general: rawDecks.find(d => d.id === 'general-other')?.channelIds.length, provider: result.providerUsed, aiReviewed: result.aiReviewed, learnedMoves: result.learnedMoves, fallbackNotice: result.fallbackNotice },
       performance.now() - startedAt
     );
     // Overrides are applied against fresh storage inside the service worker's write queue
@@ -473,7 +473,7 @@ export class SidebarManager {
 
   /** Always tells the user what Auto-sort did: how many channels, which engine, how long. */
   private static showAutoAISummary(
-    res: { count?: number; decks?: number; provider?: string; aiReviewed?: number; learnedMoves?: number; fallbackNotice?: string },
+    res: { count?: number; decks?: number; general?: number; provider?: string; aiReviewed?: number; learnedMoves?: number; fallbackNotice?: string },
     elapsedMs: number
   ): void {
     const engine =
@@ -482,7 +482,13 @@ export class SidebarManager {
       : 'offline engine';
     const secs = elapsedMs < 10_000 ? (elapsedMs / 1000).toFixed(1) : Math.round(elapsedMs / 1000).toString();
     const learned = res.learnedMoves ? ` · ${res.learnedMoves} placed using your corrections` : '';
-    const summary = `Sorted ${res.count ?? 0} channels into ${res.decks ?? 0} folders · ${engine}${learned} · ${secs}s`;
+    // The total is everything SubShelf found; the split says how much of it the sorter could place
+    const count = res.count ?? 0;
+    const general = res.general ?? 0;
+    const placed = general > 0
+      ? `${count} channels: ${count - general} into folders, ${general} in General & Others`
+      : `${count} channels into ${res.decks ?? 0} folders`;
+    const summary = `Sorted ${placed} · ${engine}${learned} · ${secs}s`;
     this.showToast(res.fallbackNotice ? `${summary}. ${res.fallbackNotice}` : summary, res.fallbackNotice ? 8000 : 5000);
   }
 

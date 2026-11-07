@@ -1,5 +1,5 @@
 import { SubDeckStorage } from '@/utils/storage';
-import { ExportImport } from '@/utils/exportImport';
+import { describeMerge, describeMergeResult, describeReplace, ExportImport, ImportData, ImportMode, previewImport } from '@/utils/exportImport';
 import { debounce } from '@/utils/debounce';
 import { CategoryDeck, resolveGeminiModel, SubDeckStorageSchema, SubscribedChannel } from '@/types';
 import { toast } from '@/utils/toast';
@@ -65,6 +65,8 @@ class PopupManager {
     if (note && known.count > 1) {
       note.textContent = inTab ? 'Showing the YouTube account in this tab' : 'Showing the YouTube account you used last';
       note.hidden = false;
+      const importNote = document.getElementById('import-account-note');
+      if (importNote) importNote.hidden = false;
     }
     // Folders belong to an account, so without one there is nothing to edit yet
     if (!SubDeckStorage.currentAccount) {
@@ -435,15 +437,18 @@ class PopupManager {
       await ExportImport.exportToFile();
     });
 
+    const importPanel = document.getElementById('import-panel') as HTMLElement;
+    let pendingImport: ImportData | null = null;
+
     importFile?.addEventListener('change', async (e) => {
       const file = (e.target as HTMLInputElement).files?.[0];
       if (file) {
         try {
-          await ExportImport.importFromFile(file);
-          this.state = await SubDeckStorage.getAll();
-          toast('Backup imported.');
-          await this.renderDecks();
-          await this.renderChannels();
+          pendingImport = await ExportImport.parseBackup(file);
+          const preview = previewImport(pendingImport, await SubDeckStorage.getAll());
+          document.getElementById('import-merge-text')!.textContent = describeMerge(preview);
+          document.getElementById('import-replace-text')!.textContent = describeReplace(preview);
+          importPanel.hidden = false;
         } catch (err) {
           toast(`Failed to import backup: ${err instanceof Error ? err.message : 'Invalid file'}`);
         } finally {
@@ -451,6 +456,28 @@ class PopupManager {
           importFile.value = '';
         }
       }
+    });
+
+    const runImport = async (mode: ImportMode) => {
+      if (!pendingImport) return;
+      try {
+        const result = await ExportImport.applyImport(pendingImport, mode);
+        this.state = await SubDeckStorage.getAll();
+        toast('folders' in result ? `Replaced your folders with ${result.folders} from the file.` : describeMergeResult(result));
+        await this.renderDecks();
+        await this.renderChannels();
+      } catch (err) {
+        toast(`Failed to import backup: ${err instanceof Error ? err.message : 'Invalid file'}`);
+      } finally {
+        pendingImport = null;
+        importPanel.hidden = true;
+      }
+    };
+    document.getElementById('import-merge-btn')?.addEventListener('click', () => runImport('merge'));
+    document.getElementById('import-replace-btn')?.addEventListener('click', () => runImport('replace'));
+    document.getElementById('import-cancel-btn')?.addEventListener('click', () => {
+      pendingImport = null;
+      importPanel.hidden = true;
     });
 
     // Chrome Web Store reviews; hidden for copies that didn't come from the store

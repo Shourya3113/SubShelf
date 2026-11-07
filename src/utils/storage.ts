@@ -163,6 +163,33 @@ function knownFoldersFrom(legacyCategories: unknown): (ucId: string) => string[]
   return (ucId) => cats.filter(c => Array.isArray(c?.channelIds) && c.channelIds.includes(ucId)).map(c => c.id);
 }
 
+/** The folder an imported one belongs to: itself, or one of the same name (custom folder IDs are unique per device). */
+export function findMatchingFolder(folders: CategoryDeck[], incoming: Pick<CategoryDeck, 'id' | 'name'>): CategoryDeck | undefined {
+  const name = incoming.name.trim().toLowerCase();
+  return folders.find(f => f.id === incoming.id) ?? folders.find(f => f.name.trim().toLowerCase() === name);
+}
+
+/** Adds imported folders to existing ones. Pure, so the import preview and the import itself can't disagree. */
+export function mergeFolders(existing: CategoryDeck[], incoming: CategoryDeck[]) {
+  const categories = existing.map(c => ({ ...c, channelIds: Array.isArray(c.channelIds) ? [...c.channelIds] : [] }));
+  const existingIds = new Set(existing.map(c => c.id));
+  const combinedIds = new Set<string>();
+  const remap: Record<string, string> = {};
+  let added = 0;
+  for (const inc of incoming) {
+    const match = findMatchingFolder(categories, inc);
+    if (!match) {
+      categories.push({ ...inc, channelIds: [...inc.channelIds] });
+      added++;
+      continue;
+    }
+    match.channelIds = [...new Set([...match.channelIds, ...inc.channelIds])].slice(0, MAX_CHANNELS_PER_CATEGORY);
+    if (match.id !== inc.id) remap[inc.id] = match.id;
+    if (existingIds.has(match.id)) combinedIds.add(match.id);
+  }
+  return { categories, remap, added, combined: combinedIds.size, kept: existing.length - combinedIds.size };
+}
+
 /** Places newly subscribed channels by the user's corrections; trains lazily, only if one is needed. */
 function learnedPlacer(raw: Record<string, any>): (ch: SubscribedChannel, engineFolderId: string | null) => string | null {
   let model: LearnedModel | null | undefined;
@@ -640,25 +667,20 @@ export class SubDeckStorage {
           return out;
         };
 
-        const categories: CategoryDeck[] = (Array.isArray(raw.categories) ? raw.categories : []).map((d: CategoryDeck) => {
-          const match = incCategories.find(x => x.id === d.id);
-          return match
-            ? { ...d, channelIds: [...new Set([...d.channelIds, ...match.channelIds])].slice(0, MAX_CHANNELS_PER_CATEGORY) }
-            : d;
-        });
-        const have = new Set(categories.map(d => d.id));
-        for (const d of incCategories) {
-          if (!have.has(d.id)) categories.push(d);
-        }
+        const merged = mergeFolders(Array.isArray(raw.categories) ? raw.categories : [], incCategories);
+        // Corrections name folders by ID, and a folder matched by name has a different one here
+        const remapFolders = (lists: Record<string, string[]> = {}) => Object.fromEntries(
+          Object.entries(lists).map(([k, v]) => [k, Array.isArray(v) ? v.map(id => merged.remap[id] ?? id) : v])
+        );
 
         // Normalize the merged result so imported handle-keyed duplicates or system channels never
         // reach storage (the same guarantee sync and the startup cleanup give)
         const { data: next } = normalizeState({
-          categories,
+          categories: merged.categories,
           channels: { ...(raw.channels ?? {}), ...(inc.channels ?? {}) },
           handleToUcId: { ...(raw.handleToUcId ?? {}), ...(inc.handleToUcId ?? {}) },
-          channelExclusions: mergeLists(raw.channelExclusions, inc.channelExclusions),
-          manualAssignments: mergeLists(raw.manualAssignments, inc.manualAssignments),
+          channelExclusions: mergeLists(raw.channelExclusions, remapFolders(inc.channelExclusions)),
+          manualAssignments: mergeLists(raw.manualAssignments, remapFolders(inc.manualAssignments)),
         });
         await store.set({
           categories: next.categories,
@@ -667,7 +689,29 @@ export class SubDeckStorage {
           channelExclusions: next.channelExclusions,
           manualAssignments: next.manualAssignments,
         });
-        return { categories: next.categories.length, channels: Object.keys(next.channels).length };
+        return { added: merged.added, combined: merged.combined, kept: merged.kept };
+      }
+
+      case 'importReplace': {
+        const inc = payload || {};
+        const raw = await store.get(['channels', 'handleToUcId', 'activeCategoryId']);
+        // Folders and corrections come from the file; which channels exist is still YouTube's to say
+        const { data: next } = normalizeState({
+          categories: Array.isArray(inc.categories) ? inc.categories : [],
+          channels: { ...(raw.channels ?? {}), ...(inc.channels ?? {}) },
+          handleToUcId: { ...(raw.handleToUcId ?? {}), ...(inc.handleToUcId ?? {}) },
+          channelExclusions: inc.channelExclusions ?? {},
+          manualAssignments: inc.manualAssignments ?? {},
+        });
+        await store.set({
+          categories: next.categories,
+          channels: next.channels,
+          handleToUcId: next.handleToUcId,
+          channelExclusions: next.channelExclusions,
+          manualAssignments: next.manualAssignments,
+          activeCategoryId: next.categories.some(c => c.id === raw.activeCategoryId) ? raw.activeCategoryId : null,
+        });
+        return { folders: next.categories.length };
       }
 
       case 'claimAccount': {

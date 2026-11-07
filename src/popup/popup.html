@@ -107,6 +107,18 @@
             <input type="file" id="import-backup-file" accept=".json" hidden />
           </label>
         </div>
+        <div id="import-panel" class="import-panel" hidden>
+          <div class="import-choice">
+            <button id="import-merge-btn" class="btn btn-primary">Merge</button>
+            <span id="import-merge-text" class="settings-help"></span>
+          </div>
+          <div class="import-choice">
+            <button id="import-replace-btn" class="btn btn-tonal">Replace</button>
+            <span id="import-replace-text" class="settings-help"></span>
+          </div>
+          <span id="import-account-note" class="settings-help" hidden>Only this YouTube account's folders change.</span>
+          <button id="import-cancel-btn" class="btn btn-text">Cancel</button>
+        </div>
       </div>
 
       <details class="advanced">

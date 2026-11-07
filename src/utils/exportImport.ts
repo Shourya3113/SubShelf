@@ -1,5 +1,5 @@
 import { SubDeckExportPayload, SubDeckStorageSchema, CategoryDeck, SubscribedChannel } from '@/types';
-import { SubDeckStorage } from './storage';
+import { findMatchingFolder, mergeFolders, SubDeckStorage } from './storage';
 import { safeAvatarUrl } from './avatarUrl';
 import { cleanDescription } from './channelDetails';
 import { SUBDECK_TAXONOMY } from '@/ai/heuristic';
@@ -22,6 +22,65 @@ const FORBIDDEN_KEYS = new Set(['__proto__', 'constructor', 'prototype']);
 
 const okKey = (v: unknown): v is string =>
   typeof v === 'string' && CHANNEL_KEY.test(v) && !FORBIDDEN_KEYS.has(v);
+
+/** A backup file that passed validation. */
+export type ImportData = Pick<SubDeckStorageSchema, 'categories' | 'channels' | 'handleToUcId' | 'channelExclusions' | 'manualAssignments'>;
+
+export interface ImportPreview {
+  addFolders: number;
+  combineFolders: number;
+  newChannels: number;
+  /** Folders in the file, which is what Replace leaves. */
+  fileFolders: number;
+  /** Folders only this account has, which Replace removes. */
+  dropFolders: string[];
+  /** Channels in a folder now that are in none after Replace. */
+  unfiledChannels: number;
+}
+
+export type ImportMode = 'merge' | 'replace';
+
+const count = (n: number, noun: string) => `${n} ${noun}${n === 1 ? '' : 's'}`;
+
+export function previewImport(data: ImportData, current: Pick<SubDeckStorageSchema, 'categories' | 'channels'>): ImportPreview {
+  const merged = mergeFolders(current.categories, data.categories);
+  const inFile = new Set(data.categories.flatMap(c => c.channelIds));
+  const filedNow = new Set(current.categories.flatMap(c => c.channelIds));
+  return {
+    addFolders: merged.added,
+    combineFolders: merged.combined,
+    newChannels: Object.keys(data.channels).filter(id => !current.channels[id]).length,
+    fileFolders: data.categories.length,
+    dropFolders: current.categories.filter(c => !findMatchingFolder(data.categories, c)).map(c => c.name),
+    unfiledChannels: [...filedNow].filter(id => !inFile.has(id)).length,
+  };
+}
+
+export function describeMerge(p: ImportPreview): string {
+  const parts = [
+    p.addFolders > 0 ? `adds ${count(p.addFolders, 'folder')}` : '',
+    p.combineFolders > 0 ? `combines ${p.combineFolders}` : '',
+    p.newChannels > 0 ? count(p.newChannels, 'new channel') : '',
+  ].filter(Boolean);
+  if (parts.length === 0) return 'Nothing new in this file.';
+  const text = parts.join(', ');
+  return `${text[0].toUpperCase()}${text.slice(1)}. Everything you have now stays.`;
+}
+
+export function describeReplace(p: ImportPreview): string {
+  const shown = p.dropFolders.slice(0, 5).join(', ');
+  const more = p.dropFolders.length > 5 ? ` and ${p.dropFolders.length - 5} more` : '';
+  return [
+    `Uses the ${count(p.fileFolders, 'folder')} in this file.`,
+    p.dropFolders.length > 0 ? `Removes ${count(p.dropFolders.length, 'folder')} you only have on this device: ${shown}${more}.` : '',
+    p.unfiledChannels > 0 ? `${count(p.unfiledChannels, 'channel')} will leave your folders.` : '',
+    'Your current folders are saved to a backup file first.',
+  ].filter(Boolean).join(' ');
+}
+
+export function describeMergeResult(r: { added: number; combined: number; kept: number }): string {
+  return `Added ${count(r.added, 'folder')}, combined ${r.combined}, kept ${r.kept}.`;
+}
 
 export class ExportImport {
   static async exportToFile(): Promise<void> {
@@ -53,7 +112,8 @@ export class ExportImport {
     setTimeout(() => URL.revokeObjectURL(url), 1500);
   }
 
-  static async importFromFile(file: File): Promise<void> {
+  /** Reads and validates a backup file without changing anything. */
+  static async parseBackup(file: File): Promise<ImportData> {
     // 1. File size cap
     if (!file || typeof file.size !== 'number') {
       throw new Error('Invalid file selected');
@@ -205,14 +265,22 @@ export class ExportImport {
       }
     }
 
-    // Merge incoming data with current storage inside the service worker's write queue;
-    // existing storage is preserved
-    await SubDeckStorage.requestMutation('importMerge', {
+    return {
       categories: validatedCategories,
       channels: { ...validatedChannels },
       handleToUcId: { ...validatedHandles },
       channelExclusions: { ...validatedExclusions },
       manualAssignments: { ...validatedManualAssignments },
-    });
+    };
+  }
+
+  /**
+   * Applies a validated backup inside the service worker's write queue. Merge keeps everything the
+   * account has; Replace saves it to a file first, since that is the one way to lose sorting here.
+   */
+  static async applyImport(data: ImportData, mode: ImportMode): Promise<{ added: number; combined: number; kept: number } | { folders: number }> {
+    if (mode === 'merge') return SubDeckStorage.requestMutation('importMerge', data);
+    await this.exportToFile();
+    return SubDeckStorage.requestMutation('importReplace', data);
   }
 }
